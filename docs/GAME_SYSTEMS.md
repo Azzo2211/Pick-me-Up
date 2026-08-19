@@ -15,7 +15,7 @@ Master preparation → party formation → mission deployment → autonomous rea
 - Current macro orders include posture, high-threat focus, protect rear, all-out, extraction.
 
 ## Heroes
-Current MVP roles:
+Current implemented roles:
 - Guardian
 - Vanguard
 - Lancer
@@ -35,7 +35,7 @@ Modeled rarity/level caps:
 - 6★ → Lv.99
 - 7★ → Lv.120
 
-The current standard acquisition space is early/mid-game focused; higher rarity/endgame systems should not be casually exposed merely because data structures exist.
+Higher-rarity and endgame systems can be expanded progressively as the full game develops. Do not expose unfinished systems merely because data structures already exist.
 
 ## Failure and persistence
 - Permadeath is active.
@@ -43,15 +43,10 @@ The current standard acquisition space is early/mid-game focused; higher rarity/
 - Retrying a floor does not reroll the stage.
 - Death, tombstones/memorial state, attempts, rewards, wounds, morale, fatigue, and persistent consequences are part of the game's identity.
 
-## Missions
-The current vertical slice contains five playable mission/floor archetypes:
-- Subjugation
-- Survival
-- Exploration
-- Defense
-- Boss
+## Missions and tower
+The current Godot implementation contains a limited set of playable mission/floor archetypes, including Subjugation, Survival, Exploration, Defense and Boss.
 
-The architecture may model a much larger tower, but Agent A should distinguish between implemented slice content and roadmap/data scaffolding.
+These are the **currently implemented contents**, not the final scope of the game. Riftward is intended to continue expanding with more floors, mission types, systems and content while preserving the core identity and progression logic.
 
 ## Economy and summon
 Current known locked reference values from the existing specification:
@@ -68,3 +63,6 @@ Newer base/hub decisions in `GAME_VISION.md` override older facility visualizati
 
 ## Determinism and save integrity
 Existing deterministic world/stage behavior, HeroSeed uniqueness, irreversible results, and save integrity are regression-sensitive. Changes touching RNG, mission generation, hero creation, death, economy, progression, or persistence require extra caution and relevant tests.
+
+## Active implementation rule
+All new gameplay development targets Godot. JavaScript/web files in the repository are historical reference material only and must not be treated as a second active implementation.
