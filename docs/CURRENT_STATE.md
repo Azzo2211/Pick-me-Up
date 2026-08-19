@@ -5,9 +5,8 @@ Primary repository: `Azzo2211/Pick-me-Up`.
 Primary branch: `main`.
 The user's local project is connected to this repository.
 
-## Main implementations
-### Godot
-The native Godot project is under:
+## Active implementation
+Riftward is being developed as a full game in Godot. The active project is:
 
 ```text
 godot/project.godot
@@ -25,8 +24,8 @@ Relevant hub code currently includes:
 
 Visible hero agents already have movement/path/activity behavior and can choose unlocked facilities as destinations.
 
-### Legacy web implementation
-The repository also contains a previous web version:
+## Historical web code
+The repository still contains files from the previous web implementation:
 - `core.js`
 - `combat.js`
 - `app.js`
@@ -34,11 +33,11 @@ The repository also contains a previous web version:
 - `styles.css`
 - `server.js`
 
-Treat this mainly as a useful reference for systems and tests unless the user explicitly requests web work.
+These files are **not an active version of the game** and must not receive parallel feature development. They may be inspected only as historical reference or as a source for logic worth porting into Godot.
 
-## Current vertical slice
-The existing documentation describes:
-- five playable mission/floor archetypes;
+## Current implemented systems
+The current Godot project already contains or represents important parts of the game's foundation, including:
+- playable mission/floor archetypes;
 - party of five;
 - autonomous Utility AI combat;
 - macro Master commands;
@@ -47,6 +46,8 @@ The existing documentation describes:
 - permadeath;
 - facilities and hub interactions;
 - deterministic stage persistence.
+
+This is the **current development state**, not a fixed vertical slice and not the final content boundary. The project should be expanded incrementally toward the full game.
 
 ## Important known design drift
 Some older documentation/code represents facilities that conflict with newer hub decisions. In particular, existing hub code may currently visualize facilities such as Workshop earlier than the latest design direction allows.
