@@ -1,0 +1,6 @@
+.godot/
+.appdata/
+.localappdata/
+builds/
+qa/
+*.log
