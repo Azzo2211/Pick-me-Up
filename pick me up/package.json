@@ -1,0 +1,10 @@
+{
+  "name": "riftward-the-last-ascent",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Vertical slice di un autonomous squad management roguelite.",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node tests/core.test.js"
+  }
+}

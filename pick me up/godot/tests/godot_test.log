@@ -1,0 +1,40 @@
+Godot Engine v4.7.1.stable.official.a13da4feb - https://godotengine.org
+
+ERROR: Failed to read the root certificate store.
+   at: get_system_ca_certificates (platform/windows/os_windows.cpp:2582)
+Riftward Base/HUB vertical slice suite
+PASS  la Home apre la base visuale
+PASS  la sidebar non viene più creata
+PASS  viewport PC impostato a 1920x890
+PASS  ridimensionamento senza fasce nere
+PASS  otto punti interattivi allineati alla Base Lv.1
+PASS  sagome cliccabili coerenti con gli edifici
+PASS  ogni edificio dispone di un percorso sui sentieri
+PASS  Hero Agent presenti nella base
+PASS  agenti sincronizzati con il roster vivo
+PASS  portale e training interattivi
+PASS  Archivio accessibile dal Magazzino
+PASS  DEV / QA accessibile dal Nexus
+PASS  il Centro di Fusione apre la fusione
+PASS  il Centro Evocativo apre l'evocazione
+PASS  selezione apre il pannello contestuale
+PASS  clic e hover non mostrano indicatori accanto agli edifici
+PASS  l'area cliccabile resta invisibile al passaggio del mouse
+PASS  rotellina disattivata sulla mappa
+PASS  la mappa copre tutta la visuale
+PASS  pan camera confinato alla base
+PASS  notifiche diegetiche disponibili
+PASS  upgrade modifica il livello della struttura
+PASS  upgrade modifica la variante visuale mostrata
+PASS  Hero Agent pianifica waypoint evitando gli edifici
+PASS  percorso verso il Portale non attraversa altre strutture
+PASS  Hero Agent percorre la base
+PASS  Hero Agent espone stato e attività
+PASS  l'edificio apre il sistema esistente corretto
+PASS  il Centro di Fusione apre la sintesi di tre eroi
+PASS  il Centro Evocativo apre le risonanze
+PASS  il Magazzino apre l'Archivio senza sidebar
+PASS  il Nexus apre DEV / QA senza sidebar
+PASS  il comando superiore torna sempre alla Base
+
+Risultato Base/HUB: 33 passati, 0 falliti
