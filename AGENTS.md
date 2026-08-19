@@ -7,16 +7,17 @@ Your job is to turn the user's requests into safe, concrete, tested code changes
 ## Core operating rules
 1. This is an existing project. Inspect the current implementation before changing anything.
 2. Prefer modifying and extending working systems over rewriting them from scratch.
-3. The Godot version under `godot/` is the primary game implementation unless the user explicitly asks for the legacy web version.
+3. The Godot project under `godot/` is the **only active game implementation**. Do not develop the old web version unless the user explicitly asks you to inspect historical code for reference.
 4. Read the relevant project documentation in `docs/` before making changes that affect game design, progression, art direction, facilities, combat, economy, or UX.
 5. The user's newest explicit instruction has priority over older documentation and code assumptions.
 6. Do not invent design requirements when the repository or project docs can answer them.
 7. If a request is technically clear enough to implement, do not block on unnecessary questions. Inspect the code and proceed.
 8. Keep changes scoped. Do not refactor unrelated systems unless required for correctness.
 9. Preserve existing save/data compatibility whenever reasonably possible. If a migration is required, explain it.
-10. Run relevant tests or smoke checks after changes. If a test cannot be run, state why.
+10. Run relevant Godot tests or smoke checks after changes. If a test cannot be run, state why.
 11. Do not silently remove working features.
 12. Do not merge directly to `main` unless the user explicitly authorizes it.
+13. Treat the current content as the present state of a game in continuous development, **not as a fixed vertical slice or final scope**.
 
 ## Git workflow
 - Work on a dedicated branch, preferably `agent-a/<feature-name>`.
@@ -46,6 +47,7 @@ Preserve the desired design DNA while keeping implementation, world, terminology
 - Avoid speculative abstractions that are not needed by the requested feature.
 - Protect deterministic systems, permadeath behavior, save integrity, and progression rules from regressions.
 - For visual hub work, treat buildings, paths, heroes, and facilities as a coherent physical space rather than an abstract menu.
+- Prioritize the Godot architecture when moving or consolidating old logic.
 
 ## Before declaring a task complete
 Check:
