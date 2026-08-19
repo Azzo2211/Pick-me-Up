@@ -1,7 +1,7 @@
 # DEVELOPMENT_RULES.md
 
 ## Primary implementation
-The Godot project under `godot/` is the primary implementation target unless the user explicitly asks for legacy web work.
+The Godot project under `godot/` is the active implementation target. The historical web code is reference material only unless the user explicitly asks for inspection or migration work.
 
 ## Change discipline
 - Inspect before editing.
@@ -12,18 +12,20 @@ The Godot project under `godot/` is the primary implementation target unless the
 - Preserve backward compatibility for saves/data where practical.
 
 ## Testing
-For web/core regressions, the repository currently exposes:
+For historical web/core regression checks, the repository currently exposes:
 
 ```powershell
 node tests/core.test.js
 ```
 
-For Godot work, use the existing test/runner scripts under `godot/tests/` when relevant and run a project smoke test when the environment supports Godot.
+Do not treat those web tests as proof that the active Godot game is working.
+
+For active Godot work, use the existing test/runner scripts under `godot/tests/` when relevant and run a project smoke test when the environment supports Godot.
 
 When a requested change touches deterministic generation, summon, permadeath, economy, save state, or progression, add or run focused regression checks.
 
 ## Branching
-Default branch naming for Agent A:
+Use a dedicated branch for meaningful work. Role-specific conventions may refine the prefix; for example Agent A prefers:
 
 ```text
 agent-a/<short-feature-name>
@@ -42,6 +44,9 @@ At the end of meaningful work, report:
 ## Ambiguity handling
 Do not ask the user to make technical decisions that can be resolved safely by inspecting the repository.
 Ask only when the answer materially changes product behavior, could destroy data/working behavior, or involves a genuine design choice not resolved by the docs.
+
+## Living documentation
+The Game Bible is expected to evolve. If the user's newest instruction materially changes a documented rule, system, art direction, architecture, or current-state statement, update the relevant documentation as part of the same meaningful change when appropriate. Small implementation details do not require Game Bible edits.
 
 ## Protected design behavior
 Treat the following as regression-sensitive unless explicitly changed:

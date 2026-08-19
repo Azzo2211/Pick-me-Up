@@ -1,8 +1,7 @@
-# AGENTS.md — Riftward Agent A
+# AGENTS.md — Riftward Repository Instructions
 
-## Role
-You are Agent A, the Senior Game Engineer for **Riftward: The Last Ascent**.
-Your job is to turn the user's requests into safe, concrete, tested code changes in this repository.
+## Purpose
+These are the shared engineering instructions for **Riftward: The Last Ascent**. They apply to any coding agent or developer working in this repository, including Codex and Agent A.
 
 ## Core operating rules
 1. This is an existing project. Inspect the current implementation before changing anything.
@@ -10,20 +9,23 @@ Your job is to turn the user's requests into safe, concrete, tested code changes
 3. The Godot project under `godot/` is the **only active game implementation**. Do not develop the old web version unless the user explicitly asks you to inspect historical code for reference.
 4. Read the relevant project documentation in `docs/` before making changes that affect game design, progression, art direction, facilities, combat, economy, or UX.
 5. The user's newest explicit instruction has priority over older documentation and code assumptions.
-6. Do not invent design requirements when the repository or project docs can answer them.
-7. If a request is technically clear enough to implement, do not block on unnecessary questions. Inspect the code and proceed.
-8. Keep changes scoped. Do not refactor unrelated systems unless required for correctness.
-9. Preserve existing save/data compatibility whenever reasonably possible. If a migration is required, explain it.
-10. Run relevant Godot tests or smoke checks after changes. If a test cannot be run, state why.
-11. Do not silently remove working features.
-12. Do not merge directly to `main` unless the user explicitly authorizes it.
-13. Treat the current content as the present state of a game in continuous development, **not as a fixed vertical slice or final scope**.
+6. The project documentation is a living source of truth, not an immutable specification. The user may add, remove, replace, or redesign systems during development.
+7. When a new user decision materially changes product direction, gameplay rules, art direction, architecture, or documented current state, update the relevant file in `docs/` when appropriate.
+8. Do not invent design requirements when the repository or project docs can answer them.
+9. If a request is technically clear enough to implement, do not block on unnecessary questions. Inspect the code and proceed.
+10. Keep changes scoped. Do not refactor unrelated systems unless required for correctness.
+11. Preserve existing save/data compatibility whenever reasonably possible. If a migration is required, explain it.
+12. Run relevant Godot tests or smoke checks after changes. If a test cannot be run, state why.
+13. Do not silently remove working features.
+14. Do not merge directly to `main` unless the user explicitly authorizes it.
+15. Treat the current content as the present state of a game in continuous development, **not as a fixed vertical slice or final scope**.
 
 ## Git workflow
-- Work on a dedicated branch, preferably `agent-a/<feature-name>`.
-- Before editing, inspect the current branch and recent relevant files.
-- After implementation, summarize changed files, tests run, known risks, and any follow-up work.
+- Use a dedicated branch for meaningful work.
+- Before editing, inspect the current branch, recent relevant files, and any related open work if needed.
+- After implementation, summarize changed files, tests run, known risks, and follow-up work.
 - Significant work should end in a pull request for review.
+- Never use destructive Git operations such as hard resets or cleaning untracked files unless the user explicitly authorizes them and the consequences are understood.
 
 ## Design priority order
 When sources conflict, use this order:
@@ -54,5 +56,9 @@ Check:
 - Does it satisfy the user's request?
 - Did it preserve unrelated working behavior?
 - Did it follow the project docs?
+- If the task materially changed the design, are the relevant docs still accurate?
 - Did relevant tests pass?
 - Is the change understandable to the next engineer?
+
+## Role-specific instructions
+Shared repository rules live here. Role-specific behavior belongs in separate documents, for example `docs/AGENT_A.md`. A role-specific document may add responsibilities or workflow preferences, but it must not weaken these shared project protections.

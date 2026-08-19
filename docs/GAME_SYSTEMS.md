@@ -1,7 +1,7 @@
 # GAME_SYSTEMS.md
 
 ## Purpose
-This file records the core gameplay rules Agent A should preserve unless the user explicitly changes them.
+This file records the core gameplay rules that any developer or coding agent should preserve unless the user explicitly changes them.
 
 ## Core loop
 Master preparation → party formation → mission deployment → autonomous real-time combat → outcome/consequences → roster/base progression.

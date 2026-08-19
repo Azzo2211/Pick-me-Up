@@ -55,5 +55,5 @@ Some older documentation/code represents facilities that conflict with newer hub
 When this happens, do not assume the existing implementation is authoritative. Follow the priority order in `AGENTS.md`, especially the newer decisions in `GAME_VISION.md` and `ART_DIRECTION.md`.
 
 ## Immediate engineering philosophy
-The project is already functional enough that Agent A should improve it incrementally rather than rebuild it from scratch.
+The project is already functional enough that developers and coding agents should improve it incrementally rather than rebuild it from scratch.
 Before each task, identify the exact subsystem involved, inspect its current implementation, and preserve unrelated working behavior.
