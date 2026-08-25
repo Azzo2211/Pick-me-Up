@@ -5,14 +5,14 @@ cd /d "%~dp0"
 rem Prefer the Windows Python Launcher. It avoids the Microsoft Store python.exe alias.
 py -3 --version >nul 2>nul
 if %errorlevel%==0 (
-    py -3 ".\agent-a\readonly_agent_v3.py" --benchmark
+    py -3 ".\agent-a\readonly_agent_v4.py" --benchmark
     goto :done
 )
 
 rem Fall back to a real python executable only if it can actually run Python.
 python -c "import sys; assert sys.version_info.major == 3" >nul 2>nul
 if %errorlevel%==0 (
-    python ".\agent-a\readonly_agent_v3.py" --benchmark
+    python ".\agent-a\readonly_agent_v4.py" --benchmark
     goto :done
 )
 
