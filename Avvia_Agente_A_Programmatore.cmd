@@ -4,7 +4,7 @@ chcp 65001 >nul
 cd /d "%~dp0"
 
 echo ==============================================
-echo Riftward - Agent A PROGRAMMATORE v2
+echo Riftward - Agent A PROGRAMMATORE v3
 echo Scrittura controllata su branch agent-a dedicata
 echo Nessun commit, push o merge automatico
 echo ==============================================
@@ -13,13 +13,13 @@ echo.
 rem Prefer the Windows Python Launcher to avoid the Microsoft Store alias.
 py -3 --version >nul 2>nul
 if %errorlevel%==0 (
-    py -3 ".\agent-a\programmer_agent_v2.py"
+    py -3 ".\agent-a\programmer_agent_v3.py"
     goto :done
 )
 
 python -c "import sys; assert sys.version_info.major == 3" >nul 2>nul
 if %errorlevel%==0 (
-    python ".\agent-a\programmer_agent_v2.py"
+    python ".\agent-a\programmer_agent_v3.py"
     goto :done
 )
 
