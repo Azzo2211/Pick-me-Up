@@ -4,8 +4,8 @@ chcp 65001 >nul
 cd /d "%~dp0"
 
 echo ==============================================
-echo Riftward - Agent A PROGRAMMATORE v4.5
-echo Inventario facility deterministico + NO_CHANGE + verifica Godot
+echo Riftward - Agent A PROGRAMMATORE v4.6
+echo Inventario facility + policy Level 1 + verifica Godot
 echo Nessun commit, push o merge automatico
 echo ==============================================
 echo.
@@ -13,13 +13,13 @@ echo.
 rem Prefer the Windows Python Launcher to avoid the Microsoft Store alias.
 py -3 --version >nul 2>nul
 if %errorlevel%==0 (
-    py -3 ".\agent-a\programmer_agent_v4_5.py"
+    py -3 ".\agent-a\programmer_agent_v4_6.py"
     goto :done
 )
 
 python -c "import sys; assert sys.version_info.major == 3" >nul 2>nul
 if %errorlevel%==0 (
-    python ".\agent-a\programmer_agent_v4_5.py"
+    python ".\agent-a\programmer_agent_v4_6.py"
     goto :done
 )
 
