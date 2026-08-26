@@ -4,7 +4,7 @@ chcp 65001 >nul
 cd /d "%~dp0"
 
 echo ==============================================
-echo Riftward - Agent A PROGRAMMATORE v4.7
+echo Riftward - Agent A PROGRAMMATORE v4.7.1
 echo Scope utente + inventario facility + policy Level 1
 echo Nessun commit, push o merge automatico
 echo ==============================================

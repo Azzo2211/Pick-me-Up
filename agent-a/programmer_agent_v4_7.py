@@ -16,6 +16,7 @@ import readonly_agent_v5 as v5
 
 
 MODEL = core.DEFAULT_MODEL
+_ORIGINAL_PLAN46 = v46._plan46
 
 SCOPE_SYSTEM_SUFFIX = """
 
@@ -75,8 +76,9 @@ def _decision_is_redundant(task: str, plan: str) -> list[str]:
 
 
 def _plan47(session: Any, task: str, model: str) -> tuple[str, int, int]:
-    # First use the v4.6 grounded policy planner.
-    plan, total_p, total_o = v46._plan46(session, task, model)
+    # Use the original v4.6 grounded policy planner. Do not call v46._plan46
+    # here because run_programmer temporarily patches that symbol to _plan47.
+    plan, total_p, total_o = _ORIGINAL_PLAN46(session, task, model)
     first = next((line.strip().upper() for line in plan.splitlines() if line.strip()), "")
     reasons = _decision_is_redundant(task, plan) if first.startswith("STATUS: NEED_USER_DECISION") else []
     if not reasons:
@@ -129,12 +131,12 @@ def run_programmer(task: str, model: str) -> dict[str, Any]:
         result = v46.run_programmer(task, model)
     finally:
         v46._plan46 = old_plan46
-    result["runtime"] = "programmer-v4.7-task-scope-precedence"
+    result["runtime"] = "programmer-v4.7.1-task-scope-precedence"
     return result
 
 
 def save_result(result: dict[str, Any]) -> Path:
-    target = Path(tempfile.gettempdir()) / "riftward_agent_a_programmer_v4_7_result.json"
+    target = Path(tempfile.gettempdir()) / "riftward_agent_a_programmer_v4_7_1_result.json"
     target.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     return target
 
@@ -145,7 +147,7 @@ def main() -> int:
     parser.add_argument("--model", default=MODEL)
     args = parser.parse_args()
 
-    print("Riftward Agent A - PROGRAMMER v4.7 / TASK SCOPE PRECEDENCE")
+    print("Riftward Agent A - PROGRAMMER v4.7.1 / TASK SCOPE PRECEDENCE")
     print(f"Repository: {core.ROOT}")
     print(f"Model: {args.model}")
     print(f"Ollama chat: {transport.CHAT_URL}")
