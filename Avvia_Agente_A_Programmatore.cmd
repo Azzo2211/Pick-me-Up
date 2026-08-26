@@ -4,8 +4,8 @@ chcp 65001 >nul
 cd /d "%~dp0"
 
 echo ==============================================
-echo Riftward - Agent A PROGRAMMATORE v4.1
-echo Preflight Ollama + manifesto modifiche strutturato
+echo Riftward - Agent A PROGRAMMATORE v4.2
+echo Preflight reale chat Ollama + manifesto strutturato
 echo Nessun commit, push o merge automatico
 echo ==============================================
 echo.
@@ -13,13 +13,13 @@ echo.
 rem Prefer the Windows Python Launcher to avoid the Microsoft Store alias.
 py -3 --version >nul 2>nul
 if %errorlevel%==0 (
-    py -3 ".\agent-a\programmer_agent_v4_1.py"
+    py -3 ".\agent-a\programmer_agent_v4_2.py"
     goto :done
 )
 
 python -c "import sys; assert sys.version_info.major == 3" >nul 2>nul
 if %errorlevel%==0 (
-    python ".\agent-a\programmer_agent_v4_1.py"
+    python ".\agent-a\programmer_agent_v4_2.py"
     goto :done
 )
 
