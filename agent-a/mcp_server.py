@@ -8,7 +8,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from mcp.types import ToolAnnotations
 
 import programmer_agent_stable as stable
@@ -27,8 +27,9 @@ _RUN_LOCK = threading.Lock()
 # useful for Git/Godot subprocesses even though Agent A also resolves ROOT.
 os.chdir(ROOT)
 
-mcp = FastMCP(
+mcp = MCPServer(
     "Riftward Agent A",
+    version="1.0.0",
     instructions=(
         "Qualified first-line local programmer for Riftward. Use run_agent_a for repository programming work. "
         "Agent A may create a task branch and edit local files, but it never commits, pushes, or merges automatically. "
@@ -170,8 +171,8 @@ def run_agent_a(task: str) -> dict[str, Any]:
                 "mutations": 0,
             }
 
-        # stdio stdout is the MCP protocol wire. Route any legacy runtime prints
-        # to stderr so they can never corrupt MCP JSON-RPC traffic.
+        # stdout is the MCP protocol wire. Route legacy runtime prints to stderr
+        # so they can never corrupt MCP JSON-RPC traffic.
         with contextlib.redirect_stdout(sys.stderr):
             result = stable.run_programmer(task, MODEL)
         return _public_result(result)
