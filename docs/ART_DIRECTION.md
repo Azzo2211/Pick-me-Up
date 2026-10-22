@@ -3,6 +3,11 @@
 ## Visual target
 Riftward should communicate an original anime-isekai fantasy identity with readable game-space composition and strong visual progression.
 
+## Rendering style
+- Real-time 3D, procedural low-poly geometry with soft colours, Lambert shading and soft blob shadows (no dynamic shadow maps, so the look is identical on every GPU).
+- Chibi heroes with big heads and big eyes; hair, eyes, skin and outfit derive deterministically from the hero id, and the 2D UI portraits use the same colours.
+- UI: ivory panels with gold borders and navy headers, teal/sky/gold/violet accents, Fredoka for titles and Nunito for text (both SIL OFL, licences in `godot/assets/fonts`).
+
 ## Hub direction
 The base should feel:
 - compact and coherent;
@@ -30,10 +35,11 @@ Do not treat this as a rigid rule if another visual solution communicates progre
 ## Specific Level 1 notes
 - Training Center: slightly raised/elevated.
 - Lodging: simple and modest, but believable for roughly five heroes.
-- Mission Gate: suspended/floating fantasy element, yet linked physically to the base circulation.
+- Mission Gate: large ring portal on its own floating rock, linked to the island by a stone bridge.
 - Merging Center: enclosed dome-like building, blue magical glow, available at Level 1.
 - Workshop and Armory: absent physically until unlocked/built.
-- Central square/plaza: open public space, not a labeled facility building.
+- Central square/plaza: open public space, not a facility building. The floating Nexus crystal in its centre is a clickable monument (summon and base expansion).
+- Construction sites (wooden frame, planks, sign) appear only when a facility is unlocked but not built yet.
 
 ## UI relationship
 UI should support the world rather than replace it. Clicking a physical facility may open contextual panels, but the player's first mental model should be “I am interacting with a place in my base.”

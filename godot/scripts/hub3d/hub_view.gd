@@ -13,8 +13,8 @@ const PITCH := deg_to_rad(44.0)
 const YAW := deg_to_rad(24.0)
 const MIN_DISTANCE := 15.0
 const MAX_DISTANCE := 78.0
-const HOME_TARGET := Vector3(2.6, 0.0, -1.6)
-const HOME_DISTANCE := 60.0
+const HOME_TARGET := Vector3(2.2, 0.0, -2.6)
+const HOME_DISTANCE := 61.0
 
 var viewport: SubViewport
 var world: HubWorld

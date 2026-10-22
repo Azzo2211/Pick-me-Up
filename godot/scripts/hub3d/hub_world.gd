@@ -9,9 +9,12 @@ signal building_clicked(id: String)
 signal hero_clicked(hero_id: String)
 
 const BuildingModelScript := preload("res://scripts/hub3d/building_model.gd")
+const WaterShader := preload("res://scripts/hub3d/water.gdshader")
 const HubAgentScript := preload("res://scripts/hub3d/hub_agent.gd")
 
 const PLAZA_RADIUS := 4.6
+const POND := Vector2(11.6, 7.6)
+const POND_RADIUS := 1.7
 const MAX_AGENTS := 30
 const GATE_PLATFORM := Vector3(15.2, 1.4, -15.6)
 
@@ -55,6 +58,7 @@ var wander_nodes: Array[int] = []
 var site_nodes: Dictionary = {}         # id -> {"door": int, "spots": Array[int]}
 var tree_spots: Array[Vector3] = []
 var shadow_spots: Array[Vector3] = []
+var water_segments: Array = []
 var current_base_level := -1
 var occupied_signature := ""
 var hovered_id := ""
@@ -74,6 +78,7 @@ func _ready() -> void:
 	agent_root = _group("Agents")
 	fx_root = _group("Fx")
 	_build_island()
+	_build_water()
 	_build_gate_platform()
 	_build_plaza()
 	_build_sky_dressing()
@@ -226,6 +231,80 @@ func _tri(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, color: Color) -> 
 	st.add_vertex(c)
 	st.set_normal(normal)
 	st.add_vertex(b)
+
+func _water_material(speed: float, stripes: float, alpha: float) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = WaterShader
+	m.set_shader_parameter("speed", speed)
+	m.set_shader_parameter("stripes", stripes)
+	m.set_shader_parameter("alpha", alpha)
+	return m
+
+## Laghetto con ruscello che cade dal bordo dell'isola.
+func _build_water() -> void:
+	var kit := MeshKit.new(terrain_root)
+	var pond_pos := Vector3(POND.x, 0.0, POND.y)
+	kit.cyl(POND_RADIUS + 0.35, POND_RADIUS + 0.45, 0.1, Color("#c9b98f"), pond_pos + Vector3(0, 0.02, 0), 18)
+	var water := MeshInstance3D.new()
+	var disc := CylinderMesh.new()
+	disc.top_radius = POND_RADIUS
+	disc.bottom_radius = POND_RADIUS
+	disc.height = 0.06
+	disc.radial_segments = 24
+	water.mesh = disc
+	water.material_override = _water_material(0.4, 3.0, 0.92)
+	water.position = pond_pos + Vector3(0, 0.08, 0)
+	terrain_root.add_child(water)
+	for i in 9:
+		var a := TAU * i / 9.0 + 0.2
+		kit.rock(0.28 + (i % 3) * 0.06, Color("#b9b0a2"), pond_pos + Vector3(cos(a), 0, sin(a)) * (POND_RADIUS + 0.35) + Vector3(0, 0.12, 0), 60 + i)
+	for i in 3:
+		kit.sphere(0.22, Color("#7fca5a"), pond_pos + Vector3(-0.6 + i * 0.6, 0.12, 0.3 - i * 0.4), Vector3(1.2, 0.25, 1.2), 8)
+	# Ruscello verso il bordo
+	var dir := POND.normalized()
+	var angle := atan2(dir.y, dir.x)
+	var edge := dir * (island_radius(angle) - 0.25)
+	var start := POND + dir * (POND_RADIUS - 0.3)
+	var length := start.distance_to(edge)
+	var stream := MeshInstance3D.new()
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.9, length)
+	stream.mesh = quad
+	stream.material_override = _water_material(1.6, length * 1.5, 0.95)
+	var mid := (start + edge) * 0.5
+	stream.position = Vector3(mid.x, 0.07, mid.y)
+	stream.rotation = Vector3(-PI / 2, atan2(-dir.x, -dir.y), 0)
+	terrain_root.add_child(stream)
+	# Cascata lungo la scogliera
+	var fall := MeshInstance3D.new()
+	var fall_quad := QuadMesh.new()
+	fall_quad.size = Vector2(1.0, 11.0)
+	fall.mesh = fall_quad
+	fall.material_override = _water_material(2.4, 9.0, 0.85)
+	var outward := Vector3(dir.x, 0, dir.y)
+	fall.position = Vector3(edge.x, -5.4, edge.y) + outward * 1.1
+	fall.rotation = Vector3(-0.18, atan2(dir.x, dir.y), 0)
+	terrain_root.add_child(fall)
+	var mist := CPUParticles3D.new()
+	mist.position = Vector3(edge.x, -10.5, edge.y) + outward * 2.0
+	mist.amount = 14
+	mist.lifetime = 2.2
+	mist.direction = Vector3.UP
+	mist.spread = 60.0
+	mist.initial_velocity_min = 0.3
+	mist.initial_velocity_max = 0.8
+	mist.gravity = Vector3.ZERO
+	mist.scale_amount_min = 1.0
+	mist.scale_amount_max = 2.0
+	var puff := SphereMesh.new(); puff.radius = 0.35; puff.height = 0.7; puff.radial_segments = 6; puff.rings = 3
+	var pm := StandardMaterial3D.new()
+	pm.albedo_color = Color(1, 1, 1, 0.55)
+	pm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	pm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	puff.material = pm
+	mist.mesh = puff
+	terrain_root.add_child(mist)
+	water_segments = [[start, edge]]
 
 func _build_gate_platform() -> void:
 	var kit := MeshKit.new(terrain_root)
@@ -558,6 +637,9 @@ func _ribbon(points: Array, width: float, color: Color, y: float) -> void:
 
 func _blocked(p: Vector2, clearance: float) -> bool:
 	if p.length() < PLAZA_RADIUS + 1.4 + clearance: return true
+	if p.distance_to(POND) < POND_RADIUS + 0.6 + clearance: return true
+	for seg in water_segments:
+		if Geometry2D.get_closest_point_to_segment(p, seg[0], seg[1]).distance_to(p) < 0.8 + clearance: return true
 	for id in SITES:
 		if id == "gate": continue
 		if buildings.has(id) and p.distance_to(SITES[id]) < float(SITE_RADIUS[id]) + clearance: return true

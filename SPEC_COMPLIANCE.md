@@ -1,52 +1,32 @@
-# Matrice di conformità alle specifiche
+# Matrice di conformità alle specifiche (build Godot)
 
-Questa matrice distingue ciò che è giocabile nella build locale da ciò che appartiene alla roadmap server/live-service della specifica.
+Stato della build Godot rispetto alla specifica di game design e alle decisioni sulla base.
 
-| Area del GDD | Stato | Implementazione |
+| Area | Stato | Implementazione |
 |---|---|---|
-| Identità e core loop | Completo | Master indiretto → preparazione → deployment → auto-combat → conseguenze → meta progressione. |
-| Account, world seed e tower | Vertical slice | World seed persistente; 5 piani giocabili su architettura da 100. |
-| Rarità 1★–7★ | Dati completi / acquisizione parziale | Cap 1★–7★ modellati; pool giocabili 1★–5★; 6★–7★ riservate all'endgame. |
-| Summon e probabilità | Completo per MVP | Normal 78/19/3%; High-grade 93,5/5,5/1%; costi LOCK; soft/hard pity; no clone identico. |
-| Generazione eroi | Completo | Identity seed, origine, background, professione, potential hidden, growth vector, personality, traits, assessment. |
-| Statistiche e formule | Completo | STR/INT/STA/AGI, HP, attacco, magia, defense, accuracy, evasion, crit, block e ammo. |
-| Leveling e promotion | Completo per early game | Curva XP, growth per livello, cap per rarità, pietre e promozione. |
-| Classi e ruoli | Completo per MVP | Guardian, Vanguard, Lancer, Ranger, Mage e Support con policy e skill distinte. |
-| Skill e mastery | Vertical slice | Skill attive/passive, cooldown, XP/level e uso contestuale AI. Evoluzioni avanzate restano post-slice. |
-| Traits, personality e autonomia | Completo | 7 assi di personalità; Utility AI valuta bersagli, rischio, ruolo, risorse e contesto. |
-| Relazioni, trust e morale | Completo per MVP | Bond pairwise, bonus squadra, morale, Fatigue e memory events. |
-| Combat system | Completo | Party 5, 20 tick/s, AI 5 Hz, front/mid/rear, munizioni, macro command e nessun controllo diretto. |
-| Status effects | Vertical slice | Fear, Low morale, Fatigue, ferite e protezione; catalogo esteso predisposto nella struttura. |
-| Mission e stage design | Completo per slice | Subjugation, Survival, Exploration, Defense e Boss con condizioni diverse. |
-| Stream generator | Completo per slice | 5 missioni collegate, seed derivati, indizi e climax persistenti. |
-| Difficulty e scaling | Completo per slice | Threat budget e scaling per floor/varianza deterministica. |
-| Failure, morte e retry | Completo | Permadeath immediato, tombstone, party wipe, estrazione, stage invariato e reward ridotte fino a ×0,35. |
-| Waiting Room e facilities | Vertical slice | 12 facilities visualizzate; Summoning, Training, Armory, Warehouse, Lodging e crafting operativi. |
-| Unlock facilities | Completo nei milestone slice | Smithy e Workshop al Floor 5; milestone successive rappresentate e bloccate. |
-| Economy e reward budget | Completo per slice | Oro, Gemme, pietre, materiali, ledger, sink e formula reward/first attempt/retry. |
-| Equipment e itemization | Completo per slice | 4 slot, grade D–B generabili, qualità individuale, inventory e auto-equip. |
-| Synthesis | Roadmap | Facility e data boundary presenti; distruzione donor non esposta nel vertical slice per evitare un flusso incompleto. |
-| Wounds, recovery e fatigue | Completo per MVP | Ferite Moderate/Serious, Fatigue persistente, Lodging e recupero offline ×3. |
-| Master actions e limiti | Completo | 5 ordini macro con cooldown; nessuna hotbar di skill individuali. |
-| Online, ranking e meta | Roadmap | Dimension Gate presente; server/social modes non simulati localmente. |
-| Transcendent endgame | Dati/Roadmap | Cap e rarità previsti; nessun 7★ obbligatorio o venduto nel pool standard. |
-| Data schema | Completo local-first | World, Hero, Skill, Equipment, Facility, StageDescriptor, MissionRun, Relationship, Ledger ed Event. |
-| Server architecture | Non deployata | La demo è offline; confini Economy/Mission/Summon sono mantenuti come funzioni atomiche e ledger/event log. |
-| AI degli eroi | Completo | Perception locale, target scoring, role policy, personality modifiers, resource state e squad commands. |
-| Telemetry e balancing | Strumenti locali | Event log, ledger, risultati missione, kill/damage/healing, attempts e death causes. |
-| UI/UX | Completo | Hub, hero screen, party formation, summon disclosure, mission HUD, report e mobile responsive. |
-| Legal/etica | Conforme al perimetro | Titolo, lore, UI e personaggi originali; nessun pagamento, paid resurrection, dark pattern o loss-triggered sale. |
+| Base come luogo fisico | Completo | Isola 3D: piazza aperta, cristallo, edifici veri, sentieri, vegetazione; i pannelli si aprono sopra la base. |
+| Base Lv.1 | Completo | Addestramento rialzato, Dormitorio per ~5 eroi, Fusione a cupola blu, Portale sospeso collegato; niente Armeria/Laboratorio/Magazzino. |
+| Crescita visiva | Completo | Livello N = N piani; cantieri solo dopo lo sblocco; la zona migliora con il livello base. |
+| Eroi vivi nella base | Completo | Camminano sui sentieri, si allenano, riposano, aspettano la missione, partono dal portale. |
+| Rarità 1★–7★ e cap | Completo | 10/20/30/50/70/99/120. |
+| Evocazione | Completo | Normale 78/19/3; High-grade 93,5/5,5/1 con pity 70/100; Trascendente 98/1,8/0,2 (5★/6★/7★) dal Piano 20. |
+| Leveling e addestramento | Completo | XP nel tempo (anche offline, max 8 h), XP da missione, level-up con crescita nascosta. |
+| Fusione e promozione | Completo | Fusione 3→1 fino a 5★; promozioni con Pietre, 6★ dal Piano 30 e 7★ dal Piano 60. |
+| Riposo, morale, ferite | Completo | Dormitorio a tempo; ferite moderate/gravi che guariscono riposando. |
+| Party e formazione | Completo | 5 eroi, 2 Front / 2 Mid / 1 Rear, formazione consigliata automatica. |
+| Combattimento | Completo | 20 tick/s, decisioni 5 Hz, punteggio bersagli, kiting, frecce, cure, paura, colpo ad area del boss. |
+| Ordini del Master | Completo | Postura, alta minaccia, proteggi retro, tutto per tutto, ritirata. |
+| Tipi di missione | Completo | Sterminio, Sopravvivenza, Esplorazione (3 punti), Difesa (faro), Guardiano. |
+| Torre | Completo | Piani 1–5 scritti a mano, 6–100 generati dal seme del mondo; boss ogni 5 piani; retry senza reroll. |
+| Permadeath | Completo | Morte definitiva, memoriale, nessuna resurrezione. |
+| Economia | Completo | Oro, Gemme, Pietre, materiali con capienza; modalità sviluppo opzionale. |
+| Strutture successive | Base | Armeria (forgia/equipaggia), Magazzino (capienza), Laboratorio (raffinazione), Alchimia (tonici). |
+| Relazioni e legami | Roadmap | Campo dati presente, logica da sviluppare. |
+| Online, classifiche | Roadmap | Non previsti nella build locale. |
 
-## Parametri LOCK verificati
-
-- Party size: 5.
-- Tower data model: 100 floor; contenuto slice: 5.
-- Core stats: STR / INT / STA / AGI.
-- Rarity e level cap: 1★ Lv.10, 2★ Lv.20, 3★ Lv.30, 4★ Lv.50, 5★ Lv.70, 6★ Lv.99, 7★ Lv.120.
-- Normal summon: 10.000 Oro.
-- High-grade summon: 500 Gemme.
-- Nessuna account energy.
-- Permadeath: attivo; paid resurrection: assente.
-- Reroll del piano al retry: assente.
-- Bond: −100…+100; morale/Fatigue: 0…100.
-- AI decision rate: 5 Hz; simulation rate: 20 tick/s.
+## Parametri bloccati verificati dai test
+- Party size 5; Torre fino a 100 piani.
+- Statistiche base FOR / INT / STA / AGI.
+- Costi evocazione 10.000 Oro e 500 Gemme.
+- Nessuna energia account; nessuna resurrezione a pagamento; nessun reroll del piano al retry.
+- Simulazione 20 tick/s, IA 5 Hz.

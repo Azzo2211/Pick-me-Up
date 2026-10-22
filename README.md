@@ -20,20 +20,16 @@ Nel repository sono ancora presenti alcuni file della precedente implementazione
 
 ## Stato attuale del gioco
 
-Il progetto contiene già una base funzionante di sistemi che continuerà a essere ampliata verso il gioco completo, tra cui:
+La schermata principale **è la base**: un'isola sospesa in 3D, colorata in stile anime-isekai, dove gli eroi vivono davvero.
 
-- party da 5 in formazione 2 Front / 2 Mid / 1 Rear;
-- 6 ruoli: Guardian, Vanguard, Lancer, Ranger, Mage e Support;
-- combattimento autonomo real-time con Utility AI;
-- ordini Master macro e nessun controllo diretto completo degli eroi;
-- stage deterministici e retry senza reroll del piano;
-- permadeath e conseguenze persistenti;
-- HeroSeed unici, rarità, crescita, personalità, morale e fatigue;
-- evocazione, leveling, training, promotion, equipment e facilities;
-- relazioni, bond, memorie ed event log;
-- hub fisico Godot con edifici e agenti/eroi visibili.
+- **Base Lv.1**: piazza aperta con il Cristallo del Nexus, Centro di Addestramento rialzato, Dormitorio semplice per circa 5 eroi, Centro di Fusione a cupola con luce blu, grande Portale sospeso collegato da un ponte. Tanta vegetazione, nessuna recinzione.
+- **Crescita visibile**: livello N = N piani. Le strutture non sbloccate non esistono; quando la base sale di livello compare il cantiere, poi l'edificio. Anche la zona migliora (lampioni, aiuole, sentieri lastricati, stendardi).
+- **Eroi vivi**: camminano sui sentieri, si allenano sul campo, entrano nel Dormitorio a riposare, aspettano la missione vicino al ponte. Si toccano per aprire la loro scheda.
+- **Pannelli sopra la base** invece di schermate a elenco: Addestramento, Dormitorio, Fusione/Promozione, Portale (missione e squadra), Cristallo (evocazione ed espansione), Armeria, Magazzino, Laboratorio, Alchimia.
+- **Sistemi**: economia reale (modalità sviluppo opzionale), addestramento e riposo nel tempo anche offline, livelli e cap per rarità 1★–7★, pool trascendente 6★/7★, fusione, promozioni endgame, Torre fino a 100 piani, ferite, permadeath.
+- **Missioni** in 3D con gli stessi personaggi: IA autonoma, solo ordini generali del Master.
 
-I contenuti presenti oggi sono lo stato corrente dello sviluppo, non il limite finale del progetto. Nuovi piani, sistemi, facilities, contenuti e profondità di gioco verranno aggiunti progressivamente.
+I contenuti presenti sono lo stato corrente dello sviluppo, non il limite finale del progetto.
 
 ## Comandi durante le missioni
 
@@ -41,31 +37,30 @@ I contenuti presenti oggi sono lo stato corrente dello sviluppo, non il limite f
 |---|---|---|
 | `1` | Postura | Cicla Avanza → Mantieni → Arretra |
 | `2` | Alta minaccia | Prioritizza i bersagli pericolosi |
-| `3` | Proteggi rear | Aumenta la priorità di intercettazione |
+| `3` | Proteggi retro | Le prime linee intercettano chi minaccia la retroguardia |
 | `4` | Tutto per tutto | Aumenta la cadenza per 10 secondi |
-| `X` | Estrazione | Tenta il disimpegno |
+| `X` | Ritirata | Estrazione dopo 6 secondi (missione non completata) |
 
 ## Sviluppo e test
 
-La priorità è testare direttamente il progetto Godot e i runner presenti sotto `godot/tests/` quando pertinenti.
-
-Il vecchio test JavaScript:
+Dalla cartella del repository (sostituisci `godot` con il percorso dell'eseguibile Godot 4.7):
 
 ```powershell
-node tests/core.test.js
+godot --headless --path godot -s res://tests/test_runner.gd -- --test-mode
+godot --headless --path godot -s res://tests/ui_smoke_runner.gd -- --test-mode
+godot --path godot -s res://tests/visual_capture_runner.gd -- --test-mode
 ```
 
-può essere usato esclusivamente come controllo storico di logiche ereditate quando una modifica Godot dipende ancora da quelle regole.
+La prima suite controlla le regole di gioco, la seconda apre tutta l'interfaccia e completa una missione, la terza salva screenshot in `godot/tests/captures/`.
 
 ## Architettura principale
 
-- `godot/project.godot` — progetto Godot ufficiale.
-- `godot/Main.tscn` — scena principale.
-- `godot/scripts/game_state.gd` — stato e persistenza del gioco.
-- `godot/scripts/base/` — hub, facilities, edifici, agenti e progressione della base.
-- `godot/tests/` — runner e verifiche Godot.
-
-La struttura può evolvere con il progetto: l'obiettivo non è conservare l'architettura attuale a ogni costo, ma migliorarla senza riscritture inutili o regressioni.
+- `godot/scripts/game_state.gd` — regole, economia, progressione, salvataggio (v3, con migrazione dei vecchi salvataggi).
+- `godot/scripts/main.gd` — schermata principale: base, HUD, pannello laterale, finestre, flusso missione.
+- `godot/scripts/ui/` — tema, widget e contenuti dei pannelli.
+- `godot/scripts/hub3d/` — base 3D: isola, edifici procedurali, eroi, camera.
+- `godot/scripts/battle/` — missione in tempo reale.
+- `docs/` — visione, sistemi, direzione artistica, stato corrente.
 
 ## Direzione del prodotto
 

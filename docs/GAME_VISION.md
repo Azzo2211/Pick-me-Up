@@ -15,7 +15,7 @@ The intended emotional loop is:
 - The game may draw inspiration from the systemic feeling of “Pick Me Up” style fiction, but must remain original in names, world, characters, UI, assets, layouts, dialogue, and presentation.
 
 ## Current product direction
-The Godot build is the main product direction. The older web implementation is useful as a systems reference and regression source, but should not dictate the visual or architectural future of the Godot version.
+The Godot build is the main product direction. The base is a real-time 3D diorama (procedural low-poly, bright anime-isekai palette) rendered behind a minimal HUD; building interfaces open as side panels over the base. The older web implementation is only a historical systems reference.
 
 ## Base / hub vision
 The early base should feel like a compact, colorful anime-isekai fantasy settlement rather than a mega-castle or dark dungeon.
@@ -30,15 +30,20 @@ Key principles:
 - the central square is an open plaza, not a separate building/facility.
 
 ### Level 1 base decisions currently authoritative
-- Training Center exists and is slightly elevated.
+- Training Center exists and is slightly elevated (raised stone platform with stairs, dummies, target, weapon rack).
 - Dormitory/Lodging exists, simple but large enough to plausibly host about five heroes.
-- Mission Gate exists, visually suspended/floating but physically connected to the base circulation.
-- Merging Center exists at Level 1; it is enclosed/dome-like with blue magical light and is not shown as locked.
-- Workshop is not yet physically present at Level 1.
-- Armory is not yet physically present at Level 1.
-- Unknown/unbuilt facilities should not be physically shown merely as locked placeholders.
+- Mission Gate exists, large, on its own floating rock, physically connected to the island by a stone bridge.
+- Merging Center exists at Level 1; it is enclosed, dome-shaped with blue magical light, no fences around it.
+- The central plaza is open space. The Nexus crystal floating in its centre is the access point for summoning and for expanding the base; it is a monument, not a building.
+- Workshop, Armory, Warehouse and Alchemy are not physically present at Level 1.
+- Unknown/unbuilt facilities are not shown. When a base level unlocks a facility, a small construction site appears in its spot; the building appears only after it is built.
 
-These newer decisions override older hub code or documents when they conflict.
+### Growth rules
+- Building level N = N storeys (or an equivalent architectural growth for non-house shapes, e.g. the training pavilion and the gate rings).
+- Facility level can never exceed the base level.
+- Each base level also improves the whole area: Lv.2 lamps and flower beds, Lv.3 paved paths and banners, Lv.4 glowing plaza ring, Lv.5 floating lanterns.
+
+These decisions override older hub code or documents when they conflict.
 
 ## Experience target
 The player should increasingly feel that they are responsible for a living organization rather than manipulating spreadsheet units. The base, roster, missions, progression, and losses should reinforce one another.

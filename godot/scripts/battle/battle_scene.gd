@@ -17,11 +17,11 @@ const ARENA_X := 15.0
 const ARENA_Z := 7.0
 const FORMATION := [Vector2(-6.5, -1.6), Vector2(-6.5, 1.6), Vector2(-8.6, -2.4), Vector2(-8.6, 2.4), Vector2(-10.8, 0.0)]
 const ENEMY_TEMPLATES := {
-	"raider": {"hp": 150.0, "attack": 17.0, "defense": 7.0, "speed": 2.3, "cadence": 0.9, "threat": 1, "range": 1.1, "tint": Color("#c0453a"), "name": "Predone"},
-	"hound": {"hp": 110.0, "attack": 15.0, "defense": 4.0, "speed": 3.6, "cadence": 0.75, "threat": 1, "range": 1.0, "tint": Color("#7b4fb8"), "name": "Segugio"},
-	"archer": {"hp": 105.0, "attack": 16.0, "defense": 3.0, "speed": 2.0, "cadence": 1.25, "threat": 2, "range": 6.5, "tint": Color("#c4467e"), "name": "Arciere"},
-	"brute": {"hp": 300.0, "attack": 27.0, "defense": 14.0, "speed": 1.5, "cadence": 1.5, "threat": 3, "range": 1.4, "tint": Color("#a8653a"), "name": "Bruto"},
-	"boss": {"hp": 1800.0, "attack": 34.0, "defense": 21.0, "speed": 1.3, "cadence": 1.35, "threat": 8, "range": 1.9, "tint": Color("#4f8a3a"), "name": "Guardiano"},
+	"raider": {"hp": 210.0, "attack": 31.0, "defense": 8.0, "speed": 2.3, "cadence": 0.95, "threat": 1, "range": 1.1, "tint": Color("#c0453a"), "name": "Predone"},
+	"hound": {"hp": 150.0, "attack": 26.0, "defense": 5.0, "speed": 3.6, "cadence": 0.75, "threat": 1, "range": 1.0, "tint": Color("#7b4fb8"), "name": "Segugio"},
+	"archer": {"hp": 140.0, "attack": 29.0, "defense": 4.0, "speed": 2.0, "cadence": 1.3, "threat": 2, "range": 6.5, "tint": Color("#c4467e"), "name": "Arciere"},
+	"brute": {"hp": 540.0, "attack": 48.0, "defense": 16.0, "speed": 1.5, "cadence": 1.55, "threat": 3, "range": 1.4, "tint": Color("#a8653a"), "name": "Bruto"},
+	"boss": {"hp": 2100.0, "attack": 46.0, "defense": 22.0, "speed": 1.3, "cadence": 1.35, "threat": 8, "range": 1.9, "tint": Color("#4f8a3a"), "name": "Guardiano"},
 }
 
 var stage: Dictionary
@@ -318,11 +318,13 @@ func _make_party_card(unit: Dictionary) -> void:
 
 func _spawn_enemy(kind: String, wave: int, index: int) -> void:
 	var t: Dictionary = ENEMY_TEMPLATES[kind]
-	var scale := 0.82 + int(stage.floor) * 0.10
+	var floor_index := int(stage.floor)
+	var hp_scale := 0.8 + floor_index * 0.2
+	var atk_scale := 0.85 + floor_index * 0.15
 	var pos := Vector2(ARENA_X - 0.5 + rng.randf_range(0.0, 1.5), clampf(-ARENA_Z + 1.0 + fmod(float(wave * 3 + index * 2), 6.0) * 2.1 + rng.randf_range(-0.5, 0.5), -ARENA_Z + 0.8, ARENA_Z - 0.8))
 	var unit := {
-		"entity_id": next_id, "hero": false, "kind": kind, "name": str(t.name), "pos": pos, "hp": float(t.hp) * scale, "max_hp": float(t.hp) * scale,
-		"attack": float(t.attack) * scale, "defense": float(t.defense) * scale, "speed": float(t.speed), "cooldown": rng.randf_range(0.2, 0.9),
+		"entity_id": next_id, "hero": false, "kind": kind, "name": str(t.name), "pos": pos, "hp": float(t.hp) * hp_scale, "max_hp": float(t.hp) * hp_scale,
+		"attack": float(t.attack) * atk_scale, "defense": float(t.defense) * (0.8 + floor_index * 0.2), "speed": float(t.speed), "cooldown": rng.randf_range(0.2, 0.9),
 		"cadence": float(t.cadence), "threat": int(t.threat), "range": float(t.range), "target": -1, "alive": true, "slam_cd": 5.0,
 		"accuracy": 82.0, "evasion": 4.0, "crit": 4.0, "block": 0.0, "ranged": kind == "archer",
 	}
