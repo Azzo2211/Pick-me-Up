@@ -43,7 +43,7 @@ var command_state := {"posture": "ADVANCE", "focus": false, "protect": false, "a
 var command_ready := {"posture": 0.0, "focus": 0.0, "protect": 0.0, "all_out": 0.0, "extract": 0.0}
 var objective := {"poi": 0, "poi_progress": 0.0, "beacon": 100.0, "boss_dead": false}
 var poi_points: Array[Vector2] = [Vector2(-1.0, -3.8), Vector2(4.5, 3.6), Vector2(10.0, -2.5)]
-var beacon_pos := Vector2(-12.6, 0.0)
+var beacon_pos := Vector2(-10.0, 3.2)
 
 var viewport: SubViewport
 var world: Node3D
@@ -123,9 +123,9 @@ func _build_world() -> void:
 	world.add_child(sun)
 	camera = Camera3D.new()
 	camera.fov = 34.0
-	camera.position = Vector3(-1.0, 13.5, 15.5)
+	camera.position = Vector3(-2.6, 13.5, 15.5)
 	world.add_child(camera)
-	camera.look_at(Vector3(-0.5, 0.0, 0.6), Vector3.UP)
+	camera.look_at(Vector3(-2.2, 0.0, 0.6), Vector3.UP)
 	camera.current = true
 	var kit := MeshKit.new(world)
 	kit.cast_shadows = false
@@ -498,7 +498,9 @@ func _update_hero(hero: Dictionary, delta: float) -> void:
 			return
 		"heal":
 			var ally := _find(int(hero.target))
-			if ally.is_empty() or not ally.alive: return
+			if ally.is_empty() or not ally.alive or float(hero.skill_cd) > 0.0:
+				hero.action = "engage"
+				return
 			if hero.pos.distance_to(ally.pos) > float(hero.range):
 				_move_towards(hero, ally.pos, delta, speed_mult)
 				return

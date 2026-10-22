@@ -572,6 +572,13 @@ func _build_crystal(body: VBoxContainer) -> void:
 		body.add_child(b)
 		if not check.ok: body.add_child(UIKit.label(str(check.message), 13, UIKit.ROSE, UIKit.body_bold()))
 	body.add_child(section("Evocazione", "%d eroi vivi" % GS.get_alive_heroes().size()))
+	var emergency := GS.emergency_recruit_status()
+	if emergency.visible:
+		body.add_child(info_card("Ti restano meno di cinque eroi. Il Nexus può richiamare gratis una recluta 1★ ogni 30 minuti.", "warn"))
+		var eb := UIKit.button("Richiamo d'emergenza (gratis)", _emergency, "gold", 0)
+		eb.disabled = not emergency.ok
+		body.add_child(eb)
+		if not emergency.ok: body.add_child(UIKit.label(str(emergency.message), 13, UIKit.MUTED, UIKit.body_bold()))
 	for pool in ["normal", "high", "transcendent"]: body.add_child(_pool_card(pool))
 	if not last_summon.is_empty():
 		body.add_child(section("Ultimi arrivati"))
@@ -606,6 +613,10 @@ func _pool_card(pool: String) -> PanelContainer:
 	v.add_child(row)
 	card.add_child(v)
 	return card
+
+func _emergency() -> void:
+	var result := GS.emergency_recruit()
+	main.report(result, "Nuova recluta", str(result.get("hero", {}).get("name", "")))
 
 func _upgrade_base() -> void:
 	var result := GS.upgrade_base()

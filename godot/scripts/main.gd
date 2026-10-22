@@ -34,6 +34,7 @@ var battle: Node
 var busy := false
 var current_view := "hub"
 var _refresh_queued := false
+var _last_panel_render := 0.0
 
 func _ready() -> void:
 	theme = UIKit.build_theme()
@@ -60,6 +61,7 @@ func _ready() -> void:
 	toast_layer.add_theme_constant_override("separation", 8)
 	add_child(toast_layer)
 	GameState.state_changed.connect(_queue_refresh)
+	GameState.time_ticked.connect(_on_time_ticked)
 	GameState.hero_leveled.connect(_on_hero_leveled)
 	await get_tree().process_frame
 	_refresh_all()
@@ -273,6 +275,7 @@ func close_panel() -> void:
 
 func _render_panel(reset_scroll: bool = false) -> void:
 	if current_panel.is_empty() or not side_panel.visible: return
+	_last_panel_render = Time.get_ticks_msec() / 1000.0
 	var scroll := side_scroll.scroll_vertical
 	UIKit.clear(side_body)
 	UIKit.clear(side_footer)
@@ -320,6 +323,24 @@ func _refresh_all() -> void:
 	_render_panel()
 	for modal in modal_layer.get_children():
 		if modal.has_meta("refresh"): (modal.get_meta("refresh") as Callable).call()
+
+## Il tempo che scorre aggiorna HUD e base subito; il pannello aperto solo ogni pochi
+## secondi e mai mentre si sta premendo un pulsante.
+func _on_time_ticked() -> void:
+	if battle != null: return
+	_update_hud()
+	hub.refresh(GameState)
+	var now := Time.get_ticks_msec() / 1000.0
+	if current_panel in ["training", "dormitory", "roster"] and now - _last_panel_render > 4.0 and not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+		_render_panel()
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		if modal_layer.get_child_count() > 0:
+			close_modal(modal_layer.get_child(modal_layer.get_child_count() - 1))
+		elif side_panel.visible and not busy:
+			close_panel()
+		get_viewport().set_input_as_handled()
 
 func _on_hero_leveled(hero_id: String, level: int) -> void:
 	var agent: HubAgent = hub.world.agent_for(hero_id)

@@ -8,6 +8,8 @@ class_name RiftwardState
 signal state_changed
 signal toast_requested(title: String, message: String, tone: String)
 signal hero_leveled(hero_id: String, level: int)
+## Emesso quando passa il tempo della base (addestramento, riposo) senza azioni del giocatore.
+signal time_ticked
 
 const SAVE_PATH := "user://riftward_save.json"
 const SAVE_VERSION := 3
@@ -118,7 +120,7 @@ func _process(delta: float) -> void:
 	if _tick_accumulator >= TICK_SECONDS:
 		var changed := advance_time(_tick_accumulator)
 		_tick_accumulator = 0.0
-		if changed: state_changed.emit()
+		if changed: time_ticked.emit()
 	if _save_accumulator >= AUTOSAVE_SECONDS:
 		_save_accumulator = 0.0
 		save_game()
@@ -703,6 +705,27 @@ func summon(pool: String, count: int) -> Dictionary:
 	add_event("SUMMON", "%d evocazioni completate" % count, str(info.name) + " · nuovi eroi arrivati alla base.", "good")
 	save_and_notify()
 	return {"ok": true, "heroes": heroes}
+
+## Anti-blocco: se restano meno di 5 eroi vivi, il Nexus richiama gratis un eroe 1★
+## ogni 30 minuti. Non è una resurrezione: è sempre un eroe nuovo.
+const EMERGENCY_COOLDOWN := 1800.0
+
+func emergency_recruit_status() -> Dictionary:
+	if get_alive_heroes().size() >= PARTY_SIZE: return {"ok": false, "message": "Hai già abbastanza eroi", "visible": false}
+	var wait := float(data.world.get("emergency_at", 0.0)) + EMERGENCY_COOLDOWN - now()
+	if wait > 0.0: return {"ok": false, "message": "Di nuovo disponibile tra %d min" % ceili(wait / 60.0), "visible": true}
+	return {"ok": true, "message": "", "visible": true}
+
+func emergency_recruit() -> Dictionary:
+	var status := emergency_recruit_status()
+	if not status.ok: return status
+	data.summon_counter += 1
+	var hero := generate_hero(str(data.world.seed) + ":emergency:" + str(data.summon_counter), 1)
+	data.heroes.append(hero)
+	data.world.emergency_at = now()
+	add_event("SUMMON", hero.name + " risponde al richiamo", "Il Nexus ha chiamato una recluta per rimettere in piedi la squadra.", "info")
+	save_and_notify()
+	return {"ok": true, "hero": hero}
 
 func _roll_rarity(pool: String, roll: float) -> int:
 	if pool == "high":

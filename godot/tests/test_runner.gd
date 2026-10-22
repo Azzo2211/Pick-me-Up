@@ -29,6 +29,7 @@ func _initialize() -> void:
 	_test("clear, sblocco piano ed esperienza", _test_clear)
 	_test("promozioni 6★ riservate all'endgame", _test_promotion_gate)
 	_test("armeria: forgia ed equipaggiamento", _test_armory)
+	_test("richiamo d'emergenza contro il blocco", _test_emergency)
 	print("\nRisultato: %d passati, %d falliti" % [passed, failed])
 	quit(0 if failed == 0 else 1)
 
@@ -277,3 +278,13 @@ func _test_armory() -> Array:
 	var valid: bool = blocked and forged.ok and equipped.ok and game.data.inventory.is_empty() and float(game.derived_stats(hero).attack) != before
 	game.free()
 	return [valid, "Forgia o equipaggiamento non conformi"]
+
+func _test_emergency() -> Array:
+	var game := _fresh("emergency-seed")
+	var hidden: bool = not game.emergency_recruit_status().visible
+	for hero in game.data.heroes.slice(0, 3): game.record_death(hero.id, "test")
+	var first := game.emergency_recruit()
+	var second := game.emergency_recruit()
+	var valid: bool = hidden and first.ok and not second.ok and int(first.hero.native_rarity) == 1 and game.get_alive_heroes().size() == 4
+	game.free()
+	return [valid, "Richiamo d'emergenza non conforme"]
