@@ -170,7 +170,7 @@ func new_world(seed_text: String = "") -> void:
 		"facilities": _default_facilities(),
 		"assignments": {},
 		"pity": {"high": 0, "transcendent": 0}, "summon_counter": 0, "item_counter": 0,
-		"active_mission": {}, "tutorial_seen": false,
+		"active_mission": {}, "tutorial_seen": false, "settings": {"light": "dusk"},
 		"dev": {"enabled": false, "unlimited_resources": false, "reveal_hidden": false, "god_mode": false, "all_content": false},
 	}
 	var starter_roles := ["Guardian", "Vanguard", "Lancer", "Ranger", "Support", "Mage"]
@@ -206,6 +206,8 @@ func _migrate() -> void:
 	for key in MATERIALS: data.world.materials.get_or_add(key, 0)
 	data.get_or_add("dev", {})
 	for key in ["enabled", "unlimited_resources", "reveal_hidden", "god_mode", "all_content"]: data.dev.get_or_add(key, false)
+	data.get_or_add("settings", {})
+	data.settings.get_or_add("light", "dusk")
 	if from_version < 3:
 		# La v2 forzava la modalità sviluppo: la v3 torna a un'economia reale.
 		data.dev.enabled = false
@@ -1163,6 +1165,15 @@ func finalize_mission(result: Dictionary) -> Dictionary:
 # =============================================================================
 # Strumenti di sviluppo (attivabili dalle Impostazioni)
 # =============================================================================
+
+## Luce della base: "dusk" (crepuscolo), "day" (giorno) o "night" (notte).
+func set_light(preset: String) -> void:
+	if not preset in ["dusk", "day", "night"]: return
+	data.settings.light = preset
+	save_and_notify()
+
+func light_preset() -> String:
+	return str(data.get("settings", {}).get("light", "dusk"))
 
 func set_dev_mode(enabled: bool) -> void:
 	data.dev.enabled = enabled

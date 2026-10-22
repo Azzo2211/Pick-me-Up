@@ -15,6 +15,8 @@ const PRESETS := {
 		"ambient": Color("#8b8fc0"), "ambient_energy": 0.75, "sky_contrib": 0.55,
 		"fog": Color("#9d7f97"), "fog_density": 0.0028, "fog_height": -3.0, "fog_height_density": 0.16,
 		"exposure": 1.12, "saturation": 1.12, "contrast": 1.06,
+		"mist_low": Color("#3b2c48"), "mist_high": Color("#c79486"),
+		"water_base": Color("#1a2133"), "water_sky": Color("#9e666b"), "water_foam": Color("#d9ccd9"),
 	},
 	"day": {
 		"zenith": Color("#2f5fa8"), "upper": Color("#5f8fd0"), "horizon": Color("#d8e4ef"), "horizon_far": Color("#b7c9dc"), "below": Color("#4a5a70"),
@@ -22,8 +24,10 @@ const PRESETS := {
 		"sun_rot": Vector3(-52, 140, 0), "sun_energy": 1.6, "light": Color("#fff1dc"),
 		"fill_rot": Vector3(-40, -30, 0), "fill_energy": 0.3, "fill": Color("#a9c4ff"),
 		"ambient": Color("#a9b8cf"), "ambient_energy": 0.7, "sky_contrib": 0.6,
-		"fog": Color("#b9c6d4"), "fog_density": 0.0035, "fog_height": -3.0, "fog_height_density": 0.12,
-		"exposure": 1.0, "saturation": 1.08, "contrast": 1.04,
+		"fog": Color("#a9bbd0"), "fog_density": 0.0016, "fog_height": -3.0, "fog_height_density": 0.1,
+		"exposure": 0.95, "saturation": 1.1, "contrast": 1.08,
+		"mist_low": Color("#7d93b3"), "mist_high": Color("#eef2f8"),
+		"water_base": Color("#1d3a57"), "water_sky": Color("#8fb4d8"), "water_foam": Color("#eef4f8"),
 	},
 	"night": {
 		"zenith": Color("#05070f"), "upper": Color("#121a33"), "horizon": Color("#2a3157"), "horizon_far": Color("#1a2040"), "below": Color("#080a14"),
@@ -33,6 +37,8 @@ const PRESETS := {
 		"ambient": Color("#4a5888"), "ambient_energy": 0.7, "sky_contrib": 0.4,
 		"fog": Color("#2c3456"), "fog_density": 0.006, "fog_height": -3.0, "fog_height_density": 0.18,
 		"exposure": 1.2, "saturation": 1.0, "contrast": 1.08,
+		"mist_low": Color("#0e1222"), "mist_high": Color("#36406a"),
+		"water_base": Color("#0a0f1c"), "water_sky": Color("#33427a"), "water_foam": Color("#8f9cc9"),
 	},
 }
 
@@ -102,4 +108,4 @@ static func setup(parent: Node3D, preset_name: String = "dusk", overrides: Dicti
 	fill.shadow_enabled = false
 	fill.light_specular = 0.1
 	parent.add_child(fill)
-	return {"environment": env, "world_environment": we, "sun": sun, "fill": fill, "sky": sky_mat}
+	return {"environment": env, "world_environment": we, "sun": sun, "fill": fill, "sky": sky_mat, "preset": p}

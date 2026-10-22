@@ -87,8 +87,7 @@ func _ready() -> void:
 	rng.seed = 424242
 	noise.seed = 7
 	noise.frequency = 0.07
-	look = WorldLook.setup(self, "dusk", {}, 140.0)
-	sun = look.sun
+	_apply_light("dusk")
 	terrain_root = _group("Terrain")
 	veg_root = _group("Vegetation")
 	decor_root = _group("Decor")
@@ -102,6 +101,33 @@ func _ready() -> void:
 	_build_water()
 	_build_plaza()
 	_build_sky_dressing()
+	_tint_world()
+
+var light_preset := ""
+var _mists: Array[ShaderMaterial] = []
+var _waters: Array[ShaderMaterial] = []
+
+## Cambia luce e cielo della base (crepuscolo, giorno, notte).
+func _apply_light(preset: String) -> void:
+	if preset == light_preset: return
+	light_preset = preset
+	for key in ["world_environment", "sun", "fill"]:
+		if look.has(key) and is_instance_valid(look[key]): (look[key] as Node).queue_free()
+	look = WorldLook.setup(self, preset, {}, 140.0)
+	sun = look.sun
+	_tint_world()
+	if look.has("sky"): (look.sky as ShaderMaterial).set_shader_parameter("aurora", 1.0 if current_base_level >= 5 else 0.0)
+
+## Nebbie e acqua seguono i colori della luce scelta.
+func _tint_world() -> void:
+	var p: Dictionary = look.get("preset", {})
+	for m in _mists:
+		m.set_shader_parameter("color_low", p.get("mist_low", Color("#3b2c48")))
+		m.set_shader_parameter("color_high", p.get("mist_high", Color("#c79486")))
+	for m in _waters:
+		m.set_shader_parameter("base_color", p.get("water_base", Color("#1a2133")))
+		m.set_shader_parameter("sky_color", p.get("water_sky", Color("#9e666b")))
+		m.set_shader_parameter("foam_color", p.get("water_foam", Color("#d9ccd9")))
 
 func _group(name_text: String) -> Node3D:
 	var n := Node3D.new()
@@ -448,6 +474,7 @@ func _water_material(speed: float, stripes: float, alpha: float) -> ShaderMateri
 	m.set_shader_parameter("speed", speed)
 	m.set_shader_parameter("stripes", stripes)
 	m.set_shader_parameter("alpha", alpha)
+	_waters.append(m)
 	return m
 
 func _build_water() -> void:
@@ -704,7 +731,9 @@ func _build_sky_dressing() -> void:
 		var pm := PlaneMesh.new()
 		pm.size = Vector2(layer[1], layer[1])
 		plane.mesh = pm
-		plane.material_override = WorldMaterials.mist(Color("#3b2c48"), Color("#c79486"), layer[2], layer[3])
+		var mist_mat := WorldMaterials.mist(Color("#3b2c48"), Color("#c79486"), layer[2], layer[3])
+		_mists.append(mist_mat)
+		plane.material_override = mist_mat
 		plane.position = Vector3(0, layer[0], 0)
 		plane.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		sky_root.add_child(plane)
@@ -973,6 +1002,7 @@ func _build_decor(base_level: int) -> void:
 # =============================================================================
 
 func refresh(state: RiftwardState) -> void:
+	_apply_light(state.light_preset())
 	var base_level := state.base_level()
 	var signature := ""
 	var level_changed := base_level != current_base_level

@@ -35,6 +35,8 @@ func _initialize() -> void:
 	_test("addestramento offline rispetta la stanchezza", _test_offline_steps)
 	_test("chiudere in missione conta come sconfitta", _test_abandoned_mission)
 	_test("oggetti vecchi senza id ricevono un id", _test_item_ids)
+	_test("luce della base salvata e migrata", _test_light_setting)
+	_test("tratti diversi e abilità in italiano", _test_traits_skills)
 	print("\nRisultato: %d passati, %d falliti" % [passed, failed])
 	quit(0 if failed == 0 else 1)
 
@@ -357,3 +359,27 @@ func _test_item_ids() -> Array:
 	valid = valid and game.equip_item(game.data.heroes[0].id, str(item.id)).ok
 	game.free()
 	return [valid, "Gli oggetti senza id non sono stati sistemati"]
+
+func _test_light_setting() -> Array:
+	var game := _fresh("light-seed")
+	var valid: bool = game.light_preset() == "dusk"
+	game.set_light("night")
+	valid = valid and game.light_preset() == "night"
+	game.set_light("sunset-of-doom")
+	valid = valid and game.light_preset() == "night"
+	game.data.erase("settings")
+	game._migrate()
+	valid = valid and game.light_preset() == "dusk"
+	game.free()
+	return [valid, "Impostazione della luce non coerente"]
+
+func _test_traits_skills() -> Array:
+	var game := _fresh("traits-seed")
+	var valid := true
+	for i in 40:
+		var hero := game.generate_hero("trait-%d" % i, 1 + i % 5)
+		if hero.traits[0] == hero.traits[1]: valid = false
+		if RiftwardState.skill_label(str(hero.skills[1].name)) != "Disciplina da Campo": valid = false
+	valid = valid and RiftwardState.skill_label("Mend") == "Cura"
+	game.free()
+	return [valid, "Tratti duplicati o abilità non tradotte"]

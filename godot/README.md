@@ -18,7 +18,8 @@ Fai doppio clic su `Apri_Progetto_Godot.cmd`. In alternativa, nel Project Manage
 - **Centro di Addestramento**: assegna eroi; guadagnano esperienza nel tempo, anche a gioco chiuso (fino a 8 ore).
 - **Dormitorio**: recuperano stanchezza e morale e guariscono le ferite.
 - **Centro di Fusione**: fondi tre eroi della stessa rarità o promuovi chi ha raggiunto il livello massimo.
-- **Portale delle Missioni**: scegli il piano e la squadra (2 Front · 2 Mid · 1 Rear), poi parti. In missione dai solo ordini generali; un eroe a 0 HP muore per sempre.
+- **Portale delle Missioni**: scegli il piano e la squadra (2 in prima linea · 2 al centro · 1 in retroguardia), poi parti. In missione dai solo ordini generali; un eroe che cade muore per sempre.
+- **Impostazioni**: luce della base (Crepuscolo, Giorno, Notte), modalità sviluppo, nuovo mondo.
 - **Cristallo del Nexus** (al centro della piazza): evoca nuovi eroi ed espandi la base. Ogni livello base permette un piano in più agli edifici e apre nuovi cantieri (Armeria, Magazzino, Laboratorio, Alchimia).
 
 ## Modalità sviluppo
@@ -33,8 +34,10 @@ godot --headless --path . -s res://tests/ui_smoke_runner.gd -- --test-mode    # 
 godot --headless --path . -s res://tests/balance_probe_runner.gd -- --test-mode  # simulazione bilanciamento
 godot --path . -s res://tests/visual_capture_runner.gd -- --test-mode         # screenshot in tests/captures
 godot --path . -s res://tests/battle_preview_runner.gd -- --test-mode         # screenshot battaglie
+godot --path . -s res://tests/hub_preview_runner.gd -- --test-mode --base5   # anteprime della base (--base2/3/5, --light=day|night)
+godot --path . -s res://tests/character_probe_runner.gd -- --test-mode       # fila di personaggi
 ```
 
 ## Grafica
 
-Tutta la grafica 3D è generata dal codice (geometria low-poly, nessun asset esterno). I font Fredoka e Nunito sono sotto licenza SIL Open Font License (`assets/fonts`).
+Tutta la grafica 3D è generata dal codice (geometria e shader procedurali, nessun asset esterno). I font Cinzel e Alegreya sono sotto licenza SIL Open Font License (`assets/fonts`).

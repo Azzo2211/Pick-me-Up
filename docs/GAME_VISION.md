@@ -15,16 +15,16 @@ The intended emotional loop is:
 - The game may draw inspiration from the systemic feeling of “Pick Me Up” style fiction, but must remain original in names, world, characters, UI, assets, layouts, dialogue, and presentation.
 
 ## Current product direction
-The Godot build is the main product direction. The base is a real-time 3D diorama (procedural low-poly, bright anime-isekai palette) rendered behind a minimal HUD; building interfaces open as side panels over the base. The older web implementation is only a historical systems reference.
+The Godot build is the main product direction. The base is a real-time 3D place (semi-realistic, mature anime-isekai dark fantasy at dusk) rendered behind a dark ornate HUD; building interfaces open as side panels over the base. The older web implementation is only a historical systems reference.
 
 ## Base / hub vision
-The early base should feel like a compact, colorful anime-isekai fantasy settlement rather than a mega-castle or dark dungeon.
+The early base should feel like a compact, lived-in fantasy hamlet (warm dusk light, rich colours, never childish) rather than a mega-castle or dark dungeon.
 
 Key principles:
 - coherent physical hub;
 - heroes visibly move through and use facilities;
 - more vegetation, trees, paths, and environmental life;
-- bright fantasy palette rather than oppressive dark-fantasy architecture;
+- warm, rich dusk palette rather than oppressive dark-fantasy architecture or toy-like pastels;
 - facilities appear physically only after they are unlocked/built;
 - level upgrades should visibly increase structure size/detail, commonly by adding floors/stories or equivalent architectural growth;
 - the central square is an open plaza, not a separate building/facility.
@@ -41,7 +41,7 @@ Key principles:
 ### Growth rules
 - Building level N = N storeys (or an equivalent architectural growth for non-house shapes, e.g. the training pavilion and the gate rings).
 - Facility level can never exceed the base level.
-- Each base level also improves the whole area: Lv.2 lamps and flower beds, Lv.3 paved paths and banners, Lv.4 glowing plaza ring, Lv.5 floating lanterns.
+- Each base level also improves the whole area: Lv.2 paved plaza, lamp posts, stone gatehouse; Lv.3 cobbled streets, stone wall, banners, fountain; Lv.4 wall towers with rune lights, statues; Lv.5 floating lanterns and an aurora.
 
 These decisions override older hub code or documents when they conflict.
 

@@ -20,6 +20,8 @@ func _run() -> void:
 		for id in ["training", "dormitory", "merging", "gate", "armory"]: state.data.facilities[id].level = 2
 	elif args.has("--base2"):
 		state.data.world.base_level = 2
+	for arg in args:
+		if arg.begins_with("--light="): state.set_light(arg.trim_prefix("--light="))
 	var ui := Control.new()
 	ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.add_child(ui)
@@ -35,6 +37,7 @@ func _run() -> void:
 	for i in 90: await process_frame
 	await create_timer(4.0).timeout
 	var tag := "base5" if args.has("--base5") else "base3" if args.has("--base3") else "base2" if args.has("--base2") else "base1"
+	if state.light_preset() != "dusk": tag += "_" + state.light_preset()
 	_capture("res://tests/captures/preview_%s_overview.png" % tag)
 	if args.has("--overview-only"):
 		quit(0)

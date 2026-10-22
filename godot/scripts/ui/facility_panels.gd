@@ -1072,6 +1072,14 @@ func build_materials(content: VBoxContainer, columns: int = 3) -> void:
 func build_settings(content: VBoxContainer) -> void:
 	content.add_theme_constant_override("separation", 10)
 	content.add_child(UIKit.para("Il salvataggio è locale e si aggiorna da solo, con una copia di sicurezza. Il tempo della base scorre anche a gioco chiuso, fino a 8 ore.", 16))
+	content.add_child(section("Luce della base"))
+	var lights := HBoxContainer.new()
+	lights.add_theme_constant_override("separation", 8)
+	for option in [["dusk", "Crepuscolo"], ["day", "Giorno"], ["night", "Notte"]]:
+		var lb := UIKit.button(option[1], GS.set_light.bind(option[0]), "primary" if GS.light_preset() == option[0] else "ghost", 0)
+		lb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		lights.add_child(lb)
+	content.add_child(lights)
 	var dev_on := bool(GS.data.dev.get("enabled", false))
 	content.add_child(section("Modalità sviluppo", "attiva" if dev_on else "spenta"))
 	content.add_child(UIKit.para("Risorse infinite e valori nascosti visibili, per provare il gioco velocemente. Spegnila per giocare con l'economia reale.", 15))

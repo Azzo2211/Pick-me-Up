@@ -181,18 +181,18 @@ static func _tuft(variant: int) -> ArrayMesh:
 	b.material("grass", WorldMaterials.foliage(false))
 	var r := RandomNumberGenerator.new()
 	r.seed = 5100 + variant
-	var base_col := Color("#3a4d1f") if variant % 2 == 0 else Color("#4a5222")
-	base_col.a = 0.6
-	var tip_col := Color("#9fae55") if variant % 2 == 0 else Color("#b3a85a")
+	var base_col := Color("#4a6227") if variant % 2 == 0 else Color("#5a6428")
+	base_col.a = 0.85
+	var tip_col := Color("#a7b65c") if variant % 2 == 0 else Color("#bcb062")
 	for i in 7:
 		var a := r.randf() * TAU
 		var dir := Vector3(cos(a), 0, sin(a))
-		var side := Vector3(-dir.z, 0, dir.x) * 0.03
-		var root := dir * r.randf_range(0.0, 0.08)
-		var height := r.randf_range(0.18, 0.36)
-		var tip := root + dir * r.randf_range(0.05, 0.14) + Vector3(0, height, 0)
-		var n := (dir + Vector3(0, 0.6, 0)).normalized()
-		b.tri("grass", root - side, root + side, tip, n, n, Vector3.UP, Vector2.ZERO, Vector2.ZERO, Vector2.ZERO, base_col, base_col, tip_col)
+		var side := Vector3(-dir.z, 0, dir.x) * 0.025
+		var root := dir * r.randf_range(0.0, 0.07)
+		var height := r.randf_range(0.14, 0.3)
+		var tip := root + dir * r.randf_range(0.05, 0.12) + Vector3(0, height, 0)
+		# normali verso l'alto: i ciuffi prendono la stessa luce del prato
+		b.tri("grass", root - side, root + side, tip, Vector3.UP, Vector3.UP, Vector3.UP, Vector2.ZERO, Vector2.ZERO, Vector2.ZERO, base_col, base_col, tip_col)
 	return b.commit()
 
 static func _rock(variant: int) -> ArrayMesh:
