@@ -1,15 +1,14 @@
 extends Node3D
 class_name HubAgent
 
-## Un eroe che vive nella base: cammina sui sentieri, si allena sul campo
-## rialzato, entra nel Dormitorio per riposare, chiacchiera in piazza.
-
-const ChibiScript := preload("res://scripts/hub3d/chibi_model.gd")
+## Una persona che vive nella base: gli eroi camminano per le strade, si allenano
+## nel cortile rialzato, entrano nel Dormitorio per riposare, chiacchierano in
+## piazza. Gli abitanti (non cliccabili) passeggiano e animano il borgo.
 
 var world: HubWorld
 var hero_id := ""
 var hero_name := ""
-var model: ChibiModel
+var model: CharacterModel
 var activity := ""
 var slot := -1
 var route: PackedVector3Array = PackedVector3Array()
@@ -19,106 +18,121 @@ var goal_anim := "idle"
 var goal_offset := Vector3.ZERO
 var arrived := false
 var wait := 0.0
-var speed := 1.8
+var speed := 1.3
 var forced := false
 var inside := false
+var villager := false
 var emote: Label3D
 var name_tag: Label3D
 var rng := RandomNumberGenerator.new()
 var emote_timer := 0.0
+var body: StaticBody3D
 
 func setup(hub: HubWorld, hero: Dictionary, appearance: Dictionary) -> void:
 	world = hub
 	hero_id = str(hero.id)
 	hero_name = str(hero.name)
 	rng.seed = abs(hero_id.hash())
-	speed = 1.6 + rng.randf_range(0.0, 0.5)
-	model = ChibiScript.new()
+	speed = 1.2 + rng.randf_range(0.0, 0.35)
+	model = CharacterModel.new()
 	add_child(model)
 	model.build_hero(hero, appearance)
-	model.scale = Vector3.ONE * 1.3
 	model.phase = rng.randf_range(0, 10)
-	MeshKit.new(self).blob_shadow(0.42, Vector3(0, 0.05, 0), 0.5)
-	var body := StaticBody3D.new()
+	body = StaticBody3D.new()
 	body.collision_layer = 4
 	body.set_meta("hero_id", hero_id)
 	var shape := CollisionShape3D.new()
 	var capsule := CapsuleShape3D.new()
-	capsule.radius = 0.35
-	capsule.height = 1.3
+	capsule.radius = 0.32
+	capsule.height = 1.1
 	shape.shape = capsule
-	shape.position = Vector3(0, 0.65, 0)
+	shape.position = Vector3(0, 0.5, 0)
 	body.add_child(shape)
 	add_child(body)
-	emote = Label3D.new()
-	emote.font = UIKit.head_font()
-	emote.font_size = 30
-	emote.outline_size = 10
-	emote.outline_modulate = Color("#1a2342")
-	emote.pixel_size = 0.0009
-	emote.fixed_size = true
-	emote.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	emote.no_depth_test = true
-	emote.position = Vector3(0, 1.55, 0)
+	emote = _tag(UIKit.head_font(), 28, Vector3(0, 1.2, 0))
 	emote.visible = false
-	add_child(emote)
-	name_tag = Label3D.new()
-	name_tag.font = UIKit.body_bold()
-	name_tag.font_size = 20
-	name_tag.outline_size = 8
-	name_tag.outline_modulate = Color("#1a2342")
-	name_tag.pixel_size = 0.0009
-	name_tag.fixed_size = true
-	name_tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	name_tag.no_depth_test = true
-	name_tag.position = Vector3(0, 1.35, 0)
+	name_tag = _tag(UIKit.body_bold(), 19, Vector3(0, 1.05, 0))
 	name_tag.text = hero_name
 	name_tag.visible = false
-	add_child(name_tag)
+
+func setup_villager(hub: HubWorld, seed_value: int) -> void:
+	world = hub
+	villager = true
+	rng.seed = seed_value
+	speed = 0.9 + rng.randf_range(0.0, 0.3)
+	model = CharacterModel.new()
+	add_child(model)
+	model.build_villager(seed_value)
+	model.phase = rng.randf_range(0, 10)
+	activity = "idle"
+
+func _tag(font: Font, size: int, pos: Vector3) -> Label3D:
+	var l := Label3D.new()
+	l.font = font
+	l.font_size = size
+	l.outline_size = 8
+	l.outline_modulate = Color(0.06, 0.04, 0.07, 0.92)
+	l.modulate = Color("#f1e6cf")
+	l.pixel_size = 0.0009
+	l.fixed_size = true
+	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	l.no_depth_test = true
+	l.position = pos
+	add_child(l)
+	return l
+
+func set_collision_enabled(value: bool) -> void:
+	if body != null: body.collision_layer = 4 if value else 0
 
 func set_activity(new_activity: String, new_slot: int, hero: Dictionary) -> void:
 	hero_name = str(hero.name)
-	name_tag.text = "%s  ·  Lv.%d" % [hero_name, int(hero.level)]
+	name_tag.text = "%s · Lv.%d" % [hero_name, int(hero.level)]
 	if new_activity == activity and new_slot == slot: return
 	activity = new_activity
 	slot = new_slot
-	if inside and activity != "resting":
-		inside = false
-		visible = true
+	if inside and activity != "resting": _leave_building()
 	if not forced: _choose_goal()
 	_update_emote()
+
+func _leave_building() -> void:
+	inside = false
+	visible = true
+	set_collision_enabled(true)
 
 func reset_route() -> void:
 	if not forced: _choose_goal()
 
 func force_goal(node: int, anim_name: String) -> void:
 	forced = true
-	inside = false
-	visible = true
+	if inside: _leave_building()
 	_go(node, anim_name, Vector3.ZERO)
 
 func release_goal() -> void:
 	forced = false
+	speed = 1.2 + rng.randf_range(0.0, 0.35)
+	if activity != "resting" or not inside:
+		visible = true
+		set_collision_enabled(true)
 	_choose_goal()
 
 func show_hover(value: bool) -> void:
-	name_tag.visible = value
+	if name_tag != null: name_tag.visible = value
 
 func pop_emote(text: String, seconds: float = 2.5) -> void:
+	if emote == null: return
 	emote.text = text
-	emote.modulate = Color("#ffe39a")
+	emote.modulate = Color("#e8c47e")
 	emote.visible = true
 	emote_timer = seconds
 
 func _update_emote() -> void:
-	if emote_timer > 0.0: return
-	match activity:
-		"injured":
-			emote.text = "✚"
-			emote.modulate = Color("#ff6b81")
-			emote.visible = true
-		_:
-			emote.visible = false
+	if emote == null or emote_timer > 0.0: return
+	if activity == "injured":
+		emote.text = "✚"
+		emote.modulate = Color("#e05a6a")
+		emote.visible = true
+	else:
+		emote.visible = false
 
 func _choose_goal() -> void:
 	if world == null or world.nav.get_point_count() == 0: return
@@ -136,19 +150,19 @@ func _choose_goal() -> void:
 		"injured":
 			var bench: Array = sites.get("dormitory", {}).get("spots", [])
 			if not bench.is_empty():
-				_go(bench[rng.randi_range(0, bench.size() - 1)], "sit", Vector3(rng.randf_range(-0.2, 0.2), 0, 0))
+				_go(bench[rng.randi_range(0, bench.size() - 1)], "rest", Vector3(rng.randf_range(-0.1, 0.1), 0, 0))
 				return
 		"party":
 			var near_gate: Array[int] = []
-			for n in world.plaza_nodes:
-				var p := world.node_position(n)
-				if p.x > -0.5 and p.z < 0.5: near_gate.append(n)
+			var gdir := Vector3(cos(HubWorld.GATE_ANGLE), 0, sin(HubWorld.GATE_ANGLE))
+			for n in world.plaza_nodes + world.ring_nodes:
+				if world.node_position(n).normalized().dot(gdir) > 0.75: near_gate.append(n)
 			if not near_gate.is_empty():
-				_go(near_gate[rng.randi_range(0, near_gate.size() - 1)], ["idle", "talk", "cheer"][rng.randi_range(0, 2)], _jitter(0.45))
+				_go(near_gate[rng.randi_range(0, near_gate.size() - 1)], ["idle", "talk", "idle"][rng.randi_range(0, 2)], _jitter(0.4))
 				return
 	if not world.wander_nodes.is_empty():
 		var node: int = world.wander_nodes[rng.randi_range(0, world.wander_nodes.size() - 1)]
-		_go(node, ["idle", "talk", "idle", "sit"][rng.randi_range(0, 3)], _jitter(0.5))
+		_go(node, ["idle", "talk", "idle", "idle"][rng.randi_range(0, 3)], _jitter(0.45))
 
 func _jitter(amount: float) -> Vector3:
 	return Vector3(rng.randf_range(-amount, amount), 0, rng.randf_range(-amount, amount))
@@ -160,7 +174,7 @@ func _go(node: int, anim_name: String, offset: Vector3) -> void:
 	arrived = false
 	route = world.route(position, node) if node >= 0 else PackedVector3Array()
 	route_index = 0
-	wait = rng.randf_range(5.0, 11.0)
+	wait = rng.randf_range(6.0, 14.0)
 	if route.is_empty(): arrived = true
 
 func tick(delta: float) -> void:
@@ -168,8 +182,7 @@ func tick(delta: float) -> void:
 	if emote_timer > 0.0:
 		emote_timer -= delta
 		if emote_timer <= 0.0: _update_emote()
-	if inside:
-		return
+	if inside: return
 	if not arrived and route_index < route.size():
 		var target := route[route_index]
 		if route_index == route.size() - 1: target += goal_offset
@@ -191,20 +204,24 @@ func tick(delta: float) -> void:
 			var focus := world.facing_target_for("training", slot)
 			var flat := Vector3(focus.x - position.x, 0, focus.z - position.z)
 			if flat.length() > 0.05: _face(flat, delta)
-		elif not forced and activity in ["idle", "party"]:
+		elif goal_anim == "rest":
+			var away := Vector3(position.x, 0, position.z) - Vector3(world.buildings.dormitory.position.x, 0, world.buildings.dormitory.position.z) if world.buildings.has("dormitory") else Vector3.FORWARD
+			if away.length() > 0.05: _face(away, delta)
+		elif not forced and activity in ["idle", "party", ""]:
 			wait -= delta
 			if wait <= 0.0: _choose_goal()
 	model.update_animation(delta)
 
 func _face(direction: Vector3, delta: float) -> void:
 	var yaw := atan2(direction.x, direction.z)
-	rotation.y = lerp_angle(rotation.y, yaw, clampf(delta * 10.0, 0.0, 1.0))
+	rotation.y = lerp_angle(rotation.y, yaw, clampf(delta * 8.0, 0.0, 1.0))
 
 func _arrive() -> void:
 	arrived = true
 	if goal_anim == "enter":
 		inside = true
 		visible = false
+		set_collision_enabled(false)
 		return
-	model.play(goal_anim if goal_anim != "enter" else "idle")
+	model.play(goal_anim if goal_anim in ["idle", "talk", "train", "cheer", "rest", "sit"] else "idle")
 	if goal_anim == "talk": rotation.y += rng.randf_range(-1.5, 1.5)

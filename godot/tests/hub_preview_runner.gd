@@ -15,6 +15,9 @@ func _run() -> void:
 	if args.has("--base5"):
 		state.data.world.base_level = 5
 		for id in state.FACILITY_ORDER: state.data.facilities[id].level = 3
+	elif args.has("--base3"):
+		state.data.world.base_level = 3
+		for id in ["training", "dormitory", "merging", "gate", "armory"]: state.data.facilities[id].level = 2
 	elif args.has("--base2"):
 		state.data.world.base_level = 2
 	var ui := Control.new()
@@ -31,8 +34,11 @@ func _run() -> void:
 	view.refresh(state)
 	for i in 90: await process_frame
 	await create_timer(4.0).timeout
-	var tag := "base5" if args.has("--base5") else "base2" if args.has("--base2") else "base1"
+	var tag := "base5" if args.has("--base5") else "base3" if args.has("--base3") else "base2" if args.has("--base2") else "base1"
 	_capture("res://tests/captures/preview_%s_overview.png" % tag)
+	if args.has("--overview-only"):
+		quit(0)
+		return
 	view.focus_on("training", 0)
 	await create_timer(1.0).timeout
 	_capture("res://tests/captures/preview_%s_training.png" % tag)

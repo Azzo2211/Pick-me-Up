@@ -487,14 +487,16 @@ func _build_gate(body: VBoxContainer, footer: VBoxContainer) -> void:
 	if gate_floor < 1 or gate_floor > max_floor: gate_floor = int(GS.data.world.current_floor)
 	var selector := HBoxContainer.new()
 	selector.add_theme_constant_override("separation", 8)
-	var prev := UIKit.button("◀", _shift_floor.bind(-1), "ghost", 52)
+	var prev := UIKit.button("‹", _shift_floor.bind(-1), "ghost", 52)
+	prev.add_theme_font_size_override("font_size", 28)
 	prev.disabled = gate_floor <= 1
 	selector.add_child(prev)
 	var title := UIKit.title("Piano %d" % gate_floor, 30, UIKit.INK)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	selector.add_child(title)
-	var next := UIKit.button("▶", _shift_floor.bind(1), "ghost", 52)
+	var next := UIKit.button("›", _shift_floor.bind(1), "ghost", 52)
+	next.add_theme_font_size_override("font_size", 28)
 	next.disabled = gate_floor >= max_floor
 	selector.add_child(next)
 	body.add_child(selector)

@@ -9,8 +9,13 @@ func _initialize() -> void:
 func _run() -> void:
 	var state = root.get_node("GameState")
 	var battle_script := load("res://scripts/battle/battle_scene.gd")
-	for level in [1, 6, 10, 15]:
-		for floor_index in [1, 2, 3, 4, 5, 8, 10]:
+	var levels := [1, 6, 10, 15]
+	var floors := [1, 2, 3, 4, 5, 8, 10]
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--levels="): levels = Array(arg.trim_prefix("--levels=").split(",")).map(func(v): return int(v))
+		if arg.begins_with("--floors="): floors = Array(arg.trim_prefix("--floors=").split(",")).map(func(v): return int(v))
+	for level in levels:
+		for floor_index in floors:
 			var wins := 0
 			var deaths := 0
 			var times := []
@@ -30,7 +35,7 @@ func _run() -> void:
 						battle._tick(battle.TICK)
 						battle.accumulator -= battle.TICK
 					guard += 1
-				var victory: bool = battle._heroes().size() > 0 and battle.completed and (battle.elapsed < float(start.stage.duration) or str(start.stage.type) == "Survival") and not battle.command_state.extracting and float(battle.objective.beacon) > 0.0
+				var victory: bool = battle.completed and battle.result_victory
 				if victory: wins += 1
 				for u in battle.units:
 					if u.hero and not u.alive: deaths += 1

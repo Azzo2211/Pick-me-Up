@@ -37,7 +37,7 @@ func _run() -> void:
 	_check(not world.buildings.has("armory") and not world.buildings.has("workshop") and not world.buildings.has("warehouse"), "armeria, laboratorio e magazzino assenti al Lv.1")
 	_check(world.agents.size() == state.get_alive_heroes().size(), "ogni eroe vivo cammina nella base")
 	_check(world.nav.get_point_count() > 20 and world.site_nodes.has("training"), "rete di sentieri navigabile")
-	_check(world.buildings.training.level == 1 and world.buildings.dormitory.top_height < 3.6, "edifici del Lv.1 a un solo piano")
+	_check(world.buildings.training.floors == 1 and world.buildings.dormitory.floors == 1 and world.buildings.merging.floors == 1, "edifici del Lv.1 a un solo piano")
 	# Pannelli delle strutture
 	for id in ["training", "dormitory", "merging", "gate", "crystal", "roster"]:
 		main.open_panel(id)
@@ -93,7 +93,7 @@ func _run() -> void:
 	_check(state.data.inventory.size() == 1, "forgia in Armeria")
 	main.panels._upgrade("training")
 	await _frames(4)
-	_check(state.facility_level("training") == 2 and world.buildings.training.level == 2, "il potenziamento aggiunge un piano all'edificio")
+	_check(state.facility_level("training") == 2 and world.buildings.training.floors == 2, "il potenziamento aggiunge un piano all'edificio")
 	# Scheda eroe, diario, impostazioni
 	main.open_hero(state.data.heroes[0].id)
 	await _frames(3)

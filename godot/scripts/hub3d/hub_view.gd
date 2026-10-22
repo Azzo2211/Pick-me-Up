@@ -9,12 +9,12 @@ signal hero_clicked(hero_id: String)
 
 const HubWorldScript := preload("res://scripts/hub3d/hub_world.gd")
 
-const PITCH := deg_to_rad(44.0)
-const YAW := deg_to_rad(24.0)
-const MIN_DISTANCE := 15.0
-const MAX_DISTANCE := 78.0
-const HOME_TARGET := Vector3(2.2, 0.0, -2.6)
-const HOME_DISTANCE := 61.0
+const PITCH := deg_to_rad(42.0)
+const YAW := deg_to_rad(18.0)
+const MIN_DISTANCE := 9.0
+const MAX_DISTANCE := 105.0
+const HOME_TARGET := Vector3(2.6, 0.0, -6.2)
+const HOME_DISTANCE := 80.0
 
 var viewport: SubViewport
 var world: HubWorld
@@ -46,8 +46,8 @@ func _ready() -> void:
 	viewport.add_child(world)
 	camera = Camera3D.new()
 	camera.fov = 30.0
-	camera.near = 0.5
-	camera.far = 260.0
+	camera.near = 0.4
+	camera.far = 320.0
 	viewport.add_child(camera)
 	camera.current = true
 	_apply_camera()
@@ -62,7 +62,7 @@ func _apply_camera() -> void:
 
 func _clamp_target() -> void:
 	var flat := Vector2(target.x, target.z)
-	if flat.length() > 18.0: flat = flat.normalized() * 18.0
+	if flat.length() > 26.0: flat = flat.normalized() * 26.0
 	target = Vector3(flat.x, target.y, flat.y)
 	distance = clampf(distance, MIN_DISTANCE, MAX_DISTANCE)
 
@@ -168,7 +168,7 @@ func focus_on(id: String, side_panel_px: float = 0.0) -> void:
 	world.set_selected(id)
 	panel_width = side_panel_px
 	var point := world.focus_position(id)
-	var focus_distance := 26.0 if id != "gate" else 32.0
+	var focus_distance := 24.0 if id != "gate" else 34.0
 	var right := Vector3(cos(YAW), 0, -sin(YAW))
 	var view_w := maxf(size.x, 1.0)
 	var half_width_world := focus_distance * tan(deg_to_rad(camera.fov) * 0.5) * (view_w / maxf(size.y, 1.0))
