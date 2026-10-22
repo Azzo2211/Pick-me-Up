@@ -125,6 +125,7 @@ func _activity_for(building_id: String) -> String:
 		"forge": return "Osserva la forgia"
 		"lodgings": return "Riposa negli alloggi"
 		"fusion": return "Studia la matrice"
+		"summoning": return "Attende una risonanza"
 		"alchemy": return "Prepara reagenti"
 		"warehouse": return "Ordina le scorte"
 		"portal": return "Attende il dispiegamento"
