@@ -44,16 +44,26 @@ Higher-rarity and endgame systems can be expanded progressively as the full game
 - Death, tombstones/memorial state, attempts, rewards, wounds, morale, fatigue, and persistent consequences are part of the game's identity.
 
 ## Missions and tower
-The current Godot implementation contains a limited set of playable mission/floor archetypes, including Subjugation, Survival, Exploration, Defense and Boss.
+Mission archetypes: Subjugation, Survival, Exploration, Defense and Boss. Floors 1–5 are hand-made; floors 6–100 are generated deterministically from the world seed (boss every 5 floors). Rewards: Gold and XP every clear (reduced on retries), Gems on first clear, Stones on first clear of boss floors, materials as loot. Heroes below 30% HP at the end get a timed injury.
 
 These are the **currently implemented contents**, not the final scope of the game. Riftward is intended to continue expanding with more floors, mission types, systems and content while preserving the core identity and progression logic.
 
 ## Economy and summon
-Current known locked reference values from the existing specification:
-- Normal summon: 10,000 Gold.
-- High-grade summon: 500 Gems.
-- No account energy system.
-- Existing pity/rate behavior should not be changed accidentally.
+Locked reference values:
+- Normal summon: 10,000 Gold — 1★ 78% · 2★ 19% · 3★ 3%.
+- High-grade summon: 500 Gems — 3★ 93.5% · 4★ 5.5% · 5★ 1% (soft pity from pull 70, hard pity at 100).
+- Transcendent summon: 3,000 Gems, unlocked after Floor 20 — 5★ 98% · 6★ 1.8% · 7★ 0.2%.
+- No account energy system. Real economy by default; development mode is optional (Settings).
+- Starting resources: 60,000 Gold, 1,500 Gems, 1 Stone.
+
+## Base, time and progression
+- Base level 1–5 (Nexus crystal). Requirements: Lv.2 Floor 3 + 40k Gold, Lv.3 Floor 6 + 120k, Lv.4 Floor 10 + 300k, Lv.5 Floor 15 + 700k.
+- Facility level ≤ base level. Upgrading a facility adds one storey.
+- Training: slots = 2 + level; XP accrues over real time (offline capped at 8 h); fatigue grows; stops at level cap or fatigue 90.
+- Dormitory: beds = 5 + 2 × (level − 1); restores fatigue and morale, heals injuries over time; heroes leave when fully recovered.
+- XP curve: `30 + 14 × level^1.45`; level-ups add stats from the hidden growth value.
+- Fusion: three same-rarity heroes (≤4★) → core gains one star. 6★/7★ only through Transcendent summon or promotion.
+- Promotion at level cap with Stones: 1★→2★ 1, 2★→3★ 2, 3★→4★ 3, 4★→5★ 5, 5★→6★ 12 (Floor 30), 6★→7★ 30 (Floor 60).
 
 ## Facilities
 Facilities are both gameplay systems and physical places in the Godot hub.
