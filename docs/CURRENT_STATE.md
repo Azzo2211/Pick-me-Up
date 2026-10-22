@@ -50,7 +50,15 @@ The current Godot project already contains or represents important parts of the 
 This is the **current development state**, not a fixed vertical slice and not the final content boundary. The project should be expanded incrementally toward the full game.
 
 ## Important known design drift
-Some older documentation/code represents facilities that conflict with newer hub decisions. In particular, existing hub code may currently visualize facilities such as Workshop earlier than the latest design direction allows.
+The active Level 1 hub uses `godot/assets/backgrounds/base_level_1_integrated.png`. The summoning courtyard and connecting paths are painted into that single terrain image. The old detached summoning overlay is retained as a historical asset but is no longer rendered.
+
+The current visible places are Training Center, Lodging, Mission Gate, Warehouse, Merging Center, Summoning Courtyard, and the open public square. Workshop and Armory do not appear as constructed buildings at Level 1. The central crystal/pedestal has been replaced with open paving.
+
+Facility names and levels are separate Godot UI signs, including the Summoning Courtyard. Click/hover areas remain invisible. The public square still provides squad and DEV/QA access without becoming a labelled building. Warehouse provides shop, archive and base-services access.
+
+Hub coordinates, activity slots and waypoints use the native 1920×804 terrain space beneath the 1920×890 game HUD. Facility IDs and persistent save keys are preserved; this presentation update needs no save migration.
+
+Some older documentation and retained images still show the former Workshop or detached courtyard. They are historical references and do not describe the active scene.
 
 When this happens, do not assume the existing implementation is authoritative. Follow the priority order in `AGENTS.md`, especially the newer decisions in `GAME_VISION.md` and `ART_DIRECTION.md`.
 

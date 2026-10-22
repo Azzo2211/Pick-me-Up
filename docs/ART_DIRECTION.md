@@ -37,3 +37,10 @@ Do not treat this as a rigid rule if another visual solution communicates progre
 
 ## UI relationship
 UI should support the world rather than replace it. Clicking a physical facility may open contextual panels, but the player's first mental model should be “I am interacting with a place in my base.”
+
+### Hub integration and labels
+- The summoning area is a low courtyard on the main island, with a flat ritual sigil and paths connecting it to the public square and Merging Center.
+- Use a unified terrain illustration for the courtyard and its access paths; pasted extensions with visible seams are not acceptable.
+- Paths must join another path, reach an entrance, or end at a clearly enclosed destination. They must not continue into empty sky.
+- Facility names are permanent Godot UI signs, positioned away from entrances and circulation. Keep them legible and update their level from runtime data. Keep the public square unlabelled.
+- Facility hit areas remain invisible during hover and selection. No contour, ring, or repeated name is added after clicking.

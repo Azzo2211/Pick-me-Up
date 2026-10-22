@@ -73,7 +73,7 @@ func _build_labels() -> void:
 
 func set_level(value: int) -> void:
 	data.level = value
-	tooltip_text = "%s · Livello %d" % [data.display_name, data.level]
+	tooltip_text = "" if data.visual_variant == "level_one_background" else "%s · Livello %d" % [data.display_name, data.level]
 	if is_instance_valid(name_label):
 		name_label.text = "%s  ·  LV.%d" % [data.display_name.to_upper(), data.level]
 	queue_redraw()
@@ -186,7 +186,7 @@ func _draw_background_hotspot(center: Vector2, accent: Color) -> void:
 func _hotspot_polygon(center: Vector2) -> PackedVector2Array:
 	var half_width := size.x * 0.48
 	var half_height := size.y * 0.46
-	if data.building_type in ["plaza", "fusion"]:
+	if data.building_type in ["plaza", "fusion", "summoning"]:
 		var ellipse := PackedVector2Array()
 		for index in range(18):
 			var angle := TAU * float(index) / 18.0
