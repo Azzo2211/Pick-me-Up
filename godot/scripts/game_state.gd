@@ -31,19 +31,19 @@ const PROMOTION_FLOOR_GATE := {5: 30, 6: 60}
 const SUMMON_POOLS := {
 	"normal": {"name": "Richiamo del Nexus", "currency": "gold", "cost": 10000, "rates": [[1, 78.0], [2, 19.0], [3, 3.0]]},
 	"high": {"name": "Giuramento Astrale", "currency": "gems", "cost": 500, "rates": [[3, 93.5], [4, 5.5], [5, 1.0]]},
-	"transcendent": {"name": "Eco Trascendente", "currency": "gems", "cost": 3000, "rates": [[5, 98.0], [6, 1.8], [7, 0.2]], "unlock_floor": 20},
+	"transcendent": {"name": "Eco Trascendente", "currency": "gems", "cost": 4000, "rates": [[4, 78.0], [5, 20.0], [6, 1.8], [7, 0.2]], "unlock_floor": 20},
 }
 const HIGH_SOFT_PITY := 70
 const HIGH_HARD_PITY := 100
 
 # --- Ruoli -------------------------------------------------------------------
 const ROLES := {
-	"Guardian": {"line": "Front", "weights": [0.31, 0.04, 0.48, 0.17], "skill": "Aegis Brace", "icon": "G", "label": "Guardiano"},
-	"Vanguard": {"line": "Front", "weights": [0.47, 0.04, 0.28, 0.21], "skill": "Driving Cleave", "icon": "V", "label": "Avanguardia"},
-	"Lancer": {"line": "Mid", "weights": [0.39, 0.04, 0.27, 0.30], "skill": "Pinning Thrust", "icon": "L", "label": "Lanciere"},
-	"Ranger": {"line": "Rear", "weights": [0.20, 0.08, 0.17, 0.55], "skill": "Marked Shot", "icon": "R", "label": "Ranger"},
-	"Mage": {"line": "Rear", "weights": [0.05, 0.58, 0.18, 0.19], "skill": "Ember Lattice", "icon": "M", "label": "Mago"},
-	"Support": {"line": "Mid", "weights": [0.08, 0.46, 0.30, 0.16], "skill": "Mend", "icon": "S", "label": "Supporto"},
+	"Guardian": {"line": "Front", "weights": [0.31, 0.04, 0.48, 0.17], "skill": "Scudo d'Egida", "icon": "G", "label": "Guardiano"},
+	"Vanguard": {"line": "Front", "weights": [0.47, 0.04, 0.28, 0.21], "skill": "Fendente Travolgente", "icon": "V", "label": "Avanguardia"},
+	"Lancer": {"line": "Mid", "weights": [0.39, 0.04, 0.27, 0.30], "skill": "Affondo Inchiodante", "icon": "L", "label": "Lanciere"},
+	"Ranger": {"line": "Rear", "weights": [0.20, 0.08, 0.17, 0.55], "skill": "Colpo Mirato", "icon": "R", "label": "Ranger"},
+	"Mage": {"line": "Rear", "weights": [0.05, 0.58, 0.18, 0.19], "skill": "Rete di Braci", "icon": "M", "label": "Mago"},
+	"Support": {"line": "Mid", "weights": [0.08, 0.46, 0.30, 0.16], "skill": "Cura", "icon": "S", "label": "Supporto"},
 }
 ## Slot di formazione: 2 Front, 2 Mid, 1 Rear.
 const FORMATION_LINES := ["Front", "Front", "Mid", "Mid", "Rear"]
@@ -130,15 +130,29 @@ func _process(delta: float) -> void:
 # =============================================================================
 
 func load_or_create() -> void:
-	if FileAccess.file_exists(SAVE_PATH):
-		var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
-		var parsed: Variant = JSON.parse_string(file.get_as_text())
-		if parsed is Dictionary and parsed.has("world"):
+	var had_save := FileAccess.file_exists(SAVE_PATH)
+	for path in [SAVE_PATH, SAVE_PATH + ".bak"]:
+		var parsed: Variant = _read_save(path)
+		if parsed is Dictionary and parsed.has("world") and parsed.has("heroes"):
 			data = parsed
 			_migrate()
+			if path != SAVE_PATH: add_event("SYSTEM", "Salvataggio recuperato", "Il file principale era illeggibile: caricata la copia di sicurezza.", "warn")
 			_apply_offline_progress()
 			return
+	if had_save:
+		# Non sovrascrivere mai un salvataggio danneggiato: lo si conserva a parte.
+		var kept := SAVE_PATH + ".danneggiato-%d" % int(Time.get_unix_time_from_system())
+		DirAccess.rename_absolute(SAVE_PATH, kept)
+		new_world()
+		add_event("SYSTEM", "Salvataggio illeggibile", "Il vecchio file è stato conservato come %s e si riparte da un nuovo mondo." % kept.get_file(), "danger")
+		return
 	new_world()
+
+func _read_save(path: String) -> Variant:
+	if not FileAccess.file_exists(path): return null
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null: return null
+	return JSON.parse_string(file.get_as_text())
 
 func new_world(seed_text: String = "") -> void:
 	var world_seed := seed_text
@@ -148,7 +162,7 @@ func new_world(seed_text: String = "") -> void:
 		"world": {
 			"id": "WORLD-%08X" % abs(world_seed.hash()), "seed": world_seed, "master_name": "Aster",
 			"gold": 60000, "gems": 1500, "stones": 1, "current_floor": 1, "max_floor": 1, "completed": [],
-			"base_level": 1,
+			"base_level": 1, "seen_floor": 1,
 			"materials": {"ore": 8, "leather": 6, "wood": 10, "herbs": 4, "cores": 0, "medicine": 2},
 			"last_saved": Time.get_unix_time_from_system(),
 		},
@@ -197,12 +211,26 @@ func _migrate() -> void:
 		data.dev.enabled = false
 		data.dev.unlimited_resources = false
 		data.dev.reveal_hidden = false
+		data.dev.all_content = false
 		data.facilities = _migrate_facilities(data.get("facilities", {}))
 		for key in ["shop_claims", "shop_history", "cosmetics"]: data.erase(key)
 	else:
 		var facilities: Dictionary = data.get_or_add("facilities", {})
 		for id in FACILITY_ORDER: facilities.get_or_add(id, {"level": 1 if int(FACILITIES[id].unlock) <= 1 else 0})
+	_normalize_types()
 	for hero in data.heroes: _normalize_hero(hero)
+	if from_version < 3:
+		# La vecchia esperienza accumulata diventa livelli veri.
+		for hero in data.heroes:
+			if hero.state == "ALIVE": add_xp(hero, 0.0)
+	for id in FACILITY_ORDER:
+		data.facilities[id].level = clampi(int(data.facilities[id].get("level", 0)), 0, base_level())
+	for item in data.inventory:
+		if not item.has("id") or str(item.id).is_empty():
+			data.item_counter = int(data.item_counter) + 1
+			item["id"] = "I-%05d" % int(data.item_counter)
+		item.get_or_add("slot", "main")
+		item.get_or_add("grade", "D")
 	for stage_key in data.get("stages", {}):
 		var stage_record: Dictionary = data.stages[stage_key]
 		if not stage_record.has("descriptor"): continue
@@ -214,10 +242,43 @@ func _migrate() -> void:
 		stage_record.get_or_add("cleared", false)
 		stage_record.get_or_add("best_time", 0.0)
 	while data.party.size() < PARTY_SIZE: data.party.append("")
-	if not data.active_mission.is_empty():
-		data.active_mission = {}
-		add_event("MISSION", "Collegamento interrotto", "Missione incompleta chiusa; le morti già registrate restano definitive.", "warn")
 	data.version = SAVE_VERSION
+	if not data.active_mission.is_empty():
+		# Chiudere il gioco durante una missione non la annulla: conta come sconfitta.
+		var results := []
+		for hero in get_party():
+			if not hero.is_empty(): results.append({"id": hero.id, "alive": true, "hp_ratio": 0.5, "kills": 0, "fatigue": 15})
+		finalize_mission({"victory": false, "reason": "abandoned", "duration": 0.0, "hero_results": results})
+		add_event("MISSION", "Missione abbandonata", "Il gioco è stato chiuso durante la missione: conta come una ritirata. Le morti già avvenute restano.", "warn")
+
+## Il JSON trasforma tutti i numeri in decimali: qui tornano interi dove serve.
+func _normalize_types() -> void:
+	for key in ["gold", "gems", "stones", "current_floor", "max_floor", "base_level"]:
+		data.world[key] = int(data.world.get(key, 0))
+	data.world.max_floor = maxi(1, int(data.world.max_floor))
+	data.world.current_floor = clampi(int(data.world.current_floor), 1, int(data.world.max_floor))
+	data.world.base_level = clampi(int(data.world.base_level), 1, BASE_LEVELS.size())
+	data.world["seen_floor"] = int(data.world.get("seen_floor", data.world.max_floor))
+	var completed: Array = []
+	for value in data.world.get("completed", []):
+		var floor_index := int(value)
+		if not completed.has(floor_index): completed.append(floor_index)
+	data.world.completed = completed
+	for key in data.world.materials: data.world.materials[key] = int(data.world.materials[key])
+	data.summon_counter = int(data.get("summon_counter", 0))
+	data.item_counter = int(data.get("item_counter", 0))
+	for key in data.pity: data.pity[key] = int(data.pity[key])
+	for id in data.get("facilities", {}):
+		var facility: Dictionary = data.facilities[id]
+		facility.level = int(facility.get("level", 0))
+	for stage_key in data.get("stages", {}):
+		var record: Dictionary = data.stages[stage_key]
+		record.attempts = int(record.get("attempts", 0))
+		if record.has("descriptor"): record.descriptor.floor = int(record.descriptor.get("floor", int(stage_key)))
+	for hero in data.heroes:
+		for key in ["level", "native_rarity", "current_rarity", "missions", "victories", "kills", "potential", "hue"]:
+			if hero.has(key): hero[key] = int(hero[key])
+		for key in hero.get("stats", {}): hero.stats[key] = int(hero.stats[key])
 
 func _migrate_facilities(old: Dictionary) -> Dictionary:
 	var output := _default_facilities()
@@ -245,18 +306,34 @@ func _apply_offline_progress() -> void:
 	if elapsed >= 30.0:
 		var before_levels := {}
 		for hero in data.heroes: before_levels[hero.id] = int(hero.level)
-		advance_time(elapsed)
+		# A passi di un minuto, come se il gioco fosse rimasto aperto.
+		var remaining := elapsed
+		while remaining > 0.0:
+			var step := minf(60.0, remaining)
+			advance_time(step)
+			remaining -= step
 		var gained := 0
 		for hero in data.heroes: gained += int(hero.level) - int(before_levels.get(hero.id, hero.level))
 		add_event("REPORT", "Mentre eri via", "Sono passati %d minuti alla base. Livelli guadagnati in addestramento: %d." % [roundi(elapsed / 60.0), gained], "info")
 	data.world.last_saved = now
 	save_game()
 
+## Scrittura sicura: file temporaneo, copia di sicurezza, poi sostituzione.
 func save_game() -> void:
 	if data.is_empty() or is_test_mode: return
 	data.world.last_saved = Time.get_unix_time_from_system()
-	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
-	if file: file.store_string(JSON.stringify(data, "  "))
+	var tmp := SAVE_PATH + ".tmp"
+	var file := FileAccess.open(tmp, FileAccess.WRITE)
+	if file == null: return
+	file.store_string(JSON.stringify(data, "  "))
+	file.close()
+	if FileAccess.file_exists(SAVE_PATH):
+		DirAccess.copy_absolute(SAVE_PATH, SAVE_PATH + ".bak")
+		if DirAccess.rename_absolute(tmp, SAVE_PATH) != OK:
+			DirAccess.remove_absolute(SAVE_PATH)
+			DirAccess.rename_absolute(tmp, SAVE_PATH)
+	else:
+		DirAccess.rename_absolute(tmp, SAVE_PATH)
 
 func save_and_notify() -> void:
 	save_game()
@@ -273,6 +350,19 @@ func rng_for(text: String) -> RandomNumberGenerator:
 
 func _pick(rng: RandomNumberGenerator, values: Array) -> Variant:
 	return values[rng.randi_range(0, values.size() - 1)]
+
+## Due valori diversi con lo stesso numero di estrazioni di due _pick.
+func _pick_two(rng: RandomNumberGenerator, values: Array) -> Array:
+	var i := rng.randi_range(0, values.size() - 1)
+	var j := rng.randi_range(0, values.size() - 2)
+	if j >= i: j += 1
+	return [values[i], values[j]]
+
+## Nomi delle abilità dei salvataggi precedenti, ancora in inglese.
+const LEGACY_SKILL_NAMES := {"Aegis Brace": "Scudo d'Egida", "Driving Cleave": "Fendente Travolgente", "Pinning Thrust": "Affondo Inchiodante", "Marked Shot": "Colpo Mirato", "Ember Lattice": "Rete di Braci", "Mend": "Cura", "Field Discipline": "Disciplina da Campo"}
+
+static func skill_label(name: String) -> String:
+	return LEGACY_SKILL_NAMES.get(name, name)
 
 func stars(rarity: int) -> String:
 	return "★".repeat(rarity)
@@ -360,7 +450,7 @@ func generate_hero(seed_text: String, rarity: int, forced_role: String = "") -> 
 		"id": id, "seed": "%08X" % abs(seed_text.hash()), "name": name, "native_rarity": rarity, "current_rarity": rarity, "level": 1, "xp": 0,
 		"role": role, "class_name": role, "origin": _pick(rng, ORIGINS), "profession": _pick(rng, PROFESSIONS), "stats": stats, "potential": potential, "growth": 3.35 + rarity * 0.62 + potential * 0.004,
 		"personality": {"courage": rng.randi_range(25, 95), "discipline": rng.randi_range(20, 96), "aggression": rng.randi_range(15, 95), "altruism": rng.randi_range(15, 95), "composure": rng.randi_range(20, 95), "loyalty": rng.randi_range(25, 90)},
-		"traits": [_pick(rng, TRAITS), _pick(rng, TRAITS)], "skills": [{"name": ROLES[role].skill, "level": 1, "xp": 0}, {"name": "Field Discipline", "level": 1, "xp": 0}],
+		"traits": _pick_two(rng, TRAITS), "skills": [{"name": ROLES[role].skill, "level": 1, "xp": 0}, {"name": "Disciplina da Campo", "level": 1, "xp": 0}],
 		"morale": rng.randi_range(60, 84), "fatigue": rng.randi_range(0, 8), "injuries": [], "missions": 0, "victories": 0, "kills": 0, "state": "ALIVE", "hue": rng.randi_range(0, 359),
 		"equipment": _starter_equipment(role), "memories": ["Ha attraversato il Rift e ha visto il Nexus per la prima volta."],
 	}
@@ -369,15 +459,46 @@ func generate_hero(seed_text: String, rarity: int, forced_role: String = "") -> 
 
 ## Aspetto deterministico derivato dall'id: non altera la sequenza RNG storica degli eroi.
 func hero_appearance(hero: Dictionary) -> Dictionary:
+	return appearance_for(hero)
+
+const FEMININE_NAMES := ["Aella", "Doria", "Fara", "Hesta", "Kaia", "Mira", "Neris", "Pyria", "Rhea", "Tavia", "Veya", "Wren", "Yara"]
+const HAIR_COLORS := ["#1b181d", "#1b181d", "#2a201b", "#2a201b", "#46301f", "#6a4429", "#9a6a43", "#c49a5e", "#dcc287", "#7d2a24", "#b0452f", "#bdb7bd", "#26304a", "#43263f"]
+const EYE_COLORS := ["#4a2c1e", "#4a2c1e", "#6e2424", "#9c7426", "#3b6b49", "#3a5f8f", "#5d6470", "#5e4287"]
+const SKIN_TONES := ["#f1dccc", "#ecd0bb", "#e4c0a2", "#d2a581", "#b98663", "#8f5f45", "#6b4533"]
+const OUTFIT_COLORS := ["#3a2e29", "#2d3236", "#352c3f", "#2c3830", "#46322a", "#262c3c", "#472a2f", "#3d3a33"]
+
+## Tratti fisici del ritratto e del modello 3D, sempre uguali per lo stesso eroe.
+static func appearance_for(hero: Dictionary) -> Dictionary:
 	var h: int = abs(str(hero.get("id", "x")).hash())
-	var skins := [Color("#ffe3cf"), Color("#f6d2b4"), Color("#e8b98f"), Color("#c98e63"), Color("#9b6644")]
-	var eyes := [Color("#3b6fd8"), Color("#2e9e6a"), Color("#8a4fd6"), Color("#c0502e"), Color("#d9a72c"), Color("#2f8fb5")]
+	var name := str(hero.get("name", "Hero"))
+	var first := name.split(" ")[0]
+	var fem: bool = FEMININE_NAMES.has(first)
+	var role := str(hero.get("role", "Guardian"))
+	var hue := float(hero.get("hue", 40)) / 360.0
+	var veteran := (h / 7919) % 100 < 14
+	var hair := Color(HAIR_COLORS[(h / 3) % HAIR_COLORS.size()])
+	if veteran: hair = hair.lerp(Color("#b9b4b4"), 0.62)
+	var styles: Array = [1, 5, 3, 1, 5] if fem else [0, 2, 0, 3, 2]
+	var style: int = styles[(h / 53) % styles.size()]
+	if role in ["Mage", "Ranger"] and (h / 211) % 4 == 0: style = 4
+	var beard := 0
+	if not fem:
+		var roll := (h / 401) % 100
+		if veteran: beard = 2 if roll < 55 else 1
+		elif roll < 18: beard = 1
+		elif roll < 30: beard = 2
 	return {
-		"hair": Color.from_hsv(float(hero.get("hue", 40)) / 360.0, 0.62, 0.86),
-		"skin": skins[h % skins.size()],
-		"eyes": eyes[(h / 7) % eyes.size()],
-		"hair_style": (h / 53) % 4,
-		"outfit": Color.from_hsv(fmod(float(hero.get("hue", 40)) / 360.0 + 0.45, 1.0), 0.45, 0.62),
+		"hair": hair,
+		"skin": Color(SKIN_TONES[(h / 11) % SKIN_TONES.size()]),
+		"eyes": Color(EYE_COLORS[(h / 7) % EYE_COLORS.size()]),
+		"hair_style": style,
+		"outfit": Color(OUTFIT_COLORS[(h / 13) % OUTFIT_COLORS.size()]),
+		"accent": Color.from_hsv(hue, 0.52, 0.58),
+		"fem": fem,
+		"veteran": veteran,
+		"beard": beard,
+		"scar": (h / 977) % 100 < 11,
+		"seed": h,
 	}
 
 func _starter_equipment(role: String) -> Dictionary:
@@ -570,7 +691,7 @@ func next_base_level() -> Dictionary:
 func can_upgrade_base() -> Dictionary:
 	var next := next_base_level()
 	if next.is_empty(): return {"ok": false, "message": "La base è al livello massimo"}
-	if cleared_floor_count() < int(next.floor) and not bool(data.dev.get("all_content", false)): return {"ok": false, "message": "Completa il Piano %d" % int(next.floor)}
+	if cleared_floor_count() < int(next.floor) and not dev_override(): return {"ok": false, "message": "Completa il Piano %d" % int(next.floor)}
 	if not can_afford({"gold": int(next.gold)}): return {"ok": false, "message": "Oro insufficiente"}
 	return {"ok": true, "message": ""}
 
@@ -588,7 +709,14 @@ func upgrade_base() -> Dictionary:
 	return {"ok": true, "level": int(next.level), "unlocked": unlocked}
 
 func cleared_floor_count() -> int:
-	return data.world.completed.size()
+	var count := 0
+	for key in data.stages:
+		if bool(data.stages[key].get("cleared", false)): count += 1
+	return count
+
+## Requisiti di progressione ignorati solo con la modalità sviluppo accesa.
+func dev_override() -> bool:
+	return bool(data.dev.get("enabled", false)) and bool(data.dev.get("all_content", false))
 
 func material_cap() -> int:
 	return 60 + 80 * facility_level("warehouse")
@@ -685,7 +813,7 @@ func advance_time(seconds: float) -> bool:
 func summon_pool_unlocked(pool: String) -> bool:
 	var info: Dictionary = SUMMON_POOLS.get(pool, {})
 	if info.is_empty(): return false
-	return cleared_floor_count() >= int(info.get("unlock_floor", 0)) or bool(data.dev.get("all_content", false))
+	return cleared_floor_count() >= int(info.get("unlock_floor", 0)) or dev_override()
 
 func summon(pool: String, count: int) -> Dictionary:
 	var info: Dictionary = SUMMON_POOLS.get(pool, {})
@@ -796,7 +924,7 @@ func promotion_requirements(hero: Dictionary) -> Dictionary:
 	var stones := int(PROMOTION_STONES[rarity])
 	if int(hero.level) < level_cap(hero): return {"ok": false, "message": "Raggiungi prima il Lv.%d" % level_cap(hero), "stones": stones}
 	var gate := int(PROMOTION_FLOOR_GATE.get(rarity, 0))
-	if gate > 0 and cleared_floor_count() < gate and not bool(data.dev.get("all_content", false)): return {"ok": false, "message": "Completa il Piano %d" % gate, "stones": stones}
+	if gate > 0 and cleared_floor_count() < gate and not dev_override(): return {"ok": false, "message": "Completa il Piano %d" % gate, "stones": stones}
 	if not can_afford({"stones": stones}): return {"ok": false, "message": "Servono %d Pietre" % stones, "stones": stones}
 	return {"ok": true, "message": "", "stones": stones}
 
@@ -862,6 +990,7 @@ func forge_item(recipe_id: String) -> Dictionary:
 	return {"ok": true, "item": item}
 
 func equip_item(hero_id: String, item_id: String) -> Dictionary:
+	if item_id.is_empty(): return {"ok": false, "message": "Oggetto non valido"}
 	var hero := hero_by_id(hero_id)
 	if hero.is_empty() or hero.state != "ALIVE": return {"ok": false, "message": "Eroe non disponibile"}
 	var index := -1
@@ -1002,7 +1131,7 @@ func finalize_mission(result: Dictionary) -> Dictionary:
 				grant(key, amount, "Bottino Piano %d" % floor, "mission")
 		stage_state.cleared = true
 		stage_state.best_time = float(result.duration) if float(stage_state.best_time) <= 0 else min(float(stage_state.best_time), float(result.duration))
-		if not data.world.completed.has(floor): data.world.completed.append(floor)
+		if not data.world.completed.has(floor): data.world.completed.append(int(floor))
 		if floor < MAX_FLOOR and floor + 1 > int(data.world.max_floor):
 			data.world.max_floor = floor + 1
 			data.world.current_floor = floor + 1
@@ -1037,6 +1166,7 @@ func finalize_mission(result: Dictionary) -> Dictionary:
 
 func set_dev_mode(enabled: bool) -> void:
 	data.dev.enabled = enabled
+	if not enabled: data.dev.all_content = false
 	data.dev.unlimited_resources = enabled
 	data.dev.reveal_hidden = enabled
 	add_event("DEV", "Modalità sviluppo " + ("attiva" if enabled else "disattivata"), "Risorse infinite e valori nascosti " + ("visibili." if enabled else "nascosti."), "warn")
@@ -1048,6 +1178,16 @@ func dev_unlock_all() -> void:
 	for floor_index in range(1, int(data.world.max_floor) + 1): _materialize_stage(floor_index)
 	add_event("DEV", "Contenuti sbloccati", "Piani e requisiti di progressione ignorati per i test.", "warn")
 	save_and_notify()
+
+## Segna come completati i piani fino a `up_to` (strumenti di sviluppo e test).
+func debug_clear_floors(up_to: int) -> void:
+	for f in range(1, up_to + 1):
+		var record := _materialize_stage(f)
+		record.cleared = true
+		if not data.world.completed.has(f): data.world.completed.append(f)
+	data.world.max_floor = maxi(int(data.world.max_floor), mini(MAX_FLOOR, up_to + 1))
+	data.world.current_floor = int(data.world.max_floor)
+	_materialize_stage(int(data.world.max_floor))
 
 func dev_restore_roster() -> void:
 	for hero in data.heroes:

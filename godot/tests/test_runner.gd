@@ -30,6 +30,11 @@ func _initialize() -> void:
 	_test("promozioni 6★ riservate all'endgame", _test_promotion_gate)
 	_test("armeria: forgia ed equipaggiamento", _test_armory)
 	_test("richiamo d'emergenza contro il blocco", _test_emergency)
+	_test("ricarica JSON: niente piani completati falsi", _test_json_reload)
+	_test("sblocchi di sviluppo non sopravvivono", _test_dev_leak)
+	_test("addestramento offline rispetta la stanchezza", _test_offline_steps)
+	_test("chiudere in missione conta come sconfitta", _test_abandoned_mission)
+	_test("oggetti vecchi senza id ricevono un id", _test_item_ids)
 	print("\nRisultato: %d passati, %d falliti" % [passed, failed])
 	quit(0 if failed == 0 else 1)
 
@@ -90,10 +95,10 @@ func _test_transcendent() -> Array:
 	var game := _fresh("transcendent-seed")
 	game.data.world.gems = 100000
 	var locked: bool = not game.summon("transcendent", 1).ok
-	for f in range(1, 21): game.data.world.completed.append(f)
+	game.debug_clear_floors(20)
 	var result := game.summon("transcendent", 20)
 	var valid: bool = locked and result.ok
-	for hero in result.heroes: valid = valid and int(hero.native_rarity) >= 5 and int(hero.native_rarity) <= 7
+	for hero in result.heroes: valid = valid and int(hero.native_rarity) >= 4 and int(hero.native_rarity) <= 7
 	game.free()
 	return [valid, "Pool trascendente non conforme"]
 
@@ -172,7 +177,7 @@ func _test_base_upgrade() -> Array:
 	var game := _fresh("base-seed")
 	game.data.world.gold = 500000
 	var blocked: bool = not game.upgrade_base().ok
-	for f in range(1, 4): game.data.world.completed.append(f)
+	game.debug_clear_floors(3)
 	var upgraded := game.upgrade_base()
 	var plot: bool = game.facility_available("armory") and not game.facility_built("armory")
 	var built := game.build_facility("armory")
@@ -215,7 +220,7 @@ func _test_legacy_migration() -> Array:
 	descriptor.erase("threat_budget")
 	game._migrate()
 	var valid: bool = int(game.data.version) == 3 and not game.is_dev_unlimited()
-	valid = valid and game.facility_level("training") == 2 and game.facility_built("merging") and not game.facility_built("armory")
+	valid = valid and game.facility_level("training") == 1 and game.facility_built("merging") and not game.facility_built("armory")
 	valid = valid and game.data.heroes[0].injuries[0] is Dictionary and game.data.has("assignments")
 	valid = valid and descriptor.has("threat_budget") and int(descriptor.threat_budget) == int(descriptor.threat)
 	game.free()
@@ -259,7 +264,7 @@ func _test_promotion_gate() -> Array:
 	hero.level = 70
 	game.data.world.stones = 99
 	var blocked: bool = not game.promote_hero(hero.id).ok
-	for f in range(1, 31): game.data.world.completed.append(f)
+	game.debug_clear_floors(30)
 	var ok := game.promote_hero(hero.id)
 	var valid: bool = blocked and ok.ok and int(hero.current_rarity) == 6 and int(game.data.world.stones) == 99 - 12
 	game.free()
@@ -288,3 +293,67 @@ func _test_emergency() -> Array:
 	var valid: bool = hidden and first.ok and not second.ok and int(first.hero.native_rarity) == 1 and game.get_alive_heroes().size() == 4
 	game.free()
 	return [valid, "Richiamo d'emergenza non conforme"]
+
+func _reload(game: RiftwardState) -> void:
+	game.data = JSON.parse_string(JSON.stringify(game.data))
+	game._migrate()
+
+func _test_json_reload() -> Array:
+	var game := _fresh("reload-seed")
+	var start := game.begin_mission(1)
+	var results := []
+	for hero in game.get_party(): results.append({"id": hero.id, "alive": true, "hp_ratio": 0.9, "kills": 0, "fatigue": 5})
+	game.finalize_mission({"victory": true, "reason": "test", "duration": 10.0, "hero_results": results})
+	_reload(game)
+	var before := game.cleared_floor_count()
+	game.begin_mission(1)
+	game.finalize_mission({"victory": true, "reason": "test", "duration": 10.0, "hero_results": results})
+	_reload(game)
+	var valid: bool = before == 1 and game.cleared_floor_count() == 1 and game.data.world.completed == [1]
+	valid = valid and typeof(game.data.summon_counter) == TYPE_INT and typeof(game.data.heroes[0].level) == TYPE_INT
+	game.free()
+	return [valid, "Ricaricare il salvataggio altera i piani completati o i tipi"]
+
+func _test_dev_leak() -> Array:
+	var game := _fresh("dev-leak-seed")
+	game.data.version = 2
+	game.data.dev = {"enabled": true, "unlimited_resources": true, "reveal_hidden": true, "all_content": true}
+	game._migrate()
+	var migrated_ok: bool = not game.dev_override() and not game.summon_pool_unlocked("transcendent")
+	game.set_dev_mode(true)
+	game.dev_unlock_all()
+	var unlocked: bool = game.summon_pool_unlocked("transcendent")
+	game.set_dev_mode(false)
+	var relocked: bool = not game.summon_pool_unlocked("transcendent")
+	game.free()
+	return [migrated_ok and unlocked and relocked, "Gli sblocchi di sviluppo restano attivi"]
+
+func _test_offline_steps() -> Array:
+	var game := _fresh("offline-seed")
+	var hero: Dictionary = game.data.heroes[0]
+	hero.fatigue = 0
+	game.assign_hero(hero.id, "training")
+	game.data.world.last_saved = Time.get_unix_time_from_system() - 8 * 3600
+	game._apply_offline_progress()
+	var valid: bool = not game.data.assignments.has(hero.id) and float(hero.fatigue) >= 89.0 and int(hero.level) < 10
+	game.free()
+	return [valid, "L'addestramento offline ha ignorato la stanchezza (Lv.%d)" % int(hero.level)]
+
+func _test_abandoned_mission() -> Array:
+	var game := _fresh("abandon-seed")
+	var morale_before := int(game.get_party()[0].morale)
+	game.begin_mission(1)
+	_reload(game)
+	var valid: bool = game.data.active_mission.is_empty() and int(game.data.stages["1"].attempts) == 1 and int(game.get_party()[0].morale) < morale_before and not bool(game.data.stages["1"].cleared)
+	game.free()
+	return [valid, "La missione abbandonata non è stata chiusa come sconfitta"]
+
+func _test_item_ids() -> Array:
+	var game := _fresh("item-seed")
+	game.data.inventory = [{"name": "Lama del Rift", "slot": "main", "grade": "C", "power": 22}]
+	game._migrate()
+	var item: Dictionary = game.data.inventory[0]
+	var valid: bool = str(item.get("id", "")) != "" and not game.equip_item(game.data.heroes[0].id, "").ok
+	valid = valid and game.equip_item(game.data.heroes[0].id, str(item.id)).ok
+	game.free()
+	return [valid, "Gli oggetti senza id non sono stati sistemati"]

@@ -2,13 +2,13 @@
 
 importer="font_data_dynamic"
 type="FontFile"
-uid="uid://4uo68jc4lnp0"
-path="res://.godot/imported/Nunito.ttf-9a0d659c7c014361f3d844547f0a9ee8.fontdata"
+uid="uid://bp620mneq4qma"
+path="res://.godot/imported/AlegreyaSC-Bold.ttf-79f6ffaf53b0e92f20797ecd60b8fb30.fontdata"
 
 [deps]
 
-source_file="res://assets/fonts/Nunito.ttf"
-dest_files=["res://.godot/imported/Nunito.ttf-9a0d659c7c014361f3d844547f0a9ee8.fontdata"]
+source_file="res://assets/fonts/AlegreyaSC-Bold.ttf"
+dest_files=["res://.godot/imported/AlegreyaSC-Bold.ttf-79f6ffaf53b0e92f20797ecd60b8fb30.fontdata"]
 
 [params]
 

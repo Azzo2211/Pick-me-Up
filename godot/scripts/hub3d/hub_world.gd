@@ -485,7 +485,7 @@ func _make_label(id: String, pos: Vector3, text: String) -> void:
 	badge.no_depth_test = true
 	badge.render_priority = 3
 	badge.position = pos
-	badge.offset = Vector2(0, 92)
+	badge.offset = Vector2(-140, 18)
 	var mark := Label3D.new()
 	mark.text = "!"
 	mark.font = UIKit.head_font()
@@ -496,11 +496,19 @@ func _make_label(id: String, pos: Vector3, text: String) -> void:
 	mark.no_depth_test = true
 	mark.render_priority = 4
 	mark.outline_size = 0
-	mark.offset = Vector2(0, 94)
+	mark.offset = Vector2(-140, 20)
 	badge.add_child(mark)
 	badge.visible = false
 	fx_root.add_child(badge)
 	badges[id] = badge
+
+## Il bollino rosso sta a sinistra del nome, così non finisce mai sotto l'HUD in alto.
+func _place_badge(id: String) -> void:
+	var label: Label3D = labels[id]
+	var width := UIKit.head_font().get_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, label.font_size).x
+	var px := width * label.pixel_size / 0.0006 * 0.5 + 34.0
+	badges[id].offset = Vector2(-px, 18)
+	(badges[id].get_child(0) as Label3D).offset = Vector2(-px, 20)
 
 func _set_label_visible(id: String, value: bool) -> void:
 	if labels.has(id):
@@ -539,6 +547,8 @@ func _update_labels(state: RiftwardState) -> void:
 				alert = state.party_readiness().ready
 		sublabels[id].text = line
 		badges[id].visible = alert
+	for id in badges:
+		if badges[id].visible: _place_badge(id)
 
 func _has_trainable(state: RiftwardState) -> bool:
 	for hero in state.get_alive_heroes():

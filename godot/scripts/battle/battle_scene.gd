@@ -146,6 +146,7 @@ func _build_world() -> void:
 	for i in 10:
 		var pos := Vector3(r.randf_range(-ARENA_X, ARENA_X), 0.08, r.randf_range(-ARENA_Z, ARENA_Z))
 		kit.sphere(0.35, ground_color.darkened(0.12), pos, Vector3(1.4, 0.3, 1.0), 8)
+	_scatter_grass(r, ground_color)
 	match str(stage.type):
 		"Exploration":
 			for p in poi_points:
@@ -170,6 +171,49 @@ func _build_world() -> void:
 			light.light_color = Color("#ffd27a")
 			light.omni_range = 7.0
 			beacon_node.add_child(light)
+
+func _scatter_grass(r: RandomNumberGenerator, ground_color: Color) -> void:
+	var tuft := CylinderMesh.new()
+	tuft.top_radius = 0.0
+	tuft.bottom_radius = 0.1
+	tuft.height = 0.34
+	tuft.radial_segments = 4
+	var tm := StandardMaterial3D.new()
+	tm.albedo_color = ground_color.darkened(0.18)
+	tm.diffuse_mode = BaseMaterial3D.DIFFUSE_LAMBERT
+	tuft.material = tm
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = tuft
+	mm.instance_count = 520
+	for i in mm.instance_count:
+		var pos := Vector3(r.randf_range(-ARENA_X - 6.0, ARENA_X + 6.0), 0.17, r.randf_range(-ARENA_Z - 5.0, ARENA_Z + 5.0))
+		mm.set_instance_transform(i, Transform3D(Basis(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3.ONE * r.randf_range(0.7, 1.4)), pos))
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	world.add_child(mmi)
+	var flower := SphereMesh.new()
+	flower.radius = 0.07
+	flower.height = 0.1
+	flower.radial_segments = 6
+	flower.rings = 3
+	var fm := StandardMaterial3D.new()
+	fm.vertex_color_use_as_albedo = true
+	fm.vertex_color_is_srgb = true
+	flower.material = fm
+	var fmm := MultiMesh.new()
+	fmm.transform_format = MultiMesh.TRANSFORM_3D
+	fmm.use_colors = true
+	fmm.mesh = flower
+	fmm.instance_count = 160
+	var colors := [Color("#ff6f91"), Color("#ffd166"), Color("#ffffff"), Color("#c77dff")]
+	for i in fmm.instance_count:
+		var pos := Vector3(r.randf_range(-ARENA_X - 6.0, ARENA_X + 6.0), 0.08, r.randf_range(-ARENA_Z - 5.0, ARENA_Z + 5.0))
+		fmm.set_instance_transform(i, Transform3D(Basis.IDENTITY, pos))
+		fmm.set_instance_color(i, colors[i % colors.size()])
+	var fmmi := MultiMeshInstance3D.new()
+	fmmi.multimesh = fmm
+	world.add_child(fmmi)
 
 # =============================================================================
 # HUD
@@ -376,7 +420,24 @@ func _process(delta: float) -> void:
 			u.flash = maxf(0.0, flash - delta * 5.0)
 			model.flash(u.flash * 0.9)
 	_update_effects(delta)
+	_follow_action(delta)
 	overlay.queue_redraw()
+
+## La camera segue dolcemente il baricentro dello scontro.
+func _follow_action(delta: float) -> void:
+	var sum := Vector2.ZERO
+	var count := 0
+	for u in units:
+		if not u.alive: continue
+		var weight := 2 if u.hero else 1
+		sum += u.pos * weight
+		count += weight
+	if count == 0: return
+	var center := sum / count
+	var focus := Vector3(clampf(center.x, -7.0, 7.0), 0.0, clampf(center.y, -2.5, 2.5) - 1.4)
+	var desired := focus + Vector3(-0.4, 13.5, 14.9)
+	camera.position = camera.position.lerp(desired, clampf(delta * 1.5, 0.0, 1.0))
+	camera.look_at(camera.position - Vector3(-0.4, 13.5, 14.9), Vector3.UP)
 
 func _tick(delta: float) -> void:
 	elapsed += delta
@@ -546,7 +607,7 @@ func _update_hero(hero: Dictionary, delta: float) -> void:
 		coefficient = 1.6
 		hero.skill_cd = 9.0
 		_ring(target.pos, UIKit.GOLD, 1.0)
-		_float_text(hero.pos, str(hero.source.skills[0].name), Color("#ffe39a"))
+		_float_text(hero.pos, RiftwardState.skill_label(str(hero.source.skills[0].name)), Color("#ffe39a"))
 	var all_out := elapsed < float(command_state.all_out_until)
 	hero.model.play("attack")
 	if bool(hero.ranged): _projectile(hero, target)

@@ -56,7 +56,7 @@ func _run() -> void:
 	main.close_panel()
 	# Base più avanzata: Lv.3 con nuove strutture
 	state.data.world.base_level = 3
-	for f in range(1, 7): if not state.data.world.completed.has(f): state.data.world.completed.append(f)
+	state.debug_clear_floors(6)
 	state.data.facilities.training.level = 3
 	state.data.facilities.dormitory.level = 2
 	state.data.facilities.merging.level = 2
