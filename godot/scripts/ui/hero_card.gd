@@ -89,7 +89,8 @@ func set_face_down(value: bool) -> void:
 	if overlay != null: overlay.queue_redraw()
 
 func _gui_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+	# al rilascio: così una carta si può anche trascinare (formazione) senza aprirla
+	if event is InputEventMouseButton and not event.pressed and event.button_index == MOUSE_BUTTON_LEFT and get_global_rect().has_point(event.global_position):
 		pressed.emit(hero_id)
 
 ## Colore della cornice: grigio per i caduti, iridescente per il 7★.

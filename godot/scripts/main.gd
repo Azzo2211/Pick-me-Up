@@ -7,6 +7,8 @@ extends Control
 const HubViewScript := preload("res://scripts/hub3d/hub_view.gd")
 const PanelsScript := preload("res://scripts/ui/facility_panels.gd")
 const BattleScript := preload("res://scripts/battle/battle_scene.gd")
+const MissionResultScript := preload("res://scripts/ui/mission_result_screen.gd")
+const LoadingScript := preload("res://scripts/ui/loading_screen.gd")
 
 const PANEL_WIDTH := 520.0
 const TOP_BAR_HEIGHT := 80.0
@@ -62,8 +64,15 @@ func _ready() -> void:
 	GameState.state_changed.connect(_queue_refresh)
 	GameState.time_ticked.connect(_on_time_ticked)
 	GameState.hero_leveled.connect(_on_hero_leveled)
+	var loading: LoadingScreen = null
+	if not GameState.is_test_mode:
+		loading = LoadingScript.new()
+		add_child(loading)
 	await get_tree().process_frame
 	_refresh_all()
+	if loading != null:
+		await loading.advance(0.6, 0.5)
+		await loading.close()
 	if not bool(GameState.data.get("tutorial_seen", false)):
 		await get_tree().create_timer(0.4).timeout
 		_show_onboarding()
@@ -131,12 +140,14 @@ func _build_hud() -> void:
 	dock.offset_left = 18
 	dock.offset_top = -74
 	dock.offset_bottom = -16
-	dock.offset_right = 760
+	dock.offset_right = 1000
 	dock.add_theme_constant_override("separation", 10)
 	dock.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud.add_child(dock)
-	dock.add_child(_round_button("Eroi", open_panel.bind("roster"), "gold"))
+	dock.add_child(_round_button("Eroi", open_roster, "gold"))
 	dock.add_child(_round_button("Squadra", _open_squad, "primary"))
+	dock.add_child(_round_button("Torre", _open_tower, "primary"))
+	dock.add_child(_round_button("Negozio", open_shop, "violet"))
 	var journal := _round_button("Diario", _show_journal, "navy")
 	journal_badge = UIKit.pill("0", UIKit.ROSE, UIKit.INK, 12)
 	journal_badge.set_anchors_preset(Control.PRESET_TOP_RIGHT)
@@ -277,6 +288,12 @@ func _open_squad() -> void:
 	panels.gate_tab = "squad"
 	open_panel("gate")
 
+func _open_tower() -> void:
+	if busy: return
+	panels.gate_tab = "mission"
+	open_panel("gate")
+	panels.open_tower_map()
+
 func close_panel() -> void:
 	current_panel = ""
 	current_view = "hub"
@@ -312,11 +329,12 @@ func _recenter() -> void:
 
 ## Compatibilità con i vecchi nomi delle schermate.
 func _set_view(view: String) -> void:
-	var map := {"hub": "", "tower": "gate", "squad": "gate", "heroes": "roster", "summon": "crystal", "merge": "merging", "base": "crystal", "archive": "journal", "dev": "settings", "shop": "crystal"}
+	var map := {"hub": "", "tower": "gate", "squad": "gate", "heroes": "roster", "summon": "crystal", "merge": "merging", "base": "crystal", "archive": "journal", "dev": "settings", "shop": "shop"}
 	var target: String = map.get(view, view)
 	if target.is_empty(): close_panel()
 	elif target == "journal": _show_journal()
 	elif target == "settings": _show_settings()
+	elif target == "shop": open_shop()
 	else: open_panel(target)
 
 # =============================================================================
@@ -513,6 +531,19 @@ func open_hero(hero_id: String) -> void:
 	var modal: Control = await open_modal(hero.name, "%s · %s · %s" % [GameState.stars(int(hero.current_rarity)), GameState.role_label(hero.role), GameState.RARITY_NAMES[int(hero.current_rarity)]], content, 900, [], refresh)
 	modal_ref.append(modal)
 
+## Roster completo a schermo largo: griglia densa con filtri per ruolo, stelle e stato.
+func open_roster() -> void:
+	if busy: return
+	var content := VBoxContainer.new()
+	panels.build_roster_screen(content)
+	await open_modal("Roster degli eroi", "%d vivi · %d caduti" % [GameState.get_alive_heroes().size(), GameState.data.memorial.size()], content, minf(size.x - 80.0, 1400.0), [], panels.refresh_roster_screen)
+
+func open_shop() -> void:
+	if busy: return
+	var content := VBoxContainer.new()
+	panels.build_shop(content)
+	await open_modal("Negozio", "Rifornimenti della base", content, minf(size.x - 80.0, 1060.0), [], panels.refresh_shop_screen)
+
 func _refresh_dossier(content: VBoxContainer, hero_id: String, modal_ref: Array) -> void:
 	if not is_instance_valid(content): return
 	UIKit.clear(content)
@@ -608,13 +639,15 @@ func deploy(floor_index: int) -> void:
 	hub.refresh(GameState)
 	hub.focus_on("gate", 0)
 	await hub.world.play_deploy(party_ids)
-	var fade := ColorRect.new()
-	fade.color = Color(0.02, 0.01, 0.04, 0)
-	fade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(fade)
+	var stage: Dictionary = result.stage
+	var loading: LoadingScreen = LoadingScript.new()
+	loading.setup("PIANO %d" % floor_index, "APERTURA DEL VARCO…", ("%s · %s" % [str(stage.get("name", "")), str(stage.get("biome", ""))]).to_upper(), Color(str(stage.get("color", "#f052c8"))).lightened(0.35))
+	loading.modulate.a = 0.0
+	add_child(loading)
 	var tween := create_tween()
-	tween.tween_property(fade, "color:a", 1.0, 0.4)
+	tween.tween_property(loading, "modulate:a", 1.0, 0.35)
 	await tween.finished
+	await loading.advance(0.35, 0.4)
 	hub.visible = false
 	hub.viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	battle = BattleScript.new()
@@ -622,10 +655,9 @@ func deploy(floor_index: int) -> void:
 	battle.hero_died.connect(_on_battle_hero_died)
 	battle.battle_finished.connect(_on_battle_finished)
 	add_child(battle)
-	move_child(fade, get_child_count() - 1)
-	var tween2 := create_tween()
-	tween2.tween_property(fade, "color:a", 0.0, 0.45)
-	tween2.tween_callback(fade.queue_free)
+	move_child(loading, get_child_count() - 1)
+	await get_tree().process_frame
+	await loading.close()
 
 func _on_battle_hero_died(hero_id: String, cause: String) -> void:
 	GameState.record_death(hero_id, cause)
@@ -642,6 +674,6 @@ func _on_battle_finished(result: Dictionary) -> void:
 	hub.world.restore_agents()
 	_refresh_all()
 	hub.reset_view()
-	var content := VBoxContainer.new()
-	panels.build_mission_result(content, result, resolved)
-	await open_modal("Vittoria" if result.victory else "Missione fallita", "Piano %d · %s" % [int(result.get("floor", 0)), panels.reason_text(str(result.get("reason", "")))], content, 760, [UIKit.button("Torna alla base", close_all_modals, "gold", 240)], Callable(), "system")
+	var screen: MissionResultScreen = MissionResultScript.new()
+	screen.setup(result, resolved)
+	modal_layer.add_child(screen)

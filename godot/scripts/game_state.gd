@@ -1019,6 +1019,59 @@ func refine_material(recipe_id: String) -> Dictionary:
 	save_and_notify()
 	return {"ok": true}
 
+# --- Negozio -----------------------------------------------------------------
+## Solo valute di gioco, prezzi e quantità sempre visibili. Niente che annulli il
+## rischio: nessuna resurrezione o protezione dalla morte permanente.
+## `limit` è il numero di acquisti per giorno (si azzera a mezzanotte UTC).
+const SHOP_TABS := [["daily", "Offerte del giorno"], ["material", "Materiali"], ["premium", "Gemme"]]
+const SHOP_OFFERS := {
+	"daily_supplies": {"tab": "daily", "name": "Scorta da campo", "icon": "herbs", "color": "#4fe3a3", "price": {"gold": 1200}, "items": {"herbs": 4, "medicine": 2}, "limit": 1},
+	"daily_forge": {"tab": "daily", "name": "Kit di forgia", "icon": "ore", "color": "#ffbb4d", "price": {"gold": 3200}, "items": {"ore": 5, "leather": 3}, "limit": 1},
+	"daily_cores": {"tab": "daily", "name": "Nuclei instabili", "icon": "cores", "color": "#b57cff", "price": {"gold": 6000}, "items": {"cores": 2}, "limit": 1},
+	"daily_gems": {"tab": "daily", "name": "Cambio in Gemme", "icon": "gems", "color": "#46dcf2", "price": {"gold": 20000}, "items": {"gems": 60}, "limit": 1},
+	"mat_ore": {"tab": "material", "name": "Minerale", "icon": "ore", "color": "#9aa6b6", "price": {"gold": 700}, "items": {"ore": 5}, "limit": 5},
+	"mat_leather": {"tab": "material", "name": "Pelle", "icon": "leather", "color": "#c08a5a", "price": {"gold": 700}, "items": {"leather": 5}, "limit": 5},
+	"mat_wood": {"tab": "material", "name": "Legno", "icon": "wood", "color": "#6f8f3e", "price": {"gold": 500}, "items": {"wood": 5}, "limit": 5},
+	"mat_herbs": {"tab": "material", "name": "Erbe", "icon": "herbs", "color": "#4fe3a3", "price": {"gold": 500}, "items": {"herbs": 5}, "limit": 5},
+	"mat_medicine": {"tab": "material", "name": "Medicine", "icon": "medicine", "color": "#ff4f74", "price": {"gold": 1400}, "items": {"medicine": 3}, "limit": 3},
+	"mat_cores": {"tab": "material", "name": "Nuclei", "icon": "cores", "color": "#b57cff", "price": {"gold": 3000}, "items": {"cores": 2}, "limit": 3},
+	"gem_stone": {"tab": "premium", "name": "Pietra di promozione", "icon": "stones", "color": "#f052c8", "price": {"gems": 450}, "items": {"stones": 1}, "limit": 2},
+	"gem_chest": {"tab": "premium", "name": "Forziere raro", "icon": "star", "color": "#ffbb4d", "price": {"gems": 300}, "items": {"ore": 6, "leather": 6, "wood": 6, "cores": 3}, "limit": 1},
+	"gem_gold": {"tab": "premium", "name": "Sacca d'oro", "icon": "gold", "color": "#ffbb4d", "price": {"gems": 150}, "items": {"gold": 12000}, "limit": 3},
+}
+
+func shop_day() -> int:
+	return int(now() / 86400.0)
+
+func _shop_state() -> Dictionary:
+	var shop: Dictionary = data.get_or_add("shop", {"day": -1, "bought": {}})
+	if int(shop.get("day", -1)) != shop_day():
+		shop.day = shop_day()
+		shop.bought = {}
+	return shop
+
+func shop_remaining(offer_id: String) -> int:
+	var offer: Dictionary = SHOP_OFFERS.get(offer_id, {})
+	if offer.is_empty(): return 0
+	return maxi(0, int(offer.limit) - int(_shop_state().bought.get(offer_id, 0)))
+
+## Secondi al prossimo rinnovo delle offerte.
+func shop_refresh_in() -> int:
+	return int((shop_day() + 1) * 86400.0 - now())
+
+func shop_buy(offer_id: String) -> Dictionary:
+	var offer: Dictionary = SHOP_OFFERS.get(offer_id, {})
+	if offer.is_empty(): return {"ok": false, "message": "Offerta sconosciuta"}
+	if shop_remaining(offer_id) <= 0: return {"ok": false, "message": "Esaurito per oggi"}
+	for key in offer.items:
+		if MATERIALS.has(key) and resource_amount(key) >= material_cap(): return {"ok": false, "message": "Scorte piene di %s: potenzia il Magazzino" % MATERIALS[key].name}
+	if not pay(offer.price, "Negozio · " + str(offer.name), "shop"): return {"ok": false, "message": "Non hai abbastanza " + cost_text(offer.price)}
+	for key in offer.items: grant(key, int(offer.items[key]), "Negozio · " + str(offer.name), "shop")
+	var shop := _shop_state()
+	shop.bought[offer_id] = int(shop.bought.get(offer_id, 0)) + 1
+	save_and_notify()
+	return {"ok": true}
+
 func brew_potion(recipe_id: String, hero_id: String) -> Dictionary:
 	if not facility_built("alchemy"): return {"ok": false, "message": "Costruisci prima il Centro Alchemico"}
 	var recipe: Dictionary = ALCHEMY_RECIPES.get(recipe_id, {})

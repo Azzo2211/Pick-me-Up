@@ -38,6 +38,7 @@ func _initialize() -> void:
 	_test("luce della base salvata e migrata", _test_light_setting)
 	_test("tratti diversi e abilità in italiano", _test_traits_skills)
 	_test("sviluppo: tutti i piani, base e eroi al massimo", _test_dev_tools)
+	_test("negozio: prezzi, limiti giornalieri e scorte", _test_shop)
 	print("\nRisultato: %d passati, %d falliti" % [passed, failed])
 	quit(0 if failed == 0 else 1)
 
@@ -400,3 +401,25 @@ func _test_dev_tools() -> Array:
 	valid = valid and int(top.current_rarity) == 7 and int(top.level) == game.level_cap(top)
 	game.free()
 	return [valid, "Gli strumenti di sviluppo non sbloccano tutto"]
+
+func _test_shop() -> Array:
+	var game := _fresh("shop-seed")
+	var gold := game.resource_amount("gold")
+	var ore := game.resource_amount("ore")
+	var bought: bool = game.shop_buy("mat_ore").ok
+	var valid: bool = bought and game.resource_amount("gold") == gold - 700 and game.resource_amount("ore") == ore + 5
+	valid = valid and game.shop_remaining("mat_ore") == 4
+	game.shop_buy("daily_supplies")
+	valid = valid and not game.shop_buy("daily_supplies").ok
+	# un nuovo giorno azzera i limiti
+	game.data.shop.day = game.shop_day() - 1
+	valid = valid and game.shop_remaining("daily_supplies") == 1
+	# niente acquisti senza fondi
+	game.data.world.gems = 10
+	valid = valid and not game.shop_buy("gem_stone").ok and int(game.data.world.stones) == 1
+	# scorte piene: l'acquisto viene rifiutato senza pagare
+	game.data.world.materials.wood = game.material_cap()
+	var before := game.resource_amount("gold")
+	valid = valid and not game.shop_buy("mat_wood").ok and game.resource_amount("gold") == before
+	game.free()
+	return [valid, "Il negozio non rispetta prezzi o limiti"]
