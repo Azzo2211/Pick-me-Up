@@ -1239,6 +1239,31 @@ func build_dossier(content: VBoxContainer, hero: Dictionary, modal_ref: Array) -
 		dv.add_child(UIKit.para("Ferite: " + ", ".join(inj), 15, UIKit.ROSE))
 	derived.add_child(dv)
 	content.add_child(derived)
+	if hero.state == "ALIVE":
+		var bonds: Array = GS.hero_bonds(str(hero.id), 4)
+		if not bonds.is_empty():
+			var bond_panel := PanelContainer.new()
+			bond_panel.add_theme_stylebox_override("panel", UIKit.ornate("card", 14.0))
+			var bv := VBoxContainer.new()
+			bv.add_theme_constant_override("separation", 6)
+			bv.add_child(UIKit.label("LEGAMI", 16, UIKit.GOLD, UIKit.head_font()))
+			for row in bonds:
+				var line := HBoxContainer.new()
+				line.add_theme_constant_override("separation", 10)
+				var who := UIKit.label(str(row.name), 15, UIKit.INK, UIKit.body_bold())
+				who.custom_minimum_size.x = 190
+				line.add_child(who)
+				var value := int(row.value)
+				var tone: Color = UIKit.TEAL if value >= RiftwardState.BOND_FRIEND else UIKit.ROSE if value <= RiftwardState.BOND_RIVAL else UIKit.SKY
+				var bar := UIKit.bar(float(value + 100), 200.0, tone, 10.0)
+				bar.custom_minimum_size.x = 160
+				bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+				line.add_child(bar)
+				line.add_child(UIKit.label(str(row.label), 14, tone, UIKit.body_bold()))
+				bv.add_child(line)
+			bv.add_child(UIKit.para("I legami crescono combattendo, allenandosi e riposando insieme. In squadra un amico fidato dà forza e coraggio; perderlo pesa sul morale.", 13, UIKit.MUTED))
+			bond_panel.add_child(bv)
+			content.add_child(bond_panel)
 	var notes := PanelContainer.new()
 	notes.add_theme_stylebox_override("panel", UIKit.ornate("system", 16.0))
 	var nv := VBoxContainer.new()
@@ -1417,6 +1442,15 @@ func build_settings(content: VBoxContainer) -> void:
 		lb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		lights.add_child(lb)
 	content.add_child(lights)
+	content.add_child(section("Qualità grafica"))
+	var qualities := HBoxContainer.new()
+	qualities.add_theme_constant_override("separation", 8)
+	for option in [["high", "Alta"], ["medium", "Media"], ["low", "Bassa"]]:
+		var qb := UIKit.button(option[1], GS.set_quality.bind(option[0]), "primary" if GS.quality() == option[0] else "ghost", 0)
+		qb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		qualities.add_child(qb)
+	content.add_child(qualities)
+	content.add_child(UIKit.para("Alta: ombre morbide, occlusione e luce rimbalzata. Media o Bassa se il gioco rallenta.", 14, UIKit.MUTED))
 	var dev_on := bool(GS.data.dev.get("enabled", false))
 	content.add_child(section("Modalità sviluppo", "attiva" if dev_on else "spenta"))
 	content.add_child(UIKit.para("Risorse infinite e valori nascosti visibili, per provare il gioco velocemente e vedere fin dove arriva. Spegnila per giocare con l'economia reale.", 15))

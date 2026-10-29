@@ -512,6 +512,10 @@ func _toggle_speed() -> void:
 # =============================================================================
 
 func _create_heroes() -> void:
+	var party_ids := []
+	for hero_source in party_source:
+		if not hero_source.is_empty(): party_ids.append(str(hero_source.id))
+	var bonded := []
 	for i in party_source.size():
 		var source: Dictionary = party_source[i]
 		if source.is_empty(): continue
@@ -529,6 +533,11 @@ func _create_heroes() -> void:
 			"kills": 0, "damage": 0, "healing": 0, "ammo": int(d.ammo), "max_ammo": int(d.ammo), "status": "", "fear": 0.0,
 			"courage": int(source.personality.courage), "ranged": ranged, "threat": 0,
 		}
+		# legami: i compagni fidati danno forza e coraggio, i rivali tolgono coraggio
+		var bonus: Dictionary = GameState.party_bond_bonus(str(source.id), party_ids)
+		unit.attack = float(unit.attack) * float(bonus.attack)
+		unit.courage = int(unit.courage) + int(bonus.courage)
+		if int(bonus.close) > 0: bonded.append(str(source.name))
 		var model := CharacterModel.new()
 		world.add_child(model)
 		model.build_hero(source, GameState.hero_appearance(source))
@@ -540,6 +549,7 @@ func _create_heroes() -> void:
 		units.append(unit)
 		next_id += 1
 		_make_party_card(unit)
+	if bonded.size() >= 2: _log("Legami forti in squadra: %s combattono fianco a fianco." % ", ".join(bonded), "good")
 
 func _make_party_card(unit: Dictionary) -> void:
 	var card := PanelContainer.new()
@@ -932,6 +942,16 @@ func _kill(target: Dictionary, attacker: Dictionary) -> void:
 	if attacker.get("hero", false): attacker.kills = int(attacker.kills) + 1
 	if target.hero:
 		_log("%s è caduto. Non tornerà." % target.name, "danger")
+		# chi gli era legato reagisce: dolore o furia
+		for ally in _heroes():
+			var value: int = GameState.bond(str(ally.id), str(target.id))
+			if value >= RiftwardState.BOND_CLOSE:
+				ally.attack = float(ally.attack) * 1.12
+				ally.courage = int(ally.courage) + 10
+				_log("%s è furioso per la caduta di %s." % [ally.name, target.name], "warn")
+			elif value >= RiftwardState.BOND_FRIEND:
+				ally.courage = int(ally.courage) - 12
+				_log("%s è scosso per la caduta di %s." % [ally.name, target.name], "warn")
 		var card: Dictionary = party_cards.get(target.entity_id, {})
 		if not card.is_empty(): card.card.modulate = Color(0.75, 0.55, 0.55, 0.75)
 		hero_died.emit(str(target.id), "Ucciso da " + str(attacker.name))

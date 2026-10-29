@@ -10,7 +10,17 @@ const PlasterShader := preload("res://scripts/hub3d/shaders/plaster.gdshader")
 const WoodShader := preload("res://scripts/hub3d/shaders/wood.gdshader")
 const RoofShader := preload("res://scripts/hub3d/shaders/roof.gdshader")
 const FoliageShader := preload("res://scripts/hub3d/shaders/foliage.gdshader")
+const FoliageCutoutShader := preload("res://scripts/hub3d/shaders/foliage_cutout.gdshader")
 const HighlightShader := preload("res://scripts/hub3d/shaders/highlight.gdshader")
+const RockShader := preload("res://scripts/hub3d/shaders/rock.gdshader")
+const SkinShader := preload("res://scripts/hub3d/shaders/skin.gdshader")
+const FabricShader := preload("res://scripts/hub3d/shaders/fabric.gdshader")
+const HairShader := preload("res://scripts/hub3d/shaders/hair.gdshader")
+const FOLIAGE_TEXTURES := {
+	"leaves": preload("res://assets/textures/leaves.png"),
+	"needles": preload("res://assets/textures/needles.png"),
+	"grass": preload("res://assets/textures/grass.png"),
+}
 const MistShader := preload("res://scripts/hub3d/shaders/mist.gdshader")
 
 static var _cache: Dictionary = {}
@@ -179,7 +189,7 @@ const ROOF_VARIANTS := {
 	"slate_blue": [Color("#3d4a66"), Color("#262e42"), 0, Vector2(0.24, 0.16), 0.15],
 	"clay": [Color("#7a3b2c"), Color("#57291f"), 0, Vector2(0.2, 0.15), 0.3],
 	"shingle": [Color("#5b4532"), Color("#3a2b1f"), 1, Vector2(0.28, 0.2), 0.35],
-	"thatch": [Color("#8d7445"), Color("#5e4b2b"), 2, Vector2(0.3, 0.2), 0.2],
+	"thatch": [Color("#7f6a42"), Color("#4c3c23"), 2, Vector2(0.3, 0.2), 0.3],
 	"copper": [Color("#4e8478"), Color("#3a6158"), 0, Vector2(0.3, 0.2), 0.0],
 	"violet": [Color("#4a3b66"), Color("#2f2645"), 0, Vector2(0.24, 0.16), 0.05],
 }
@@ -198,13 +208,55 @@ static func roof(variant: String = "slate") -> ShaderMaterial:
 	return _put(key, m)
 
 static func foliage(textured: bool = false) -> ShaderMaterial:
-	var key := "foliage|%s" % textured
-	if _cache.has(key): return _cache[key]
+	return foliage_cards("leaves") if textured else foliage_solid()
+
+## Fogliame pieno (interno delle chiome, coni delle conifere, colture).
+static func foliage_solid() -> ShaderMaterial:
+	if _cache.has("foliage|solid"): return _cache["foliage|solid"]
 	var m := ShaderMaterial.new()
 	m.shader = FoliageShader
-	m.set_shader_parameter("use_texture", textured)
-	if textured: m.set_shader_parameter("leaf_tex", leaf_texture())
+	return _put("foliage|solid", m)
+
+## Carte ritagliate di fogliame: "leaves", "needles" o "grass" (atlanti in assets/textures).
+static func foliage_cards(texture_name: String, sway: float = 0.035) -> ShaderMaterial:
+	var key := "foliage|%s|%.3f" % [texture_name, sway]
+	if _cache.has(key): return _cache[key]
+	var m := ShaderMaterial.new()
+	m.shader = FoliageCutoutShader
+	m.set_shader_parameter("leaf_tex", FOLIAGE_TEXTURES.get(texture_name, FOLIAGE_TEXTURES["leaves"]))
+	m.set_shader_parameter("sway", sway)
+	if texture_name == "grass":
+		m.set_shader_parameter("translucency", 0.3)
+		m.set_shader_parameter("variation", 0.35)
 	return _put(key, m)
+
+## Materiali dei personaggi: pelle, stoffa, cuoio, capelli (colore dai vertici).
+static func skin() -> ShaderMaterial:
+	if _cache.has("skin"): return _cache["skin"]
+	var m := ShaderMaterial.new()
+	m.shader = SkinShader
+	return _put("skin", m)
+
+static func fabric(is_leather: bool = false) -> ShaderMaterial:
+	var key := "fabric|%s" % is_leather
+	if _cache.has(key): return _cache[key]
+	var m := ShaderMaterial.new()
+	m.shader = FabricShader
+	m.set_shader_parameter("leather", 1.0 if is_leather else 0.0)
+	return _put(key, m)
+
+static func hair() -> ShaderMaterial:
+	if _cache.has("hair"): return _cache["hair"]
+	var m := ShaderMaterial.new()
+	m.shader = HairShader
+	return _put("hair", m)
+
+## Roccia naturale (massi, scogliere vicine, rupi).
+static func rock() -> ShaderMaterial:
+	if _cache.has("rock"): return _cache["rock"]
+	var m := ShaderMaterial.new()
+	m.shader = RockShader
+	return _put("rock", m)
 
 static func mist(low: Color, high: Color, density: float = 0.75, scale: float = 0.035) -> ShaderMaterial:
 	var m := ShaderMaterial.new()
@@ -220,41 +272,6 @@ static func highlight() -> ShaderMaterial:
 	var m := ShaderMaterial.new()
 	m.shader = HighlightShader
 	return m
-
-## Texture di un ciuffo di foglie (scala di grigi + alfa) generata una volta.
-static func leaf_texture() -> ImageTexture:
-	if _cache.has("leaf_tex"): return _cache["leaf_tex"]
-	var size := 128
-	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
-	img.fill(Color(0, 0, 0, 0))
-	var r := RandomNumberGenerator.new()
-	r.seed = 1337
-	for i in 170:
-		var c := Vector2(r.randf_range(10, size - 10), r.randf_range(10, size - 10))
-		var to_center := (c - Vector2(size, size) * 0.5).length() / (size * 0.5)
-		if to_center > 0.95 or (to_center > 0.75 and r.randf() < 0.5): continue
-		var angle := r.randf_range(0, TAU)
-		var length := r.randf_range(6.0, 11.0)
-		var width := length * r.randf_range(0.38, 0.5)
-		var shade := r.randf_range(0.55, 1.0)
-		var dir := Vector2(cos(angle), sin(angle))
-		var side := Vector2(-dir.y, dir.x)
-		var x0 := int(c.x - length) - 1
-		var y0 := int(c.y - length) - 1
-		for y in range(maxi(0, y0), mini(size, y0 + int(length * 2) + 3)):
-			for x in range(maxi(0, x0), mini(size, x0 + int(length * 2) + 3)):
-				var d := Vector2(x + 0.5, y + 0.5) - c
-				var along := d.dot(dir) / length
-				var across := d.dot(side) / width
-				var k := along * along + across * across
-				if k <= 1.0:
-					var vein := 1.0 - 0.18 * clampf(1.0 - absf(across) * 6.0, 0.0, 1.0)
-					var light := shade * (0.85 + 0.15 * along) * vein
-					img.set_pixel(x, y, Color(light, light, light, 1.0))
-	img.generate_mipmaps()
-	var tex := ImageTexture.create_from_image(img)
-	_cache["leaf_tex"] = tex
-	return tex
 
 ## Texture rotonda sfumata (fumo, aloni, chiazze di luce), messa in cache.
 static func soft_texture(size: int, color: Color) -> ImageTexture:

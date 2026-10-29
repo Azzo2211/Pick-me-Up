@@ -346,9 +346,14 @@ func _queue_refresh() -> void:
 	_refresh_queued = true
 	call_deferred("_refresh_all")
 
+var _quality_applied := ""
+
 func _refresh_all() -> void:
 	_refresh_queued = false
 	if battle != null: return
+	if WorldLook.quality != GameState.quality() or _quality_applied.is_empty():
+		_quality_applied = GameState.quality()
+		WorldLook.apply_quality(get_viewport(), _quality_applied)
 	_update_hud()
 	hub.refresh(GameState)
 	_render_panel()

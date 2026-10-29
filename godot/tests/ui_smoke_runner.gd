@@ -33,8 +33,8 @@ func _run() -> void:
 	await _frames(5)
 	var world: HubWorld = main.hub.world
 	_check(main.hub != null and main.hub.visible, "la base 3D è la schermata principale")
-	_check(world.buildings.has("training") and world.buildings.has("dormitory") and world.buildings.has("merging") and world.buildings.has("gate"), "Base Lv.1: addestramento, dormitorio, fusione e portale presenti")
-	_check(not world.buildings.has("armory") and not world.buildings.has("workshop") and not world.buildings.has("warehouse"), "armeria, laboratorio e magazzino assenti al Lv.1")
+	_check(world.buildings.has("training") and world.buildings.has("dormitory") and world.buildings.has("merging") and world.buildings.has("gate") and world.buildings.has("warehouse") and world.buildings.has("alchemy"), "Base Lv.1: addestramento, dormitorio, fusione, portale, magazzino e alchimia presenti")
+	_check(not world.buildings.has("armory") and not world.buildings.has("workshop"), "armeria e laboratorio assenti al Lv.1")
 	_check(world.agents.size() == state.get_alive_heroes().size(), "ogni eroe vivo cammina nella base")
 	_check(world.nav.get_point_count() > 20 and world.site_nodes.has("training"), "rete di sentieri navigabile")
 	_check(world.buildings.training.floors == 1 and world.buildings.dormitory.floors == 1 and world.buildings.merging.floors == 1, "edifici del Lv.1 a un solo piano")

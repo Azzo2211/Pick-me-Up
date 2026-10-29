@@ -12,6 +12,7 @@ signal hero_clicked(hero_id: String)
 
 const BuildingModelScript := preload("res://scripts/hub3d/building_model.gd")
 const WaterShader := preload("res://scripts/hub3d/water.gdshader")
+const CrystalShader := preload("res://scripts/hub3d/shaders/crystal.gdshader")
 const HubAgentScript := preload("res://scripts/hub3d/hub_agent.gd")
 
 const PLAZA_RADIUS := 4.4
@@ -108,9 +109,12 @@ var _mists: Array[ShaderMaterial] = []
 var _waters: Array[ShaderMaterial] = []
 
 ## Cambia luce e cielo della base (crepuscolo, giorno, notte).
+var look_quality := ""
+
 func _apply_light(preset: String) -> void:
-	if preset == light_preset: return
+	if preset == light_preset and look_quality == WorldLook.quality: return
 	light_preset = preset
+	look_quality = WorldLook.quality
 	for key in ["world_environment", "sun", "fill"]:
 		if look.has(key) and is_instance_valid(look[key]): (look[key] as Node).queue_free()
 	look = WorldLook.setup(self, preset, {}, 140.0)
@@ -334,8 +338,8 @@ func _smooth_normals(verts: PackedVector3Array, indices: PackedInt32Array) -> Pa
 
 ## Scogliera sotto l'isola: strati di roccia che si stringono verso il basso.
 func _build_cliffs() -> void:
-	var segments := 200
-	var layers := 9
+	var segments := 260
+	var layers := 14
 	var verts := PackedVector3Array()
 	var cols := PackedColorArray()
 	var indices := PackedInt32Array()
@@ -348,13 +352,18 @@ func _build_cliffs() -> void:
 			var a := TAU * s / segments
 			var edge := island_radius(a)
 			var r := edge * (1.0 - pow(t, 1.35) * 0.9) + 0.35 * (1.0 - t)
-			var jitter := cliff_noise.get_noise_2d(a * 12.0, l * 2.0) * 1.4 * (1.0 - t * 0.5) * smoothstep(0.0, 0.12, t)
+			# colonne verticali (rumore fitto sull'angolo, lento in altezza) e grandi masse
+			var columns := cliff_noise.get_noise_2d(a * 46.0, l * 0.3) * 0.75
+			var masses := cliff_noise.get_noise_2d(a * 9.0, l * 1.3) * 1.2
+			var jitter := (columns + masses) * (1.0 - t * 0.45) * smoothstep(0.0, 0.08, t)
 			var y := -0.85 - t * 17.0 + cliff_noise.get_noise_2d(a * 7.0, l * 4.0) * 1.6 * t
 			verts.append(Vector3(cos(a) * (r + jitter), y, sin(a) * (r + jitter)))
-			cols.append(Color(0, 0, 1, lerpf(0.9, 0.5, t)))
+			var tint := Color(0.86, 0.9, 0.78) if l == 1 else Color(1.0, 0.97, 0.93)
+			tint.a = lerpf(0.95, 0.45, t)
+			cols.append(tint)
 	var tip := verts.size()
 	verts.append(Vector3(1.0, -21.0, -0.6))
-	cols.append(Color(0, 0, 1, 0.4))
+	cols.append(Color(1, 1, 1, 0.4))
 	for l in layers:
 		for s in segments:
 			var s2 := (s + 1) % segments
@@ -369,7 +378,36 @@ func _build_cliffs() -> void:
 		var a0 := layers * segments + s
 		var a1 := layers * segments + (s + 1) % segments
 		_tri_idx(indices, verts, a0, tip, a1, Vector3(verts[a0].x, -2.0, verts[a0].z).normalized())
-	_add_flat_mesh(terrain_root, verts, cols, indices, WorldMaterials.terrain(), true)
+	_add_flat_mesh(terrain_root, verts, cols, indices, WorldMaterials.rock(), true)
+
+## Rupe sospesa: zolla rocciosa a cono rovesciato con colonne e sporgenze.
+## "top" è il centro della faccia superiore; la geometria va nel MeshBuilder dato.
+func _rock_spire(b: MeshBuilder, key: String, top: Vector3, radius: float, depth: float, seed_value: int, rings: int = 8, segments: int = 22) -> void:
+	var noise := FastNoiseLite.new()
+	noise.seed = seed_value
+	noise.frequency = 0.9
+	var grid: Array = []
+	for ri in rings + 1:
+		var t := float(ri) / rings
+		var row: Array = []
+		for si in segments:
+			var a := TAU * si / segments
+			var rr := radius * (1.0 - pow(t, 1.25) * 0.93) * (1.0 + noise.get_noise_2d(a * 9.0, t * 2.0) * 0.18 + noise.get_noise_2d(a * 3.0, t * 5.0) * 0.12 * t)
+			var y := top.y - t * depth + noise.get_noise_2d(a * 4.0, ri * 3.0) * depth * 0.05 * t
+			row.append(top + Vector3(cos(a) * rr, y - top.y, sin(a) * rr))
+		grid.append(row)
+	var tip := top + Vector3(radius * 0.06, -depth * 1.12, -radius * 0.04)
+	for ri in rings:
+		var t := float(ri) / rings
+		for si in segments:
+			var s2 := (si + 1) % segments
+			var q: Array = [grid[ri][si], grid[ri][s2], grid[ri + 1][s2], grid[ri + 1][si]]
+			var out := (Vector3(q[0].x, 0, q[0].z) - Vector3(top.x, 0, top.z)).normalized()
+			var c := Color(1.0, 0.97, 0.93, lerpf(0.9, 0.45, t))
+			b.quad(key, q[0], q[1], q[2], q[3], out + Vector3(0, -0.2, 0), c)
+	for si in segments:
+		var s2 := (si + 1) % segments
+		b.flat_tri(key, grid[rings][si], grid[rings][s2], tip, Vector3(grid[rings][si].x - top.x, -1.0, grid[rings][si].z - top.z), Color(1, 1, 1, 0.4))
 
 func _add_flat_mesh(parent: Node3D, verts: PackedVector3Array, cols: PackedColorArray, indices: PackedInt32Array, mat: Material, shadows: bool) -> MeshInstance3D:
 	# normali per faccia (vertici duplicati) per un aspetto roccioso
@@ -417,14 +455,8 @@ func _build_gate_platform() -> void:
 		var a := TAU * i / 20.0
 		pts.append(Vector2(cos(a), sin(a)) * (GATE_PLATFORM_RADIUS + 0.35 * sin(a * 3.0 + 1.0)))
 	b.extrude("ground", pts, c.y - 0.4, c.y, Color(0.15, 0.0, 0.0, 1.0), true, false, Vector3(c.x, 0, c.z))
-	var layers := 6
-	for l in layers:
-		var t0 := float(l) / layers
-		var t1 := float(l + 1) / layers
-		var r0 := GATE_PLATFORM_RADIUS * (1.0 - pow(t0, 1.2) * 0.92)
-		var r1 := GATE_PLATFORM_RADIUS * (1.0 - pow(t1, 1.2) * 0.92)
-		b.cylinder("ground", r0, r1, 1.6, Vector3(c.x, c.y - 0.4 - 0.8 - l * 1.6, c.z), Color(0, 0, 1, lerpf(0.9, 0.5, t0)), 14, Vector3(0, l * 0.4, 0), false, MeshBuilder.UV.FACE, TAU, false)
-	b.cone("ground", GATE_PLATFORM_RADIUS * 0.08, 1.4, Vector3(c.x, c.y - 0.4 - layers * 1.6 - 0.7, c.z), Color(0, 0, 1, 0.45), 8, Vector3(PI, 0, 0))
+	b.material("rock", WorldMaterials.rock())
+	_rock_spire(b, "rock", Vector3(c.x, c.y - 0.38, c.z), GATE_PLATFORM_RADIUS + 0.25, 9.5, 91, 10, 26)
 	# piazzola lastricata
 	b.cylinder("paving", 3.9, 4.0, 0.08, Vector3(c.x, c.y + 0.02, c.z), Color.WHITE, 28)
 	# ponte: dal bordo dell'isola alla rupe, con parapetti e piloni
@@ -523,6 +555,7 @@ func _build_water() -> void:
 	fall.rotation = Vector3(-0.12, atan2(dir.x, dir.y), 0)
 	terrain_root.add_child(fall)
 	var mist := CPUParticles3D.new()
+	mist.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mist.position = Vector3(edge.x, -13.5, edge.y) + outward * 2.2
 	mist.amount = 16
 	mist.lifetime = 2.6
@@ -569,17 +602,19 @@ func _build_plaza() -> void:
 	crystal = Node3D.new()
 	crystal.position = Vector3(0, 2.6, 0)
 	decor_root.add_child(crystal)
+	var crystal_mat := ShaderMaterial.new()
+	crystal_mat.shader = CrystalShader
 	var cb := MeshBuilder.new()
-	cb.material("core", WorldMaterials.glow(Color("#3f8fe0"), 1.5))
-	cb.material("inner", WorldMaterials.glow(Color("#a9dcff"), 2.6))
-	cb.sphere("core", 0.62, Vector3.ZERO, Color.WHITE, Vector3(0.62, 1.55, 0.62), 6, 2)
-	cb.sphere("inner", 0.3, Vector3.ZERO, Color.WHITE, Vector3(0.5, 1.4, 0.5), 6, 2)
+	cb.material("crystal", crystal_mat)
+	_crystal_mesh(cb, "crystal", 0.36, 1.25, 0.5, 0.42, Vector3.ZERO, 0.0)
+	_crystal_mesh(cb, "crystal", 0.16, 0.45, 0.22, 0.18, Vector3(0.36, -0.55, 0.12), 0.5)
+	_crystal_mesh(cb, "crystal", 0.13, 0.36, 0.18, 0.15, Vector3(-0.3, -0.62, -0.2), -0.6)
 	var core := cb.instance(crystal, false)
 	core.set_meta("spin", true)
 	for i in 3:
 		var shard := MeshBuilder.new()
-		shard.material("s", WorldMaterials.glow(Color("#7fc0ff"), 2.0))
-		shard.sphere("s", 0.13, Vector3.ZERO, Color.WHITE, Vector3(0.6, 1.7, 0.6), 4, 2)
+		shard.material("s", crystal_mat)
+		_crystal_mesh(shard, "s", 0.07, 0.16, 0.1, 0.08, Vector3.ZERO, 0.0)
 		var mi := shard.instance(crystal, false)
 		mi.set_meta("angle", TAU * i / 3.0)
 	var light := OmniLight3D.new()
@@ -601,6 +636,26 @@ func _build_plaza() -> void:
 	body.add_child(shape)
 	decor_root.add_child(body)
 	_make_label("crystal", Vector3(0, 4.1, 0), "Cristallo del Nexus")
+
+## Cristallo esagonale sfaccettato: prisma con punta e base a piramide.
+func _crystal_mesh(b: MeshBuilder, key: String, radius: float, body: float, top: float, bottom: float, center: Vector3, tilt: float) -> void:
+	b.push(Transform3D(Basis(Vector3(0, 0, 1), tilt), center))
+	var ring_low: Array[Vector3] = []
+	var ring_high: Array[Vector3] = []
+	for i in 6:
+		var a := TAU * i / 6.0 + 0.3
+		var r := radius * (0.92 + 0.08 * sin(i * 2.7))
+		ring_low.append(Vector3(cos(a) * r, -body * 0.5, sin(a) * r))
+		ring_high.append(Vector3(cos(a) * r * 0.94, body * 0.5, sin(a) * r * 0.94))
+	var apex := Vector3(radius * 0.08, body * 0.5 + top, 0.0)
+	var foot := Vector3(0.0, -body * 0.5 - bottom, radius * 0.05)
+	for i in 6:
+		var j := (i + 1) % 6
+		var mid := (ring_low[i] + ring_low[j] + ring_high[i] + ring_high[j]) * 0.25
+		b.quad(key, ring_low[i], ring_low[j], ring_high[j], ring_high[i], Vector3(mid.x, 0, mid.z), Color.WHITE)
+		b.flat_tri(key, ring_high[i], ring_high[j], apex, (ring_high[i] + ring_high[j]) * 0.5 + Vector3(0, radius, 0), Color.WHITE)
+		b.flat_tri(key, ring_low[j], ring_low[i], foot, (ring_low[i] + ring_low[j]) * 0.5 - Vector3(0, radius, 0), Color.WHITE)
+	b.pop()
 
 func _scaled(pts: PackedVector2Array, s: float) -> PackedVector2Array:
 	var out := PackedVector2Array()
@@ -636,10 +691,15 @@ func _blocked(p: Vector2, clearance: float) -> bool:
 	if r < PLAZA_RADIUS + 1.0 + clearance: return true
 	if _road_distance(p) < 0.5 + clearance: return true
 	if absf(r - WALL_RADIUS) < 0.9 + clearance: return true
+	# lato da cui guarda la telecamera: lì gli alberi coprirebbero gli edifici
+	var toward_camera := Vector2(sin(deg_to_rad(18.0)), cos(deg_to_rad(18.0)))
 	for id in SITES:
 		if id == "gate": continue
 		var reserve := float(SITE_RADIUS[id]) if active_sites.has(id) else float(SITE_RADIUS[id]) * 0.55
-		if p.distance_to(polar(SITES[id].x, SITES[id].y)) < reserve + clearance: return true
+		var site := polar(SITES[id].x, SITES[id].y)
+		var d := p.distance_to(site)
+		if d < reserve + clearance: return true
+		if active_sites.has(id) and d < reserve * 2.3 + clearance and (p - site).normalized().dot(toward_camera) > 0.45: return true
 	for g in GARDENS:
 		var gp := polar(g.x, g.y)
 		if maxf(absf(p.x - gp.x), absf(p.y - gp.y)) < 1.6 + clearance: return true
@@ -746,9 +806,10 @@ func _build_sky_dressing() -> void:
 		sky_root.add_child(islet)
 		var b := MeshBuilder.new()
 		b.material("ground", WorldMaterials.terrain())
+		b.material("rock", WorldMaterials.rock())
 		var s := r.randf_range(1.2, 2.6)
-		b.cylinder("ground", 2.0 * s, 2.2 * s, 0.5 * s, Vector3.ZERO, Color(0.1, 0, 0, 1), 10, Vector3.ZERO, true, MeshBuilder.UV.FACE, TAU, false)
-		b.cylinder("ground", 2.2 * s, 0.3, 4.0 * s, Vector3(0, -2.25 * s, 0), Color(0, 0, 1, 0.7), 9, Vector3.ZERO, false, MeshBuilder.UV.FACE, TAU, false)
+		b.cylinder("ground", 2.15 * s, 2.25 * s, 0.35 * s, Vector3(0, 0.08 * s, 0), Color(0.1, 0, 0, 1), 18, Vector3.ZERO, true, MeshBuilder.UV.FACE, TAU, true)
+		_rock_spire(b, "rock", Vector3(0, -0.08 * s, 0), 2.25 * s, 4.6 * s, 300 + i, 7, 18)
 		b.instance(islet, false)
 		if i % 2 == 0:
 			var trees: Array = []
@@ -1001,7 +1062,25 @@ func _build_decor(base_level: int) -> void:
 # Aggiornamento dallo stato di gioco
 # =============================================================================
 
+var last_state: RiftwardState
+
+## Un amico (legame alto) che in questo momento gironzola libero, se c'è.
+func idle_friend_of(hero_id: String) -> HubAgent:
+	if last_state == null: return null
+	var best: HubAgent = null
+	var best_value := RiftwardState.BOND_FRIEND - 1
+	for other_id in agents:
+		if other_id == hero_id: continue
+		var other: HubAgent = agents[other_id]
+		if other.activity != "idle" or other.inside or other.forced: continue
+		var value := last_state.bond(hero_id, other_id)
+		if value > best_value:
+			best_value = value
+			best = other
+	return best
+
 func refresh(state: RiftwardState) -> void:
+	last_state = state
 	_apply_light(state.light_preset())
 	var base_level := state.base_level()
 	var signature := ""
@@ -1181,6 +1260,22 @@ func _update_labels(state: RiftwardState) -> void:
 			"gate":
 				line += " · Piano %d" % int(state.data.world.current_floor)
 				alert = int(state.data.world.max_floor) > int(state.data.world.get("seen_floor", 0))
+			"armory":
+				var stored: int = state.data.inventory.size()
+				line += " · %d oggetti in deposito" % stored
+				alert = stored > 0
+			"warehouse":
+				var full := 0
+				for key in state.MATERIALS:
+					if state.resource_amount(key) >= state.material_cap(): full += 1
+				line += " · scorte max %d" % state.material_cap()
+				alert = full > 0
+			"alchemy":
+				var injured := 0
+				for hero in state.get_alive_heroes():
+					if not hero.injuries.is_empty(): injured += 1
+				line += " · feriti %d" % injured
+				alert = injured > 0 and state.can_afford(state.ALCHEMY_RECIPES.heal.cost)
 		sublabels[id].text = line
 		badges[id].visible = alert
 	for id in badges:
@@ -1242,6 +1337,7 @@ func _has_promotable(state: RiftwardState) -> bool:
 
 func _spawn_dust(pos: Vector3) -> void:
 	var p := CPUParticles3D.new()
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	p.position = pos
 	p.one_shot = true
 	p.emitting = true

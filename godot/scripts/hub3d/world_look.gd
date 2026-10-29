@@ -6,6 +6,16 @@ class_name WorldLook
 
 const SkyShader := preload("res://scripts/hub3d/shaders/sky.gdshader")
 
+## Qualità grafica scelta nelle Impostazioni (vedi GameState.quality()).
+static var quality := "high"
+
+## Applica antialias e filtri della qualità scelta alla finestra di gioco.
+static func apply_quality(viewport: Viewport, level: String) -> void:
+	quality = level
+	if viewport == null: return
+	viewport.msaa_3d = Viewport.MSAA_4X if level == "high" else Viewport.MSAA_2X if level == "medium" else Viewport.MSAA_DISABLED
+	viewport.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA
+
 const PRESETS := {
 	"dusk": {
 		"zenith": Color("#1b2550"), "upper": Color("#4e4f86"), "horizon": Color("#f0a46a"), "horizon_far": Color("#a77790"), "below": Color("#2a2340"),
@@ -70,6 +80,19 @@ static func setup(parent: Node3D, preset_name: String = "dusk", overrides: Dicti
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.tonemap_exposure = p.exposure
 	env.tonemap_white = 6.0
+	# occlusione e luce rimbalzata in screen space (renderer Forward+): volumi,
+	# angoli e contatti col terreno prendono profondità
+	env.ssao_enabled = quality != "low"
+	env.ssao_radius = 0.9
+	env.ssao_intensity = 1.8
+	env.ssao_power = 1.6
+	env.ssao_detail = 0.7
+	env.ssao_horizon = 0.06
+	env.ssao_light_affect = 0.12
+	env.ssil_enabled = quality == "high"
+	env.ssil_radius = 3.0
+	env.ssil_intensity = 0.7
+	env.ssil_normal_rejection = 1.0
 	env.fog_enabled = true
 	env.fog_light_color = p.fog
 	env.fog_density = p.fog_density

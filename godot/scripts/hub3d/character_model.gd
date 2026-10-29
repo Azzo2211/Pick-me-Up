@@ -142,10 +142,14 @@ func _build_rig(p: Dictionary) -> void:
 func _b(part: String) -> MeshBuilder:
 	if _parts.has(part): return _parts[part]
 	var b := MeshBuilder.new()
-	b.material("cloth", WorldMaterials.lit(Color.WHITE, 0.9))
+	b.material("cloth", WorldMaterials.fabric(false))
+	b.material("leather", WorldMaterials.fabric(true))
+	b.material("skin", WorldMaterials.skin())
+	b.material("hair", WorldMaterials.hair())
+	b.material("eye", WorldMaterials.lit(Color.WHITE, 0.25))
 	b.material("metal", WorldMaterials.metal(Color.WHITE, 0.38, 0.8))
 	b.material("dull", WorldMaterials.metal(Color.WHITE, 0.6, 0.45))
-	b.material("rock", WorldMaterials.terrain())
+	b.material("rock", WorldMaterials.rock())
 	_parts[part] = b
 	return b
 
@@ -196,98 +200,166 @@ func _body(look: Dictionary, colors: Dictionary) -> void:
 	var thigh_key: String = colors.get("thigh_key", "cloth")
 	var thigh_col: Color = colors.get("thigh", pants)
 	var shin_col: Color = colors.get("shin", pants)
-	# gambe
+	var pelvis_col: Color = colors.get("pelvis", pants)
+	var pelvis_key: String = colors.get("pelvis_key", thigh_key)
+	if fore == skin and fore_key == "cloth": fore_key = "skin"
+	if sleeve == skin and sleeve_key == "cloth": sleeve_key = "skin"
+	if shirt == skin and shirt_key == "cloth": shirt_key = "skin"
+	var hand_key := "skin" if hand == skin else "leather"
+	var L := limb * 1.18
+	var tx := torso.x
+	var tz := torso.z
+	# gambe: coscia piena in alto, ginocchio, polpaccio, caviglia sottile
 	for side in ["l", "r"]:
 		var lb := _b("leg_" + side)
-		lb.cylinder(thigh_key, 0.072 * limb, 0.062 * limb, 0.46, Vector3(0, -0.225, 0), thigh_col, 9)
+		lb.loft(thigh_key, [[0.05, 0.08 * L, 0.082 * L], [-0.05, 0.082 * L, 0.085 * L], [-0.2, 0.07 * L, 0.073 * L, 0.0, 0.004], [-0.36, 0.057 * L, 0.06 * L], [-0.47, 0.05 * L, 0.053 * L]], thigh_col, 14)
 		var sb := _b("shin_" + side)
-		sb.cylinder(shin_key, 0.058 * limb, 0.047 * limb, 0.3, Vector3(0, -0.15, 0), shin_col, 8)
-		sb.cylinder("cloth", 0.06 * limb, 0.056 * limb, 0.2, Vector3(0, -0.32, 0), boots, 8)
-		sb.box("cloth", Vector3(0.1 * limb, 0.075, 0.24 * limb), Vector3(0, -0.435, 0.04 * limb), boots)
-	# bacino e cintura
+		sb.sphere(shin_key, 0.052 * L, Vector3(0, 0.0, 0.006), shin_col, Vector3(1.0, 0.9, 1.0), 12, 7)
+		sb.loft(shin_key, [[0.0, 0.051 * L, 0.053 * L], [-0.08, 0.055 * L, 0.061 * L, 0.0, -0.008], [-0.18, 0.047 * L, 0.051 * L, 0.0, -0.004], [-0.27, 0.041 * L, 0.043 * L]], shin_col, 14)
+		# stivale: gambale svasato e piede ovale con tacco
+		sb.loft("leather", [[-0.2, 0.052 * L, 0.055 * L], [-0.24, 0.05 * L, 0.052 * L], [-0.36, 0.046 * L, 0.05 * L, 0.0, 0.003], [-0.43, 0.048 * L, 0.056 * L, 0.0, 0.008]], boots, 14)
+		sb.sphere("leather", 1.0, Vector3(0, -0.448, 0.035 * L), boots, Vector3(0.05 * L, 0.03, 0.105 * L), 12, 7)
+		sb.box("leather", Vector3(0.07 * L, 0.03, 0.05 * L), Vector3(0, -0.46, -0.035 * L), boots.darkened(0.2))
+		sb.box("leather", Vector3(0.088 * L, 0.012, 0.18 * L), Vector3(0, -0.472, 0.02 * L), boots.darkened(0.35), Vector3.ZERO, MeshBuilder.UV.FACE, false)
+	# bacino: fianchi (più larghi per le donne) e cintura
 	var hb := _b("hips")
-	hb.push(Transform3D(Basis.from_scale(Vector3(torso.x, 1, 0.72 * torso.z)), Vector3.ZERO))
-	hb.cylinder("cloth", 0.155 * (1.06 if fem else 1.0), 0.15, 0.22, Vector3(0, -0.02, 0), colors.get("pelvis", pants), 12)
-	hb.cylinder("cloth", 0.16, 0.16, 0.05, Vector3(0, 0.08, 0), colors.get("belt", Color("#2e2118")), 12)
-	hb.pop()
-	hb.box("dull", Vector3(0.05, 0.04, 0.02), Vector3(0, 0.08, 0.118 * torso.z), Color("#b39a62"))
-	# busto
+	var hipw := 1.1 if fem else 1.0
+	hb.loft(pelvis_key, [[0.12, 0.128 * tx, 0.09 * tz], [0.04, 0.14 * tx * hipw, 0.098 * tz, 0.0, -0.004], [-0.04, 0.152 * tx * hipw, 0.104 * tz, 0.0, -0.008], [-0.1, 0.146 * tx * hipw, 0.1 * tz, 0.0, -0.006], [-0.15, 0.1 * tx, 0.075 * tz]], pelvis_col, 16)
+	var belt: Color = colors.get("belt", Color("#2e2118"))
+	hb.loft("leather", [[0.105, 0.136 * tx, 0.096 * tz], [0.075, 0.141 * tx, 0.1 * tz], [0.045, 0.14 * tx * hipw, 0.099 * tz, 0.0, -0.004]], belt, 16, false)
+	hb.box("dull", Vector3(0.05, 0.04, 0.02), Vector3(0, 0.075, 0.1 * tz + 0.004), Color("#b39a62"))
+	# busto: vita, torace, spalle e trapezi
 	var tb := _b("spine")
-	tb.push(Transform3D(Basis.from_scale(Vector3(torso.x, torso.y, 0.62 * torso.z)), Vector3.ZERO))
-	tb.cylinder(shirt_key, 0.19 if not fem else 0.175, 0.15 if not fem else 0.14, 0.36, Vector3(0, 0.17, 0), shirt, 12)
-	tb.pop()
-	tb.sphere(shirt_key, 0.19, Vector3(0, 0.38 * torso.y, 0), shirt, Vector3(1.12 * torso.x, 0.5, 0.68 * torso.z), 12, 6)
+	var w := 0.9 if fem else 1.0
+	var waist := 0.118 if fem else 0.132
+	tb.loft(shirt_key, [[-0.03, waist * tx, 0.094 * tz], [0.07, (waist + 0.01) * tx, 0.1 * tz], [0.17, 0.157 * tx * w, 0.11 * tz, 0.0, 0.006], [0.27, 0.172 * tx * w, 0.118 * tz, 0.0, 0.01], [0.35, 0.18 * tx * w, 0.113 * tz, 0.0, 0.005], [0.41, 0.172 * tx * w, 0.1 * tz], [0.455, 0.112 * tx, 0.075 * tz], [0.49, 0.062, 0.056]], shirt, 18)
 	if fem:
-		for sx in [-1.0, 1.0]: tb.sphere(shirt_key, 0.058, Vector3(sx * 0.06, 0.26, 0.085), shirt, Vector3(1, 0.9, 0.8), 8, 5)
-	tb.cylinder("cloth", 0.05, 0.055, 0.12, Vector3(0, 0.46 * torso.y, 0), skin, 8)
-	# braccia
-	for side in ["l", "r"]:
+		for sx in [-1.0, 1.0]: tb.sphere(shirt_key, 0.058, Vector3(sx * 0.062, 0.262, 0.086 * tz), shirt, Vector3(1.0, 0.92, 0.82), 10, 6)
+	tb.loft("skin", [[0.44, 0.047, 0.05, 0.0, 0.004], [0.5, 0.044, 0.046, 0.0, 0.006], [0.54, 0.043, 0.045, 0.0, 0.008]], skin, 12, false)
+	# braccia: deltoide, bicipite, gomito, avambraccio, polso, mano
+	for side: String in ["l", "r"]:
+		var sgn: float = -1.0 if side == "l" else 1.0
 		var ab := _b("arm_" + side)
-		ab.sphere(sleeve_key, 0.062 * limb, Vector3(0, -0.01, 0), sleeve, Vector3.ONE, 8, 5)
-		ab.cylinder(sleeve_key, 0.056 * limb, 0.047 * limb, 0.29, Vector3(0, -0.145, 0), sleeve, 8)
+		ab.sphere(sleeve_key, 0.066 * L, Vector3(sgn * 0.004, -0.008, 0), sleeve, Vector3(1.0, 0.95, 1.05), 12, 7)
+		ab.loft(sleeve_key, [[-0.02, 0.06 * L, 0.063 * L], [-0.1, 0.055 * L, 0.06 * L, 0.0, 0.004], [-0.2, 0.046 * L, 0.049 * L], [-0.29, 0.04 * L, 0.042 * L]], sleeve, 14)
 		var fb := _b("fore_" + side)
-		fb.cylinder(fore_key, 0.046 * limb, 0.038 * limb, 0.25, Vector3(0, -0.125, 0), fore, 8)
+		fb.sphere(fore_key, 0.041 * L, Vector3.ZERO, fore, Vector3.ONE, 10, 6)
+		fb.loft(fore_key, [[0.0, 0.041 * L, 0.043 * L], [-0.06, 0.045 * L, 0.047 * L, 0.0, 0.003], [-0.17, 0.035 * L, 0.037 * L], [-0.255, 0.027 * L, 0.03 * L]], fore, 14)
 		var handb := _b("hand_" + side)
-		handb.box("cloth", Vector3(0.062 * limb, 0.085 * limb, 0.034 * limb), Vector3(0, -0.035, 0.005), hand)
+		handb.loft(hand_key, [[0.01, 0.026 * L, 0.018 * L], [-0.04, 0.033 * L, 0.017 * L, 0.0, 0.003], [-0.08, 0.03 * L, 0.015 * L, 0.0, 0.004], [-0.105, 0.019 * L, 0.011 * L, 0.0, 0.002]], hand, 10)
+		handb.rod(hand_key, Vector3(-sgn * 0.02 * L, -0.025, 0.012), Vector3(-sgn * 0.028 * L, -0.065, 0.03), 0.011 * L, 0.008 * L, hand, 6)
 	_head(look)
 
 func _head(look: Dictionary) -> void:
-	var hs := float(get_meta("head", 1.0))
+	var hs := float(get_meta("head", 1.0)) * 1.08
 	var b := _b("head")
 	var skin: Color = look.skin
 	var hair: Color = look.hair
+	var eyes: Color = look.get("eyes", Color("#3b5a7a"))
 	var fem: bool = look.get("fem", false)
 	b.push(Transform3D(Basis.from_scale(Vector3.ONE * hs), Vector3(0, 0.0, 0)))
-	b.sphere("cloth", 0.112, Vector3(0, 0.135, 0.005), skin, Vector3(0.92 if not fem else 0.88, 1.1, 1.02), 12, 8)
-	b.sphere("cloth", 0.085, Vector3(0, 0.075, 0.022), skin.darkened(0.04), Vector3(1.0 if not fem else 0.92, 0.75, 1.0), 10, 6)
-	b.box("cloth", Vector3(0.022, 0.045, 0.03), Vector3(0, 0.118, 0.112), skin.darkened(0.08))
-	for sx in [-1.0, 1.0]:
-		b.sphere("cloth", 0.012, Vector3(sx * 0.036, 0.142, 0.099), Color("#16110e"), Vector3(1.2, 0.8, 0.6), 6, 4)
-		b.box("cloth", Vector3(0.042, 0.009, 0.012), Vector3(sx * 0.036, 0.163, 0.104), hair.darkened(0.2), Vector3(0, 0, -sx * 0.12))
-		b.sphere("cloth", 0.022, Vector3(sx * 0.103, 0.13, 0.0), skin.darkened(0.06), Vector3(0.5, 1.0, 0.8), 6, 4)
-	b.box("cloth", Vector3(0.036, 0.008, 0.01), Vector3(0, 0.085, 0.108), skin.darkened(0.25))
+	var jaw := 0.88 if fem else 1.0
+	var shade := skin.darkened(0.06)
+	# cranio e volto: mento, mandibola, zigomi, fronte
+	b.loft("skin", [[0.012, 0.024, 0.026, 0.0, 0.034, shade], [0.035, 0.05 * jaw, 0.058, 0.0, 0.022, shade], [0.07, 0.07 * jaw, 0.084, 0.0, 0.008], [0.105, 0.08, 0.096, 0.0, 0.002], [0.14, 0.084, 0.1, 0.0, -0.002], [0.175, 0.087, 0.101, 0.0, -0.007], [0.21, 0.081, 0.095, 0.0, -0.012], [0.24, 0.06, 0.072, 0.0, -0.016], [0.258, 0.02, 0.026, 0.0, -0.016]], skin, 18)
+	var face_z := 0.1
+	# occhi a mandorla: bianco, iride, pupilla, linea delle ciglia
+	for sx: float in [-1.0, 1.0]:
+		var ex: float = sx * 0.033
+		b.sphere("eye", 0.0125, Vector3(ex, 0.133, face_z - 0.005), Color("#e9e4dc"), Vector3(1.3, 0.62, 0.5), 10, 6)
+		b.sphere("eye", 0.0078, Vector3(ex + sx * 0.001, 0.133, face_z - 0.0005), eyes.darkened(0.2), Vector3(1.0, 1.0, 0.45), 8, 5)
+		b.sphere("eye", 0.0036, Vector3(ex + sx * 0.001, 0.133, face_z + 0.0022), Color("#0d0b0a"), Vector3(1.0, 1.0, 0.4), 6, 4)
+		b.box("hair", Vector3(0.034, 0.0045, 0.006), Vector3(ex, 0.1405, face_z - 0.001), Color("#14100e"), Vector3(0, 0, -sx * 0.12))
+		# sopracciglio affusolato
+		b.box("hair", Vector3(0.034, 0.0065, 0.008), Vector3(ex + sx * 0.002, 0.158, face_z + 0.001), hair.darkened(0.25), Vector3(0, 0, -sx * (0.16 if not fem else 0.1)))
+		# orecchie
+		b.sphere("skin", 0.024, Vector3(sx * 0.085, 0.125, -0.004), shade, Vector3(0.35, 1.0, 0.72), 8, 5)
+	# naso: dorso e punta
+	b.loft("skin", [[0.145, 0.006, 0.004, 0.0, face_z - 0.006], [0.115, 0.009, 0.01, 0.0, face_z - 0.001], [0.1, 0.012, 0.012, 0.0, face_z + 0.001]], skin, 8)
+	# bocca: labbra sottili e linea
+	b.box("skin", Vector3(0.024, 0.0035, 0.004), Vector3(0, 0.074, face_z - 0.008), skin.darkened(0.42))
+	b.sphere("skin", 0.011, Vector3(0, 0.068, face_z - 0.012), skin.darkened(0.14).lerp(Color("#b06a5a"), 0.25 if fem else 0.1), Vector3(1.0, 0.38, 0.5), 8, 5)
 	_hair(b, look)
+	b.pop()
+
+## Ciocca appuntita: parte da "root" e va verso "dir" (lunghezza e larghezza in metri).
+func _lock(b: MeshBuilder, root: Vector3, dir: Vector3, length: float, width: float, color: Color, flat: float = 0.55) -> void:
+	var d := dir.normalized()
+	var ref := Vector3.FORWARD if absf(d.dot(Vector3.FORWARD)) < 0.9 else Vector3.RIGHT
+	var x := ref.cross(d).normalized()
+	var z := x.cross(d).normalized()
+	b.push(Transform3D(Basis(x, d, z), root))
+	b.loft("hair", [[0.0, width, width * flat, 0.0, 0.0, color.darkened(0.15)], [length * 0.45, width * 0.9, width * flat * 0.85], [length * 0.8, width * 0.45, width * flat * 0.5], [length, 0.002, 0.002]], color, 7)
 	b.pop()
 
 func _hair(b: MeshBuilder, look: Dictionary) -> void:
 	var hair: Color = look.hair
 	var style := int(look.get("style", 0))
 	var fem: bool = look.get("fem", false)
-	if look.get("hood", false): return
-	# calotta: copre testa e nuca lasciando libera la fronte
-	b.push(Transform3D(Basis(Vector3.RIGHT, -0.38), Vector3(0, 0.155, -0.012)))
-	b.dome("cloth", 0.121, Vector3.ZERO, hair, 0.9, 12, 4)
-	b.pop()
-	b.sphere("cloth", 0.104, Vector3(0, 0.115, -0.04), hair, Vector3(1.02, 0.95, 0.85), 10, 6)
-	# ciocche lungo l'attaccatura: spezzano la sagoma "a casco"
+	if look.get("hood", false):
+		var beard_h := int(look.get("beard", 0))
+		if beard_h > 0: _beard(b, hair, beard_h)
+		return
 	var r := RandomNumberGenerator.new()
-	r.seed = int(hair.to_rgba32()) + style
-	for i in 7:
-		var a := lerpf(-1.3, 1.3, i / 6.0)
-		var length := r.randf_range(0.06, 0.1) * (1.5 if absf(a) > 0.9 else 1.0)
-		var pos := Vector3(sin(a) * 0.104, 0.205 - absf(a) * 0.03, cos(a) * 0.088 - 0.012)
-		b.box("cloth", Vector3(0.05, length, 0.026), pos + Vector3(0, -length * 0.42, 0), hair.darkened(r.randf() * 0.12), Vector3(-0.15 + r.randf() * 0.2, a * 0.95, -a * 0.2))
+	r.seed = int(hair.to_rgba32()) + style * 31
+	# calotta: copre cranio e nuca, lascia libera la fronte
+	b.push(Transform3D(Basis(Vector3.RIGHT, -0.42), Vector3(0, 0.16, -0.01)))
+	b.dome("hair", 0.104, Vector3.ZERO, hair, 0.95, 18, 6)
+	b.pop()
+	b.sphere("hair", 0.096, Vector3(0, 0.128, -0.03), hair.darkened(0.08), Vector3(1.03, 1.0, 0.92), 14, 8)
+	var top := Vector3(0, 0.235, -0.01)
+	# frangia: ciocche dalla sommità verso la fronte
+	var fringe := 7
+	for i in fringe:
+		var t := lerpf(-1.0, 1.0, float(i) / (fringe - 1))
+		var root := top + Vector3(t * 0.05, -0.005, 0.03)
+		var tip_dir := Vector3(t * 0.45 + r.randf_range(-0.12, 0.12), -1.0, 1.15 - absf(t) * 0.5)
+		var length := r.randf_range(0.09, 0.13) * (1.15 if fem else 1.0)
+		if style == 5 or style == 1: length *= 0.6
+		_lock(b, root, tip_dir, length, r.randf_range(0.018, 0.024), hair.lightened(r.randf() * 0.08))
+	# lati sopra le orecchie
+	for sx: float in [-1.0, 1.0]:
+		for k in 2:
+			var root := Vector3(sx * 0.082, 0.19 - k * 0.025, 0.02 - k * 0.03)
+			var length := r.randf_range(0.08, 0.12) * (1.6 if fem or style == 2 else 1.0)
+			_lock(b, root, Vector3(sx * 0.35, -1.0, 0.2 - k * 0.25), length, 0.02, hair.darkened(r.randf() * 0.1))
 	match style:
 		0:
-			b.box("cloth", Vector3(0.17, 0.035, 0.05), Vector3(0, 0.215, 0.07), hair, Vector3(0.5, 0, 0))
+			for i in 5:
+				var a := lerpf(-1.1, 1.1, i / 4.0)
+				_lock(b, Vector3(sin(a) * 0.07, 0.2, -0.06 - cos(a) * 0.02), Vector3(sin(a) * 0.5, -0.8, -1.0), r.randf_range(0.08, 0.11), 0.022, hair.darkened(r.randf() * 0.1))
 		1:
-			for i in 6:
-				var a := -1.0 + i * 0.4
-				b.cone("cloth", 0.035, 0.12, Vector3(a * 0.07, 0.24, -0.01 - absf(a) * 0.03), hair, 5, Vector3(-0.5, 0, -a * 0.6))
+			for i in 8:
+				var a := lerpf(-1.2, 1.2, i / 7.0)
+				_lock(b, top + Vector3(sin(a) * 0.05, -0.01, -0.03 - cos(a) * 0.02), Vector3(sin(a) * 0.8, 0.9, -0.7), r.randf_range(0.07, 0.11), 0.024, hair.lightened(r.randf() * 0.06))
 		2:
-			b.box("cloth", Vector3(0.21, 0.3 if fem else 0.18, 0.05), Vector3(0, 0.0 if fem else 0.05, -0.085), hair, Vector3(0.12, 0, 0))
-			for sx in [-1.0, 1.0]: b.box("cloth", Vector3(0.04, 0.2 if fem else 0.1, 0.06), Vector3(sx * 0.098, 0.07 if fem else 0.12, 0.02), hair)
+			for i in 7:
+				var a := lerpf(-1.25, 1.25, i / 6.0)
+				var length := (0.3 if fem else 0.17) * r.randf_range(0.85, 1.1)
+				_lock(b, Vector3(sin(a) * 0.075, 0.19, -0.05 - cos(a) * 0.03), Vector3(sin(a) * 0.25, -1.0, -0.35), length, 0.03, hair.darkened(r.randf() * 0.1), 0.45)
 		3:
-			b.sphere("cloth", 0.04, Vector3(0, 0.17, -0.12), hair, Vector3.ONE, 6, 4)
-			b.rod("cloth", Vector3(0, 0.15, -0.13), Vector3(0, -0.06, -0.17), 0.034, 0.018, hair, 6)
+			b.sphere("hair", 0.03, Vector3(0, 0.19, -0.105), hair, Vector3.ONE, 8, 5)
+			_lock(b, Vector3(0, 0.19, -0.11), Vector3(0, -1.0, -0.45), 0.24 if fem else 0.16, 0.036, hair, 0.7)
+			for i in 3:
+				_lock(b, Vector3(-0.04 + i * 0.04, 0.2, -0.07), Vector3(0, -0.3, -1.0), 0.08, 0.02, hair.darkened(0.05))
 		4:
-			b.sphere("cloth", 0.055, Vector3(0, 0.24, -0.07), hair, Vector3(1, 0.85, 1), 8, 5)
+			b.sphere("hair", 0.048, Vector3(0, 0.235, -0.085), hair, Vector3(1.0, 0.85, 1.0), 12, 7)
+			b.torus("hair", 0.04, 0.012, Vector3(0, 0.235, -0.085), hair.darkened(0.1), Vector3(0.5, 0, 0), 12, 5)
 		5:
-			b.box("cloth", Vector3(0.2, 0.1, 0.16), Vector3(0, 0.2, -0.04), hair, Vector3(-0.3, 0, 0))
-			b.box("cloth", Vector3(0.18, 0.12, 0.05), Vector3(0, 0.1, -0.11), hair, Vector3(0.25, 0, 0))
+			for i in 7:
+				var a := lerpf(-1.0, 1.0, i / 6.0)
+				_lock(b, Vector3(a * 0.06, 0.245, 0.04), Vector3(a * 0.2, 0.15, -1.0), r.randf_range(0.15, 0.19), 0.026, hair.lightened(r.randf() * 0.05), 0.5)
 	var beard := int(look.get("beard", 0))
-	if beard > 0:
-		b.sphere("cloth", 0.07, Vector3(0, 0.055, 0.06), hair.darkened(0.1), Vector3(1.05, 0.8 if beard == 1 else 1.1, 0.75), 8, 5)
+	if beard > 0: _beard(b, hair, beard)
+
+func _beard(b: MeshBuilder, hair: Color, beard: int) -> void:
+	var c := hair.darkened(0.12)
+	if beard == 1:
+		# barba corta lungo la mandibola
+		b.loft("hair", [[0.02, 0.03, 0.03, 0.0, 0.036], [0.05, 0.062, 0.07, 0.0, 0.016], [0.085, 0.074, 0.088, 0.0, 0.004]], c, 14, false, Vector3.ZERO, 0.0)
+	else:
+		b.loft("hair", [[-0.03, 0.03, 0.03, 0.0, 0.05], [0.02, 0.055, 0.06, 0.0, 0.034], [0.06, 0.068, 0.078, 0.0, 0.014], [0.09, 0.074, 0.088, 0.0, 0.004]], c, 14, false)
+		b.box("hair", Vector3(0.05, 0.008, 0.01), Vector3(0, 0.083, 0.094), c)
 
 func _hood(b: MeshBuilder, color: Color) -> void:
 	b.push(Transform3D(Basis(Vector3.RIGHT, -0.25), Vector3(0, 0.13, -0.015)))
@@ -421,7 +493,7 @@ func _dress_brute(tint: Color) -> void:
 
 func _dress_golem(tint: Color) -> void:
 	# le rocce delle membra non vanno appiattite sotto
-	var stone := Color(0, 0, 1, 1)
+	var stone := Color(0.78, 0.76, 0.74, 1)
 	var glow := _glow("spine", tint.lightened(0.35), 3.0)
 	for part in ["leg_l", "leg_r", "shin_l", "shin_r", "hips", "arm_l", "arm_r", "fore_l", "fore_r", "hand_l", "hand_r", "head"]: _glow(part, tint.lightened(0.35), 3.0)
 	for side in ["l", "r"]:

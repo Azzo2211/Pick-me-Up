@@ -12,7 +12,7 @@ signal hero_leveled(hero_id: String, level: int)
 signal time_ticked
 
 const SAVE_PATH := "user://riftward_save.json"
-const SAVE_VERSION := 3
+const SAVE_VERSION := 4
 const PARTY_SIZE := 5
 const MAX_FLOOR := 100
 const OFFLINE_CAP_HOURS := 8.0
@@ -71,9 +71,9 @@ const FACILITIES := {
 	"merging": {"name": "Centro di Fusione", "short": "Fusione", "unlock": 1, "build_cost": 0, "upgrade_cost": 12000, "description": "La cupola azzurra dove gli eroi si fondono e vengono promossi di rarità."},
 	"gate": {"name": "Portale delle Missioni", "short": "Portale", "unlock": 1, "build_cost": 0, "upgrade_cost": 15000, "description": "Il varco sospeso verso la Torre. Da qui parte la squadra."},
 	"armory": {"name": "Armeria", "short": "Armeria", "unlock": 2, "build_cost": 25000, "upgrade_cost": 14000, "description": "Forgia e assegna armi e armature agli eroi."},
-	"warehouse": {"name": "Magazzino", "short": "Magazzino", "unlock": 3, "build_cost": 40000, "upgrade_cost": 16000, "description": "Deposito di materiali ed equipaggiamento. Aumenta le scorte massime."},
+	"warehouse": {"name": "Magazzino", "short": "Magazzino", "unlock": 1, "build_cost": 0, "upgrade_cost": 16000, "description": "Deposito di materiali ed equipaggiamento. Aumenta le scorte massime."},
 	"workshop": {"name": "Laboratorio", "short": "Laboratorio", "unlock": 3, "build_cost": 45000, "upgrade_cost": 18000, "description": "Raffina i materiali grezzi in componenti per la forgia e l'alchimia."},
-	"alchemy": {"name": "Centro Alchemico", "short": "Alchimia", "unlock": 4, "build_cost": 80000, "upgrade_cost": 26000, "description": "Distilla tonici che curano ferite e risollevano il morale."},
+	"alchemy": {"name": "Centro Alchemico", "short": "Alchimia", "unlock": 1, "build_cost": 0, "upgrade_cost": 26000, "description": "Distilla tonici che curano ferite e risollevano il morale."},
 }
 const FACILITY_ORDER := ["training", "dormitory", "merging", "gate", "armory", "warehouse", "workshop", "alchemy"]
 
@@ -170,7 +170,7 @@ func new_world(seed_text: String = "") -> void:
 		"facilities": _default_facilities(),
 		"assignments": {},
 		"pity": {"high": 0, "transcendent": 0}, "summon_counter": 0, "item_counter": 0,
-		"active_mission": {}, "tutorial_seen": false, "settings": {"light": "dusk"},
+		"active_mission": {}, "tutorial_seen": false, "settings": {"light": "dusk", "quality": "high"},
 		"dev": {"enabled": false, "unlimited_resources": false, "reveal_hidden": false, "god_mode": false, "all_content": false},
 	}
 	var starter_roles := ["Guardian", "Vanguard", "Lancer", "Ranger", "Support", "Mage"]
@@ -208,6 +208,7 @@ func _migrate() -> void:
 	for key in ["enabled", "unlimited_resources", "reveal_hidden", "god_mode", "all_content"]: data.dev.get_or_add(key, false)
 	data.get_or_add("settings", {})
 	data.settings.get_or_add("light", "dusk")
+	data.settings.get_or_add("quality", "high")
 	if from_version < 3:
 		# La v2 forzava la modalità sviluppo: la v3 torna a un'economia reale.
 		data.dev.enabled = false
@@ -219,6 +220,12 @@ func _migrate() -> void:
 	else:
 		var facilities: Dictionary = data.get_or_add("facilities", {})
 		for id in FACILITY_ORDER: facilities.get_or_add(id, {"level": 1 if int(FACILITIES[id].unlock) <= 1 else 0})
+	if from_version < 4:
+		# Dalla v4 Magazzino e Centro Alchemico esistono fin dalla Base Lv.1
+		# (come nell'immagine della base approvata): chi non li aveva li trova costruiti.
+		for id in ["warehouse", "alchemy"]:
+			var facility: Dictionary = data.facilities.get_or_add(id, {"level": 0})
+			if int(facility.get("level", 0)) < 1: facility["level"] = 1
 	_normalize_types()
 	for hero in data.heroes: _normalize_hero(hero)
 	if from_version < 3:
@@ -800,6 +807,18 @@ func advance_time(seconds: float) -> bool:
 			if float(hero.fatigue) <= 0.0 and float(hero.morale) >= 100.0 and injuries.is_empty():
 				finished.append(hero_id)
 			changed = true
+	# chi si allena o riposa insieme si conosce meglio
+	var by_place := {}
+	for hero_id in data.assignments:
+		var place := str(data.assignments[hero_id].facility)
+		if not by_place.has(place): by_place[place] = []
+		by_place[place].append(str(hero_id))
+	for place in by_place:
+		var ids: Array = by_place[place]
+		if ids.size() < 2 or ids.size() > 12: continue
+		var rate := 0.05 if place == "training" else 0.03
+		for i in ids.size():
+			for j in range(i + 1, ids.size()): change_bond(ids[i], ids[j], rate * minutes)
 	for hero_id in finished:
 		data.assignments.erase(hero_id)
 		var done := hero_by_id(hero_id)
@@ -1211,9 +1230,101 @@ func finalize_mission(result: Dictionary) -> Dictionary:
 			var serious := hp_ratio < 0.12
 			hero.injuries.append({"name": "Ferita grave" if serious else "Ferita da combattimento", "severity": "Grave" if serious else "Moderata", "minutes": 45.0 if serious else 20.0})
 	var deaths: Array = run.deaths.duplicate()
+	var survivors := []
+	for hero_result in result.get("hero_results", []):
+		var alive_hero := hero_by_id(str(hero_result.id))
+		if not alive_hero.is_empty() and alive_hero.state == "ALIVE": survivors.append(str(hero_result.id))
+	_bonds_after_mission(survivors, deaths, bool(result.victory))
 	data.active_mission = {}
 	save_and_notify()
 	return {"ok": true, "gold": int(rewards.get("gold", 0)), "xp": int(rewards.get("xp", 0)), "rewards": rewards, "drops": drops, "level_ups": level_ups, "deaths": deaths, "first_clear": first_clear and bool(result.victory)}
+
+# =============================================================================
+# Legami tra eroi: nascono con un'affinità iniziale e crescono combattendo,
+# allenandosi e riposando insieme. Un amico che cade pesa sul morale.
+# =============================================================================
+
+const BOND_FRIEND := 40
+const BOND_CLOSE := 65
+const BOND_RIVAL := -25
+
+static func bond_key(a: String, b: String) -> String:
+	return a + "::" + b if a < b else b + "::" + a
+
+## Affinità iniziale (deterministica dal seme del mondo e dai tratti).
+func _initial_bond(a: String, b: String) -> float:
+	var rng := rng_for(str(data.world.seed) + ":bond:" + bond_key(a, b))
+	var value := float(rng.randi_range(-8, 26))
+	for id in [a, b]:
+		var hero := hero_by_id(id)
+		if hero.is_empty(): continue
+		if hero.get("traits", []).has("Socievole"): value += 6.0
+		if hero.get("traits", []).has("Solitario"): value -= 6.0
+	return value
+
+func bond(a: String, b: String) -> int:
+	if a == b or a.is_empty() or b.is_empty(): return 0
+	var key := bond_key(a, b)
+	if data.relationships.has(key): return roundi(float(data.relationships[key]))
+	return roundi(_initial_bond(a, b))
+
+func change_bond(a: String, b: String, amount: float) -> void:
+	if a == b or a.is_empty() or b.is_empty(): return
+	var gain := amount
+	if amount > 0.0:
+		for id in [a, b]:
+			var traits: Array = hero_by_id(id).get("traits", [])
+			if traits.has("Socievole"): gain *= 1.35
+			if traits.has("Solitario"): gain *= 0.65
+	var key := bond_key(a, b)
+	var current := float(data.relationships.get(key, _initial_bond(a, b)))
+	data.relationships[key] = snappedf(clampf(current + gain, -100.0, 100.0), 0.01)
+
+static func bond_label(value: int) -> String:
+	if value >= BOND_CLOSE: return "Amico fidato"
+	if value >= BOND_FRIEND: return "Amico"
+	if value >= 15: return "Compagno"
+	if value <= BOND_RIVAL: return "Rivale"
+	return "Conoscente"
+
+## Legami più forti (in positivo o negativo) di un eroe con gli eroi vivi.
+func hero_bonds(hero_id: String, limit: int = 4) -> Array:
+	var rows := []
+	for other in get_alive_heroes():
+		if str(other.id) == hero_id: continue
+		var value := bond(hero_id, str(other.id))
+		rows.append({"id": str(other.id), "name": str(other.name), "value": value, "label": bond_label(value)})
+	rows.sort_custom(func(x, y): return absi(int(x.value)) > absi(int(y.value)))
+	return rows.slice(0, limit)
+
+## Effetto dei legami in missione: compagni fidati in squadra danno coraggio e
+## un po' di forza, i rivali tolgono coraggio.
+func party_bond_bonus(hero_id: String, party_ids: Array) -> Dictionary:
+	var friends := 0
+	var close := 0
+	var rivals := 0
+	for other in party_ids:
+		var other_id := str(other)
+		if other_id == hero_id or other_id.is_empty(): continue
+		var value := bond(hero_id, other_id)
+		if value >= BOND_CLOSE: close += 1
+		elif value >= BOND_FRIEND: friends += 1
+		elif value <= BOND_RIVAL: rivals += 1
+	return {"attack": 1.0 + 0.05 * mini(close, 2) + 0.02 * mini(friends, 2), "courage": 8 * close + 4 * friends - 8 * rivals, "close": close, "friends": friends, "rivals": rivals}
+
+## Dopo una missione: chi è tornato insieme si lega di più; chi ha perso un amico ne soffre.
+func _bonds_after_mission(survivor_ids: Array, dead: Array, victory: bool) -> void:
+	for i in survivor_ids.size():
+		for j in range(i + 1, survivor_ids.size()):
+			change_bond(str(survivor_ids[i]), str(survivor_ids[j]), 3.0 if victory else 1.5)
+	for survivor_id in survivor_ids:
+		var hero := hero_by_id(str(survivor_id))
+		if hero.is_empty(): continue
+		for tomb in dead:
+			var value := bond(str(survivor_id), str(tomb.id))
+			if value >= 20:
+				hero.morale = clampi(int(hero.morale) - (4 + value / 12), 0, 100)
+				hero.memories.push_front("Ha visto cadere %s, %s." % [tomb.name, "un amico fidato" if value >= BOND_CLOSE else "un compagno"])
 
 # =============================================================================
 # Strumenti di sviluppo (attivabili dalle Impostazioni)
@@ -1227,6 +1338,16 @@ func set_light(preset: String) -> void:
 
 func light_preset() -> String:
 	return str(data.get("settings", {}).get("light", "dusk"))
+
+## Qualità grafica: "high" (ombre morbide, occlusione e luce rimbalzata, MSAA 4x),
+## "medium" (solo occlusione, MSAA 2x), "low" (niente effetti in screen space).
+func set_quality(level: String) -> void:
+	if not level in ["high", "medium", "low"]: return
+	data.settings.quality = level
+	save_and_notify()
+
+func quality() -> String:
+	return str(data.get("settings", {}).get("quality", "high"))
 
 func set_dev_mode(enabled: bool) -> void:
 	data.dev.enabled = enabled

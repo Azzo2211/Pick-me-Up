@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode diffuse_lambert, specular_schlick_ggx;
+render_mode diffuse_burley, specular_schlick_ggx;
 
 // Terreno dell'isola: erba, sterrato, selciato e roccia delle scogliere.
 // Maschere nei colori dei vertici: R sterrato, G selciato, B roccia, A occlusione.
@@ -17,14 +17,14 @@ uniform vec3 rock_a : source_color = vec3(0.44, 0.38, 0.32);
 uniform vec3 rock_b : source_color = vec3(0.24, 0.21, 0.20);
 uniform vec3 moss_color : source_color = vec3(0.17, 0.22, 0.09);
 uniform float cobble_scale = 2.4;
-uniform float flower_amount = 0.35;
+uniform float flower_amount = 0.12;
 
 varying vec3 wpos;
 varying vec3 wnrm;
 
 void vertex() {
 	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
-	wnrm = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
+	wnrm = safe_normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 }
 
 void fragment() {
@@ -65,6 +65,14 @@ void fragment() {
 	col = mix(col, cobble, pave_mask);
 	vec3 cliff = mix(rock, moss_color * 1.2, smoothstep(0.62, 0.8, fbm3(vec2(wpos.x + wpos.z, wpos.y * 0.6) * 0.9)) * 0.55);
 	col = mix(col, cliff, rock_mask);
+	// rilievo per pixel: ciottoli bombati, sassolini e solchi nello sterrato,
+	// erba irregolare, stratificazioni della roccia
+	float h_grass = (n3 - 0.5) * 0.006;
+	float h_dirt = pebble * 0.012 - rut * 0.012 + (n2 - 0.5) * 0.006;
+	float h_cobble = smoothstep(0.015, 0.2, v.y) * 0.035 * aa_keep(cobble_scale * 4.0, fw) + (stone_id - 0.5) * 0.006;
+	float h_rock = (strata - 0.5) * 0.06;
+	float height = mix(mix(mix(h_grass, h_dirt, dirt_mask), h_cobble, pave_mask), h_rock, rock_mask);
+	NORMAL = bump_normal(NORMAL, VERTEX, height, 1.0);
 	ALBEDO = col;
 	ROUGHNESS = mix(0.96, 0.82, pave_mask);
 	SPECULAR = 0.3;

@@ -25,6 +25,7 @@ func _initialize() -> void:
 	_test("livello strutture limitato dal livello base", _test_facility_cap)
 	_test("descriptor persistente e piani procedurali", _test_stage_persistence)
 	_test("migrazione salvataggi v2", _test_legacy_migration)
+	_test("salvataggi v3: magazzino e alchimia dalla Base Lv.1", _test_v3_storage_alchemy)
 	_test("permadeath e tombstone", _test_permadeath)
 	_test("clear, sblocco piano ed esperienza", _test_clear)
 	_test("promozioni 6★ riservate all'endgame", _test_promotion_gate)
@@ -39,6 +40,7 @@ func _initialize() -> void:
 	_test("tratti diversi e abilità in italiano", _test_traits_skills)
 	_test("sviluppo: tutti i piani, base e eroi al massimo", _test_dev_tools)
 	_test("negozio: prezzi, limiti giornalieri e scorte", _test_shop)
+	_test("legami: crescono insieme, il lutto pesa", _test_bonds)
 	print("\nRisultato: %d passati, %d falliti" % [passed, failed])
 	quit(0 if failed == 0 else 1)
 
@@ -76,8 +78,8 @@ func _test_initial_world() -> Array:
 	var game := _fresh("initial-seed")
 	var valid: bool = game.data.heroes.size() == 6 and game.get_party().filter(func(hero): return not hero.is_empty()).size() == 5
 	valid = valid and game.base_level() == 1 and not game.is_dev_unlimited()
-	for id in ["training", "dormitory", "merging", "gate"]: valid = valid and game.facility_built(id) and game.facility_level(id) == 1
-	for id in ["armory", "workshop", "warehouse", "alchemy"]: valid = valid and not game.facility_built(id) and not game.facility_available(id)
+	for id in ["training", "dormitory", "merging", "gate", "warehouse", "alchemy"]: valid = valid and game.facility_built(id) and game.facility_level(id) == 1
+	for id in ["armory", "workshop"]: valid = valid and not game.facility_built(id) and not game.facility_available(id)
 	game.free()
 	return [valid, "Roster, party o strutture della Base Lv.1 non conformi"]
 
@@ -223,12 +225,54 @@ func _test_legacy_migration() -> Array:
 	descriptor["threat"] = descriptor.threat_budget
 	descriptor.erase("threat_budget")
 	game._migrate()
-	var valid: bool = int(game.data.version) == 3 and not game.is_dev_unlimited()
+	var valid: bool = int(game.data.version) == RiftwardState.SAVE_VERSION and not game.is_dev_unlimited()
 	valid = valid and game.facility_level("training") == 1 and game.facility_built("merging") and not game.facility_built("armory")
+	valid = valid and game.facility_built("warehouse") and game.facility_built("alchemy")
 	valid = valid and game.data.heroes[0].injuries[0] is Dictionary and game.data.has("assignments")
 	valid = valid and descriptor.has("threat_budget") and int(descriptor.threat_budget) == int(descriptor.threat)
 	game.free()
-	return [valid, "Migrazione v2 → v3 non conforme"]
+	return [valid, "Migrazione dei vecchi salvataggi non conforme"]
+
+func _test_v3_storage_alchemy() -> Array:
+	var game := _fresh("v3-seed")
+	game.data.version = 3
+	game.data.facilities.warehouse.level = 0
+	game.data.facilities.alchemy.level = 0
+	game._migrate()
+	var valid: bool = int(game.data.version) == RiftwardState.SAVE_VERSION and game.facility_level("warehouse") == 1 and game.facility_level("alchemy") == 1
+	valid = valid and not game.facility_built("armory") and not game.facility_built("workshop")
+	game.free()
+	return [valid, "Magazzino o Centro Alchemico mancanti dopo la migrazione v3 → v4"]
+
+func _test_bonds() -> Array:
+	var game := _fresh("bond-seed")
+	var a: String = game.data.heroes[0].id
+	var b: String = game.data.heroes[1].id
+	var c: String = game.data.heroes[2].id
+	var first := game.bond(a, b)
+	var valid: bool = first == game.bond(b, a) and first >= -20 and first <= 40 and game.bond(a, a) == 0
+	var other := _fresh("bond-seed")
+	valid = valid and other.bond(a, b) == first
+	other.free()
+	game._bonds_after_mission([a, b, c], [], true)
+	valid = valid and game.bond(a, b) > first
+	# allenarsi insieme avvicina
+	game.assign_hero(a, "training")
+	game.assign_hero(b, "training")
+	var before := game.bond(a, b)
+	game.advance_time(3600.0)
+	valid = valid and game.bond(a, b) > before
+	# lutto: un amico fidato che cade abbassa il morale e lascia un ricordo
+	game.change_bond(a, c, 100.0)
+	var hero_a := game.hero_by_id(a)
+	hero_a.morale = 80
+	game._bonds_after_mission([a], [{"id": c, "name": "Test"}], false)
+	valid = valid and int(hero_a.morale) < 80 and str(hero_a.memories[0]).contains("Test")
+	var bonus := game.party_bond_bonus(a, [a, b, c])
+	valid = valid and float(bonus.attack) > 1.0 and int(bonus.courage) > 0
+	valid = valid and RiftwardState.bond_label(80) == "Amico fidato" and RiftwardState.bond_label(-40) == "Rivale"
+	game.free()
+	return [valid, "Legami non deterministici o senza effetti"]
 
 func _test_permadeath() -> Array:
 	var game := _fresh("death-seed")
