@@ -1160,7 +1160,12 @@ func _projectile(from: Dictionary, to: Dictionary) -> void:
 	effects.append({"node": node, "life": 0.28, "max": 0.28, "from": start, "to": finish})
 
 func _float_text(pos: Vector2, text: String, color: Color) -> void:
-	floaters.append({"pos": Vector3(pos.x + rng.randf_range(-0.3, 0.3), 1.9, pos.y), "text": text, "color": color, "life": 0.95})
+	# numeri vicini e recenti si impilano invece di sovrapporsi ("96" + "53" ≠ "9653")
+	var lift := 0.0
+	for f in floaters:
+		var p: Vector3 = f.pos
+		if float(f.life) > 0.6 and Vector2(p.x, p.z).distance_to(pos) < 0.8: lift += 0.32
+	floaters.append({"pos": Vector3(pos.x + rng.randf_range(-0.3, 0.3), 1.9 + minf(lift, 1.3), pos.y), "text": text, "color": color, "life": 0.95})
 
 func _update_effects(delta: float) -> void:
 	for e in effects:

@@ -1,7 +1,7 @@
 extends SceneTree
 
 ## Cattura schermate reali del gioco (serve un display, es. xvfb-run):
-## godot --path godot --rendering-driver opengl3 -s res://tests/visual_capture_runner.gd -- --test-mode
+## godot --path godot -s res://tests/visual_capture_runner.gd -- --test-mode
 
 var main: Control
 var state: RiftwardState

@@ -1,7 +1,7 @@
 extends SceneTree
 
 ## Rende una griglia di carte e ritratti per controllare lo stile (serve un display).
-## godot --path godot --rendering-driver opengl3 -s res://tests/portrait_preview_runner.gd -- --test-mode
+## godot --path godot -s res://tests/portrait_preview_runner.gd -- --test-mode
 
 func _initialize() -> void:
 	call_deferred("_run")

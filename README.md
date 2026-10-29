@@ -20,16 +20,18 @@ Nel repository sono ancora presenti alcuni file della precedente implementazione
 
 ## Stato attuale del gioco
 
-La schermata principale **è la base**: un borgo cinto da mura su un'isola sospesa nel Rift, in 3D, con uno stile dark fantasy maturo ispirato ai manhwa (luce del crepuscolo, ombre, nebbia), dove gli eroi vivono davvero.
+La schermata principale **è la base**: un borgo cinto da mura su un'isola sospesa nel Rift, in 3D, con uno stile dark fantasy maturo ispirato ai manhwa (luce del crepuscolo, ombre morbide, nebbia, materiali in rilievo, alberi dipinti foglia per foglia), dove gli eroi vivono davvero.
 
-- **Base Lv.1**: piazza aperta con il Cristallo del Nexus, strada ad anello, Centro di Addestramento rialzato, Dormitorio a graticcio per circa 5 eroi, Centro di Fusione (rotonda con cupola e luce blu), grande Portale sospeso su una rupe collegata da un ponte. Bosco tutto intorno, palizzata, laghetto e cascata.
+- **Base Lv.1**: piazza aperta con il Cristallo del Nexus, strada ad anello, Centro di Addestramento rialzato, Dormitorio a graticcio per circa 5 eroi, Centro di Fusione (rotonda con cupola e luce blu), Magazzino, Alchimia, grande Portale sospeso su una rupe collegata da un ponte. Bosco tutto intorno, palizzata, laghetto, cascata e scogliere di roccia.
 - **Crescita visibile**: livello N = N piani. Le strutture non sbloccate non esistono; quando la base sale di livello compare il cantiere, poi l'edificio. Anche il borgo migliora: strade di terra → selciato, palizzata → mura di pietra → torri, lampioni, bancarelle, fontana, statue, lanterne fluttuanti.
-- **Eroi vivi** con proporzioni reali: camminano per le strade insieme agli abitanti, si allenano nel cortile, entrano nel Dormitorio a riposare, aspettano la missione sulla strada del Portale. Si toccano per aprire la loro scheda.
+- **Eroi vivi** con proporzioni reali, corpi modellati e volti: camminano per le strade insieme agli abitanti, si allenano nel cortile, entrano nel Dormitorio a riposare, aspettano la missione sulla strada del Portale; nel tempo libero raggiungono gli amici e vanno dove li porta il carattere. Si toccano per aprire la loro scheda.
+- **Legami tra eroi**: crescono combattendo, allenandosi e riposando insieme; in missione gli amici si danno forza e coraggio, i rivali no; se cade un amico arrivano lutto o furia.
 - **Pannelli sopra la base** invece di schermate a elenco: Addestramento, Dormitorio, Fusione/Promozione, Portale (missione e squadra), Cristallo (evocazione ed espansione), Armeria, Magazzino, Laboratorio, Alchimia.
-- **Sistemi**: economia reale (modalità sviluppo opzionale), addestramento e riposo nel tempo anche offline, livelli e cap per rarità 1★–7★, pool trascendente 6★/7★, fusione, promozioni endgame, Torre fino a 100 piani, ferite, permadeath.
+- **Sistemi**: economia reale (modalità sviluppo opzionale), addestramento e riposo nel tempo anche offline, livelli e cap per rarità 1★–7★, pool trascendente 6★/7★, fusione, promozioni endgame, Torre fino a 100 piani, ferite, legami, permadeath.
 - **Interfaccia "Sistema" neon** sopra il mondo fantasy: pannelli quasi neri con cornici sottili e accenti neon, eroi come carte con cornice per rarità (6★ e 7★ animate), evocazione come evento a schermo intero, roster, memoriale dei caduti, ritratti in stile manhwa.
 - **Missioni** in 3D con gli stessi personaggi in arene diverse per bioma: IA autonoma, solo ordini generali del Master, ritratti e vita della squadra a sinistra, barra del guardiano in alto.
 - **Luce della base** a scelta nelle Impostazioni: Crepuscolo, Giorno o Notte.
+- **Qualità grafica** nelle Impostazioni: Alta, Media o Bassa (per i PC meno potenti).
 
 I contenuti presenti sono lo stato corrente dello sviluppo, non il limite finale del progetto.
 
@@ -57,10 +59,11 @@ La prima suite controlla le regole di gioco, la seconda apre tutta l'interfaccia
 
 ## Architettura principale
 
-- `godot/scripts/game_state.gd` — regole, economia, progressione, salvataggio (v3, con migrazione dei vecchi salvataggi).
+- `godot/scripts/game_state.gd` — regole, economia, progressione, legami, salvataggio (v4, con migrazione dei vecchi salvataggi).
 - `godot/scripts/main.gd` — schermata principale: base, HUD, pannello laterale, finestre, flusso missione.
 - `godot/scripts/ui/` — tema, widget e contenuti dei pannelli.
-- `godot/scripts/hub3d/` — base 3D: isola, edifici procedurali, eroi, camera.
+- `godot/scripts/hub3d/` — base 3D: isola, edifici procedurali, eroi, camera, shader dei materiali.
+- `tools/gen_textures.py` — genera le texture di foglie, aghi ed erba in `godot/assets/textures/` (Python con numpy e Pillow).
 - `godot/scripts/battle/` — missione in tempo reale.
 - `docs/` — visione, sistemi, direzione artistica, stato corrente.
 

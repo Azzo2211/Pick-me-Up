@@ -1,6 +1,6 @@
 # Riftward — progetto Godot
 
-Requisito: Godot 4.7.1 o compatibile (renderer Compatibility).
+Requisito: Godot 4.7.1 o compatibile. Il gioco usa il renderer Forward+ (Vulkan o Direct3D 12); se la scheda video non li supporta passa da solo a OpenGL, con meno effetti.
 
 ## Giocare
 
@@ -19,8 +19,9 @@ Fai doppio clic su `Apri_Progetto_Godot.cmd`. In alternativa, nel Project Manage
 - **Dormitorio**: recuperano stanchezza e morale e guariscono le ferite.
 - **Centro di Fusione**: fondi tre eroi della stessa rarità o promuovi chi ha raggiunto il livello massimo.
 - **Portale delle Missioni**: scegli il piano e la squadra (2 in prima linea · 2 al centro · 1 in retroguardia), poi parti. In missione dai solo ordini generali; un eroe che cade muore per sempre.
-- **Impostazioni**: luce della base (Crepuscolo, Giorno, Notte), modalità sviluppo, nuovo mondo.
-- **Cristallo del Nexus** (al centro della piazza): evoca nuovi eroi ed espandi la base. Ogni livello base permette un piano in più agli edifici e apre nuovi cantieri (Armeria, Magazzino, Laboratorio, Alchimia).
+- **Impostazioni**: luce della base (Crepuscolo, Giorno, Notte), qualità grafica (Alta, Media, Bassa: abbassala se il gioco va a scatti), modalità sviluppo, nuovo mondo.
+- **Scheda eroe**: oltre a statistiche e ricordi mostra i legami più forti (Amico fidato, Amico, Compagno, Rivale).
+- **Cristallo del Nexus** (al centro della piazza): evoca nuovi eroi ed espandi la base. Ogni livello base permette un piano in più agli edifici e apre nuovi cantieri (Armeria al Lv.2, Laboratorio al Lv.3). Magazzino e Alchimia ci sono già dal Lv.1.
 
 ## Modalità sviluppo
 
@@ -36,8 +37,10 @@ godot --path . -s res://tests/visual_capture_runner.gd -- --test-mode         # 
 godot --path . -s res://tests/battle_preview_runner.gd -- --test-mode         # screenshot battaglie
 godot --path . -s res://tests/hub_preview_runner.gd -- --test-mode --base5   # anteprime della base (--base2/3/5, --light=day|night)
 godot --path . -s res://tests/character_probe_runner.gd -- --test-mode       # fila di personaggi
+godot --path . -s res://tests/portrait_quality_runner.gd -- --test-mode      # tutti i ritratti, grandi e piccoli
+godot --path . -s res://tests/quality_probe_runner.gd -- --test-mode --scene=nature  # banco di prova (nature|single|buildings|building|people)
 ```
 
 ## Grafica
 
-Tutta la grafica 3D è generata dal codice (geometria e shader procedurali, nessun asset esterno). L'interfaccia usa i font Oxanium ed Exo 2 (licenza SIL Open Font License, in `assets/fonts`).
+Tutta la grafica 3D è generata dal codice (geometria e shader procedurali, nessun asset esterno). Le sole texture sono foglie, aghi ed erba in `assets/textures/`, generate da `tools/gen_textures.py` e già incluse. L'interfaccia usa i font Oxanium ed Exo 2 (licenza SIL Open Font License, in `assets/fonts`).

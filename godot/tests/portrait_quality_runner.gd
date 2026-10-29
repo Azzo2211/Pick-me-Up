@@ -2,7 +2,7 @@ extends SceneTree
 
 ## Banco di prova dei ritratti: tutte le acconciature, carnagioni e ruoli in
 ## grande (come nelle carte) e in piccolo (liste e HUD).
-## godot --path godot --rendering-driver opengl3 -s res://tests/portrait_quality_runner.gd -- --test-mode [--out=/percorso.png]
+## godot --path godot -s res://tests/portrait_quality_runner.gd -- --test-mode [--out=/percorso.png]
 
 func _initialize() -> void:
 	call_deferred("_run")
