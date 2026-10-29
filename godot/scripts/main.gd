@@ -80,8 +80,8 @@ func _build_hud() -> void:
 	# Sfumatura scura in alto per staccare l'HUD dalla scena
 	var shade := TextureRect.new()
 	var gradient := Gradient.new()
-	gradient.set_color(0, Color(0.03, 0.02, 0.04, 0.72))
-	gradient.set_color(1, Color(0.03, 0.02, 0.04, 0.0))
+	gradient.set_color(0, Color(0.02, 0.03, 0.05, 0.72))
+	gradient.set_color(1, Color(0.02, 0.03, 0.05, 0.0))
 	var tex := GradientTexture2D.new()
 	tex.gradient = gradient
 	tex.fill_from = Vector2(0, 0)
@@ -106,12 +106,12 @@ func _build_hud() -> void:
 	master.add_theme_stylebox_override("panel", UIKit.ornate("hud", 6.0).set_padding(8.0, 4.0))
 	var master_row := HBoxContainer.new()
 	master_row.add_theme_constant_override("separation", 10)
-	master_row.add_child(UIKit.medal(48, UIKit.GOLD))
+	master_row.add_child(UIKit.medal(48, UIKit.CYAN))
 	var master_text := VBoxContainer.new()
-	master_text.add_theme_constant_override("separation", -3)
+	master_text.add_theme_constant_override("separation", 0)
 	master_text.alignment = BoxContainer.ALIGNMENT_CENTER
 	master_label = UIKit.title("Master Aster", 19, UIKit.INK)
-	master_sub = UIKit.label("Base Lv.1 · Piano 1", 14, UIKit.GOLD, UIKit.head_medium())
+	master_sub = UIKit.label("Base Lv.1 · Piano 1", 14, UIKit.CYAN, UIKit.head_medium())
 	master_text.add_child(master_label)
 	master_text.add_child(master_sub)
 	master_row.add_child(master_text)
@@ -171,7 +171,7 @@ func _resource_pill(key: String, title: String) -> PanelContainer:
 	row.add_theme_constant_override("separation", 8)
 	row.add_child(UIKit.icon(key, 30))
 	var stack := VBoxContainer.new()
-	stack.add_theme_constant_override("separation", -4)
+	stack.add_theme_constant_override("separation", 0)
 	stack.alignment = BoxContainer.ALIGNMENT_CENTER
 	stack.add_child(UIKit.label(title.to_upper(), 11, UIKit.MUTED, UIKit.head_medium()))
 	var value := UIKit.label("0", 20, UIKit.INK, UIKit.head_font())
@@ -219,7 +219,7 @@ func _build_side_panel() -> void:
 	var titles := VBoxContainer.new()
 	titles.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	titles.add_theme_constant_override("separation", 0)
-	side_subtitle = UIKit.label("", 13, UIKit.GOLD, UIKit.head_medium())
+	side_subtitle = UIKit.label("", 13, UIKit.CYAN, UIKit.head_medium())
 	side_title = UIKit.title("", 27, UIKit.INK)
 	side_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	titles.add_child(side_subtitle)
@@ -371,7 +371,7 @@ func open_modal(title: String, subtitle: String, content: Control, width: float 
 	root.mouse_filter = Control.MOUSE_FILTER_STOP
 	modal_layer.add_child(root)
 	var dim := ColorRect.new()
-	dim.color = Color(0.02, 0.01, 0.03, 0.66)
+	dim.color = Color(0.01, 0.02, 0.04, 0.7)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.add_child(dim)
 	var center := CenterContainer.new()
@@ -397,7 +397,7 @@ func open_modal(title: String, subtitle: String, content: Control, width: float 
 	var titles := VBoxContainer.new()
 	titles.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	titles.add_theme_constant_override("separation", 0)
-	if not subtitle.is_empty(): titles.add_child(UIKit.label(subtitle.to_upper(), 13, UIKit.GOLD if style != "system" else UIKit.LILAC, UIKit.head_medium()))
+	if not subtitle.is_empty(): titles.add_child(UIKit.label(subtitle.to_upper(), 13, UIKit.CYAN if style != "system" else UIKit.LILAC, UIKit.head_medium()))
 	var t := UIKit.title(title, 26, UIKit.INK)
 	if style == "system": t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	titles.add_child(t)

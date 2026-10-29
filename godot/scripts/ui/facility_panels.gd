@@ -6,6 +6,7 @@ class_name FacilityPanels
 
 const HeroPortraitScript := preload("res://scripts/hero_portrait.gd")
 const HeroCardScript := preload("res://scripts/ui/hero_card.gd")
+const SummonEventScript := preload("res://scripts/ui/summon_event.gd")
 const ROSTER_PAGE := 24
 
 var main
@@ -136,8 +137,8 @@ func activity_pill(hero: Dictionary) -> PanelContainer:
 		"resting": return UIKit.pill("A riposo", UIKit.SKY)
 		"injured": return UIKit.pill("Ferito", UIKit.ROSE)
 		"party": return UIKit.pill("In squadra", UIKit.GOLD)
-		"dead": return UIKit.pill("Caduto", Color("#8a8086"))
-	return UIKit.pill("Libero", Color("#8a8494"))
+		"dead": return UIKit.pill("Caduto", Color("#7d8696"))
+	return UIKit.pill("Libero", Color("#7d8a9e"))
 
 func stars_label(rarity: int, size: int = 15) -> Label:
 	return UIKit.label(GS.stars(rarity), size, UIKit.rarity_color(rarity), UIKit.body_bold())
@@ -248,7 +249,7 @@ func stat_tile(title: String, value: String, color: Color = UIKit.INK) -> PanelC
 	card.add_theme_stylebox_override("panel", UIKit.ornate("inset", 10.0))
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", -2)
+	box.add_theme_constant_override("separation", 0)
 	box.add_child(UIKit.label(title.to_upper(), 12, UIKit.MUTED, UIKit.head_medium()))
 	box.add_child(UIKit.label(value, 23, color, UIKit.head_font()))
 	card.add_child(box)
@@ -399,9 +400,9 @@ func _build_merging(body: VBoxContainer) -> void:
 			var empty := PanelContainer.new()
 			empty.custom_minimum_size = Vector2(112, 174)
 			var st := UIKit.ornate("inset", 0.0)
-			st.border = Color("#5b4a7a") if i == 0 else Color("#3a2e26")
+			st.border = Color("#3f6a8c") if i == 0 else Color("#22304a")
 			empty.add_theme_stylebox_override("panel", st)
-			var q := UIKit.title("?", 34, Color("#5b4a7a"))
+			var q := UIKit.title("?", 34, Color("#3f6a8c"))
 			q.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			q.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 			empty.add_child(q)
@@ -510,7 +511,7 @@ func _build_gate(body: VBoxContainer, footer: VBoxContainer) -> void:
 	var tags := HBoxContainer.new()
 	tags.add_theme_constant_override("separation", 6)
 	tags.add_child(UIKit.pill(_type_label(str(stage.type)), color.lightened(0.25)))
-	tags.add_child(UIKit.pill(str(stage.biome), Color("#8a8494")))
+	tags.add_child(UIKit.pill(str(stage.biome), Color("#7d8a9e")))
 	if bool(record.cleared): tags.add_child(UIKit.pill("Completato", UIKit.TEAL))
 	v.add_child(tags)
 	var name_label := UIKit.title(str(stage.name), 22, UIKit.INK)
@@ -675,7 +676,7 @@ func _build_crystal(body: VBoxContainer) -> void:
 
 func _pool_card(pool: String) -> PanelContainer:
 	var info: Dictionary = GS.SUMMON_POOLS[pool]
-	var color: Color = {"normal": UIKit.SKY, "high": UIKit.VIOLET, "transcendent": Color("#e65872")}[pool]
+	var color: Color = {"normal": UIKit.CYAN, "high": UIKit.MAGENTA, "transcendent": UIKit.rarity_color(6)}[pool]
 	var card := PanelContainer.new()
 	card.add_theme_stylebox_override("panel", UIKit.tinted(color, 14.0))
 	var v := VBoxContainer.new()
@@ -712,45 +713,17 @@ func _upgrade_base() -> void:
 		main.toast("Base Lv.%d" % int(result.level), ("Nuovi cantieri: " + ", ".join(result.unlocked)) if not result.unlocked.is_empty() else "Gli edifici possono crescere di un piano.", "good")
 	else: main.toast("Non ancora", str(result.message), "warn")
 
-## Evocazione: le carte arrivano coperte e si girano una alla volta.
+## Evocazione: evento a schermo intero (vedi SummonEvent).
 func _summon(pool: String, count: int) -> void:
 	var result := GS.summon(pool, count)
 	if not result.ok:
 		main.toast("Evocazione bloccata", str(result.message), "warn")
 		return
 	last_summon = result.heroes
-	var grid := GridContainer.new()
-	grid.columns = mini(5, result.heroes.size())
-	grid.add_theme_constant_override("h_separation", 12)
-	grid.add_theme_constant_override("v_separation", 12)
-	var cards: Array = []
-	var best := 1
-	for hero in result.heroes:
-		var card: HeroCard = HeroCardScript.new()
-		card.setup(hero, 150.0 if count > 1 else 230.0)
-		card.set_face_down(true)
-		card.pressed.connect(_open_from_summon)
-		grid.add_child(card)
-		cards.append(card)
-		best = maxi(best, int(hero.current_rarity))
-	var holder := CenterContainer.new()
-	holder.add_child(grid)
-	await main.open_modal("Evocazione" if best < 5 else "Risonanza leggendaria", "%d evocazioni · %s" % [count, GS.SUMMON_POOLS[pool].name], holder, 880 if count > 1 else 340, [], Callable(), "system")
-	await main.get_tree().create_timer(0.35).timeout
-	for card in cards:
-		if not is_instance_valid(card): return
-		_flip(card)
-		await main.get_tree().create_timer(0.16 if card.rarity < 4 else 0.45).timeout
-
-func _flip(card: HeroCard) -> void:
-	card.pivot_offset = card.size * 0.5
-	var tween := card.create_tween()
-	tween.tween_property(card, "scale:x", 0.0, 0.12)
-	tween.tween_callback(card.set_face_down.bind(false))
-	tween.tween_property(card, "scale:x", 1.0, 0.14)
-	if card.rarity >= 4:
-		tween.tween_property(card, "scale", Vector2(1.08, 1.08), 0.12)
-		tween.tween_property(card, "scale", Vector2.ONE, 0.18)
+	var event: SummonEvent = SummonEventScript.new()
+	event.setup(result.heroes, str(GS.SUMMON_POOLS[pool].name))
+	event.hero_pressed.connect(_open_from_summon)
+	main.modal_layer.add_child(event)
 
 func _open_from_summon(hero_id: String) -> void:
 	main.open_hero(hero_id)

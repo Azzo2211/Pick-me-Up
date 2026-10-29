@@ -6,7 +6,7 @@ class_name HeroPortrait
 ## Capelli, pelle, occhi, abiti e dettagli (barba, cicatrici, età) derivano
 ## dall'id dell'eroe, quindi lo stesso eroe ha sempre lo stesso volto.
 ##
-## framed = true  → ritratto quadrato con cornice in bronzo (liste, HUD)
+## framed = true  → ritratto quadrato con cornice neon del colore di rarità (liste, HUD)
 ## framed = false → solo figura su fondo trasparente (dentro le carte)
 
 const LINE := Color(0.08, 0.05, 0.06, 0.92)
@@ -165,29 +165,29 @@ func _draw() -> void:
 func _draw_backdrop() -> void:
 	var s := size
 	var frame := UIKit.rarity_color(rarity)
-	draw_rect(Rect2(Vector2.ZERO, s), Color("#120e15"))
+	draw_rect(Rect2(Vector2.ZERO, s), Color("#0c121c"))
 	for i in 6:
 		var r := s.x * (0.75 - i * 0.1)
 		var c := frame.darkened(0.55)
 		c.a = 0.10 + i * 0.03
 		draw_circle(Vector2(s.x * 0.5, s.y * 0.42), r, c)
-	draw_arc(Vector2(s.x * 0.5, s.y * 0.42), s.x * 0.44, 0, TAU, 40, Color(0.69, 0.51, 0.31, 0.22), 1.0, true)
+	draw_arc(Vector2(s.x * 0.5, s.y * 0.42), s.x * 0.44, 0, TAU, 40, Color(frame.r, frame.g, frame.b, 0.18), 1.0, true)
 
 func _draw_frame() -> void:
 	var s := size
 	var frame := UIKit.rarity_color(rarity)
 	var cut := s.x * 0.12
 	var pts := OrnateStyle.octagon(Rect2(Vector2(1, 1), s - Vector2(2, 2)), cut)
-	draw_polyline(OrnateStyle.closed(pts), Color("#a07a4c"), maxf(2.0, s.x * 0.035), true)
+	draw_polyline(OrnateStyle.closed(pts), Color("#1c2a3e"), maxf(2.0, s.x * 0.035), true)
 	var inner := OrnateStyle.octagon(Rect2(Vector2(1, 1), s - Vector2(2, 2)).grow(-s.x * 0.05), cut * 0.7)
 	draw_polyline(OrnateStyle.closed(inner), Color(frame.r, frame.g, frame.b, 0.75), maxf(1.0, s.x * 0.014), true)
 	# angoli tagliati: copre il ritratto oltre la cornice
 	for corner in [[Vector2(0, 0), Vector2(cut + 1, 0), Vector2(0, cut + 1)], [Vector2(s.x, 0), Vector2(s.x, cut + 1), Vector2(s.x - cut - 1, 0)], [Vector2(s.x, s.y), Vector2(s.x - cut - 1, s.y), Vector2(s.x, s.y - cut - 1)], [Vector2(0, s.y), Vector2(0, s.y - cut - 1), Vector2(cut + 1, s.y)]]:
-		draw_colored_polygon(PackedVector2Array(corner), Color("#0b080d"))
+		draw_colored_polygon(PackedVector2Array(corner), Color("#070b11"))
 	var gem := Vector2(s.x * 0.5, s.y - s.x * 0.035)
 	var g := s.x * 0.06
 	draw_colored_polygon(PackedVector2Array([gem + Vector2(0, -g), gem + Vector2(g, 0), gem + Vector2(0, g), gem + Vector2(-g, 0)]), frame)
-	draw_polyline(PackedVector2Array([gem + Vector2(0, -g), gem + Vector2(g, 0), gem + Vector2(0, g), gem + Vector2(-g, 0), gem + Vector2(0, -g)]), Color("#2a1d14"), 1.0, true)
+	draw_polyline(PackedVector2Array([gem + Vector2(0, -g), gem + Vector2(g, 0), gem + Vector2(0, g), gem + Vector2(-g, 0), gem + Vector2(0, -g)]), Color("#070b11"), 1.0, true)
 
 # --- Capelli dietro --------------------------------------------------------
 

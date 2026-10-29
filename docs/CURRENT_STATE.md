@@ -18,8 +18,9 @@ godot/project.godot
 | Game rules, save, economy, progression | `godot/scripts/game_state.gd` (autoload `GameState`, save v3) |
 | Main screen, HUD, side panel, modals, mission flow | `godot/scripts/main.gd` |
 | Building panels, hero dossier, journal, settings, mission report | `godot/scripts/ui/facility_panels.gd` |
-| Dark ornate theme, widgets, icons (Cinzel/Alegreya fonts) | `godot/scripts/ui/ui_kit.gd`, `ornate_style.gd`, `ornate_divider.gd`, `ui_icon.gd` |
+| Neon "System" theme, widgets, icons (Oxanium/Exo 2 fonts) | `godot/scripts/ui/ui_kit.gd`, `ornate_style.gd`, `ornate_divider.gd`, `ui_icon.gd` |
 | Hero cards (summons, roster, memorial, dossier) | `godot/scripts/ui/hero_card.gd` |
+| Summon event (full-screen rift, colour shift, card reveal) | `godot/scripts/ui/summon_event.gd` |
 | 2D manhwa-style portraits | `godot/scripts/hero_portrait.gd` |
 | 3D base: island, walls, streets, plaza, forest, navigation, labels | `godot/scripts/hub3d/hub_world.gd` |
 | Camera, picking, hover/click | `godot/scripts/hub3d/hub_view.gd` |

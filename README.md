@@ -27,7 +27,7 @@ La schermata principale **è la base**: un borgo cinto da mura su un'isola sospe
 - **Eroi vivi** con proporzioni reali: camminano per le strade insieme agli abitanti, si allenano nel cortile, entrano nel Dormitorio a riposare, aspettano la missione sulla strada del Portale. Si toccano per aprire la loro scheda.
 - **Pannelli sopra la base** invece di schermate a elenco: Addestramento, Dormitorio, Fusione/Promozione, Portale (missione e squadra), Cristallo (evocazione ed espansione), Armeria, Magazzino, Laboratorio, Alchimia.
 - **Sistemi**: economia reale (modalità sviluppo opzionale), addestramento e riposo nel tempo anche offline, livelli e cap per rarità 1★–7★, pool trascendente 6★/7★, fusione, promozioni endgame, Torre fino a 100 piani, ferite, permadeath.
-- **Interfaccia scura e ornata**: eroi come carte (evocazione con carte che si girano, roster, memoriale dei caduti), finestre di sistema, ritratti in stile manhwa.
+- **Interfaccia "Sistema" neon** sopra il mondo fantasy: pannelli quasi neri con cornici sottili e accenti neon, eroi come carte con cornice per rarità (6★ e 7★ animate), evocazione come evento a schermo intero, roster, memoriale dei caduti, ritratti in stile manhwa.
 - **Missioni** in 3D con gli stessi personaggi in arene diverse per bioma: IA autonoma, solo ordini generali del Master, ritratti e vita della squadra a sinistra, barra del guardiano in alto.
 - **Luce della base** a scelta nelle Impostazioni: Crepuscolo, Giorno o Notte.
 

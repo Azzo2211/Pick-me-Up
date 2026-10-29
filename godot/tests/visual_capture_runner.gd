@@ -50,8 +50,25 @@ func _run() -> void:
 	main.open_panel("crystal")
 	await _wait(0.6)
 	main.panels._summon("high", 10)
-	await _wait(1.5)
+	await _wait(1.2)
+	_capture("res://tests/captures/capture_summon_charge.png")
+	await _wait(5.5)
 	_capture("res://tests/captures/capture_summon.png")
+	main.close_all_modals()
+	await _wait(0.3)
+	# Carte 1★–7★ affiancate: le cornici crescono con la rarità
+	var gallery := HBoxContainer.new()
+	gallery.add_theme_constant_override("separation", 18)
+	for r in range(1, 8):
+		var sample: Dictionary = state.data.heroes[r % state.data.heroes.size()].duplicate(true)
+		sample["current_rarity"] = r
+		sample["id"] = "sample_%d" % r
+		var card: HeroCard = preload("res://scripts/ui/hero_card.gd").new()
+		card.setup(sample, 200.0)
+		gallery.add_child(card)
+	main.open_modal("Rarità 1★–7★", "Cornici del Sistema", gallery, 1640, [], Callable(), "system")
+	await _wait(1.0)
+	_capture("res://tests/captures/capture_rarity.png")
 	main.close_all_modals()
 	main.close_panel()
 	# Base più avanzata: Lv.3 con nuove strutture
