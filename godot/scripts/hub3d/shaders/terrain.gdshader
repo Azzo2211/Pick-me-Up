@@ -36,11 +36,16 @@ void fragment() {
 	vec3 grass = mix(grass_dark, grass_light, smoothstep(0.28, 0.78, n1));
 	grass = mix(grass, grass_dry, smoothstep(0.6, 0.85, n2) * 0.55);
 	grass *= 0.8 + 0.34 * n3;
-	float bloom = smoothstep(0.86, 0.9, vnoise(p * 7.0 + 11.0)) * smoothstep(0.55, 0.7, n2) * flower_amount * aa_keep(7.0, fw);
+	float bv = vnoise(p * 7.0 + 11.0);
+	float bw = fwidth(bv);
+	float bloom = smoothstep(0.86 - bw, 0.9 + bw, bv) * smoothstep(0.55, 0.7, n2) * flower_amount * aa_keep(7.0, fw);
 	grass = mix(grass, mix(vec3(0.55, 0.48, 0.62), vec3(0.75, 0.66, 0.38), hash12(floor(p * 7.0))), bloom);
 
 	vec3 dirt = mix(dirt_color, dirt_light, n2) * (0.84 + 0.26 * mix(0.5, vnoise(p * 9.0), aa_keep(9.0, fw)));
-	float pebble = smoothstep(0.8, 0.84, vnoise(p * 15.0)) * aa_keep(15.0, fw);
+	// sassolini: bordo largo almeno un paio di pixel, niente contorni a scalini
+	float pv = vnoise(p * 15.0);
+	float pw = fwidth(pv) * 1.5;
+	float pebble = smoothstep(0.8 - pw, 0.84 + pw, pv) * aa_keep(15.0, fw);
 	dirt = mix(dirt, dirt_light * 1.12, pebble * 0.55);
 	float rut = smoothstep(0.55, 0.9, fbm3(p * 2.5));
 	dirt *= 1.0 - rut * 0.12;

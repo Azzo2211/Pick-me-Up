@@ -260,8 +260,13 @@ func _head(look: Dictionary) -> void:
 	b.push(Transform3D(Basis.from_scale(Vector3.ONE * hs), Vector3(0, 0.0, 0)))
 	var jaw := 0.88 if fem else 1.0
 	var shade := skin.darkened(0.06)
+	var lower := skin
+	# barba corta = ombra di barba sul mento e sulla mandibola (colore, niente geometria)
+	if int(look.get("beard", 0)) == 1:
+		shade = skin.lerp(hair.darkened(0.35), 0.42)
+		lower = skin.lerp(hair.darkened(0.25), 0.16)
 	# cranio e volto: mento, mandibola, zigomi, fronte
-	b.loft("skin", [[0.012, 0.024, 0.026, 0.0, 0.034, shade], [0.035, 0.05 * jaw, 0.058, 0.0, 0.022, shade], [0.07, 0.07 * jaw, 0.084, 0.0, 0.008], [0.105, 0.08, 0.096, 0.0, 0.002], [0.14, 0.084, 0.1, 0.0, -0.002], [0.175, 0.087, 0.101, 0.0, -0.007], [0.21, 0.081, 0.095, 0.0, -0.012], [0.24, 0.06, 0.072, 0.0, -0.016], [0.258, 0.02, 0.026, 0.0, -0.016]], skin, 18)
+	b.loft("skin", [[0.012, 0.024, 0.026, 0.0, 0.034, shade], [0.035, 0.05 * jaw, 0.058, 0.0, 0.022, shade], [0.07, 0.07 * jaw, 0.084, 0.0, 0.008, lower], [0.105, 0.08, 0.096, 0.0, 0.002], [0.14, 0.084, 0.1, 0.0, -0.002], [0.175, 0.087, 0.101, 0.0, -0.007], [0.21, 0.081, 0.095, 0.0, -0.012], [0.24, 0.06, 0.072, 0.0, -0.016], [0.258, 0.02, 0.026, 0.0, -0.016]], skin, 28)
 	var face_z := 0.1
 	# occhi a mandorla: bianco, iride, pupilla, linea delle ciglia
 	for sx: float in [-1.0, 1.0]:
@@ -292,6 +297,42 @@ func _lock(b: MeshBuilder, root: Vector3, dir: Vector3, length: float, width: fl
 	b.loft("hair", [[0.0, width, width * flat, 0.0, 0.0, color.darkened(0.15)], [length * 0.45, width * 0.9, width * flat * 0.85], [length * 0.8, width * 0.45, width * flat * 0.5], [length, 0.002, 0.002]], color, 7)
 	b.pop()
 
+## Centro e raggio della calotta su cui si appoggiano le ciocche pettinate.
+const CAP_CENTER := Vector3(0, 0.16, -0.016)
+
+## Punto sulla sfera dei capelli: theta 0 = fronte, PI/2 = sommità, PI = nuca;
+## "side" sposta verso le tempie (radianti).
+static func _cap_point(theta: float, side: float, radius: float) -> Vector3:
+	return CAP_CENTER + Vector3(sin(side), cos(side) * sin(theta), cos(side) * cos(theta)) * radius
+
+## Ciocca appoggiata alla testa da "from" a "to": il lato piatto guarda in fuori,
+## così segue la calotta invece di sporgere come una cresta.
+func _strand(b: MeshBuilder, from: Vector3, to: Vector3, width: float, color: Color, flat: float = 0.45, tip: float = 0.002) -> void:
+	var d := to - from
+	var length := d.length()
+	if length < 0.001: return
+	d /= length
+	var out := ((from + to) * 0.5 - CAP_CENTER).normalized()
+	var z := (out - d * out.dot(d)).normalized()
+	var x := d.cross(z).normalized()
+	b.push(Transform3D(Basis(x, d, z), from))
+	# la sezione sta tutta sopra la linea from-to: il lato interno appoggia sulla testa
+	var t := width * flat
+	if tip >= width * 0.5:
+		# tratto intermedio di una ciocca lunga: sezione costante, giunture lisce
+		b.loft("hair", [[0.0, width * 0.96, t * 0.96, 0.0, t * 0.8, color.darkened(0.06)], [length * 0.5, width, t, 0.0, t * 0.85], [length * 1.08, width * 0.96, t * 0.96, 0.0, t * 0.8]], color, 7)
+	else:
+		b.loft("hair", [[0.0, width * 0.8, t * 0.8, 0.0, t * 0.75, color.darkened(0.12)], [length * 0.35, width, t, 0.0, t * 0.85], [length * 0.75, width * 0.8, t * 0.8, 0.0, t * 0.75], [length * 1.04, tip, tip, 0.0, tip * 0.5]], color, 7)
+	b.pop()
+
+## Ciocca che segue la curva della testa in più tratti (theta da t0 a t1).
+func _swept(b: MeshBuilder, t0: float, t1: float, side: float, radius: float, width: float, color: Color, parts: int = 3) -> void:
+	for k in parts:
+		var a0 := lerpf(t0, t1, float(k) / parts)
+		var a1 := lerpf(t0, t1, float(k + 1) / parts)
+		# i tratti si sovrappongono un poco; solo l'ultimo si chiude a punta
+		_strand(b, _cap_point(a0, side, radius), _cap_point(a1, side, radius), width, color, 0.28, 0.002 if k == parts - 1 else width)
+
 func _hair(b: MeshBuilder, look: Dictionary) -> void:
 	var hair: Color = look.hair
 	var style := int(look.get("style", 0))
@@ -302,21 +343,25 @@ func _hair(b: MeshBuilder, look: Dictionary) -> void:
 		return
 	var r := RandomNumberGenerator.new()
 	r.seed = int(hair.to_rgba32()) + style * 31
-	# calotta: copre cranio e nuca, lascia libera la fronte
-	b.push(Transform3D(Basis(Vector3.RIGHT, -0.42), Vector3(0, 0.16, -0.01)))
-	b.dome("hair", 0.104, Vector3.ZERO, hair, 0.95, 18, 6)
+	# calotta: copre cranio e nuca, lascia libera la fronte. Sta sempre qualche
+	# millimetro fuori dal cranio: due superfici quasi coincidenti si
+	# compenetrano a chiazze (attaccatura dei capelli "a scalini").
+	b.push(Transform3D(Basis(Vector3.RIGHT, -0.42), Vector3(0, 0.16, -0.016)))
+	b.dome("hair", 0.113, Vector3.ZERO, hair, 1.0, 30, 9)
 	b.pop()
-	b.sphere("hair", 0.096, Vector3(0, 0.128, -0.03), hair.darkened(0.08), Vector3(1.03, 1.0, 0.92), 14, 8)
+	b.sphere("hair", 0.096, Vector3(0, 0.128, -0.036), hair.darkened(0.08), Vector3(1.05, 1.0, 0.9), 24, 12)
 	var top := Vector3(0, 0.235, -0.01)
-	# frangia: ciocche dalla sommità verso la fronte
+	# frangia: ciocche che scendono sulla fronte restando staccate dalla pelle
+	# (finiscono all'altezza delle sopracciglia, non sugli occhi)
 	var fringe := 7
+	var swept := style == 5 or style == 1
 	for i in fringe:
 		var t := lerpf(-1.0, 1.0, float(i) / (fringe - 1))
-		var root := top + Vector3(t * 0.05, -0.005, 0.03)
-		var tip_dir := Vector3(t * 0.45 + r.randf_range(-0.12, 0.12), -1.0, 1.15 - absf(t) * 0.5)
-		var length := r.randf_range(0.09, 0.13) * (1.15 if fem else 1.0)
-		if style == 5 or style == 1: length *= 0.6
-		_lock(b, root, tip_dir, length, r.randf_range(0.018, 0.024), hair.lightened(r.randf() * 0.08))
+		var side := t * 0.72 + r.randf_range(-0.05, 0.05)
+		var end_theta := r.randf_range(-0.06, 0.06) + absf(t) * 0.12 + (0.32 if swept else 0.0)
+		var from := _cap_point(0.95, side * 0.8, 0.116)
+		var to := _cap_point(end_theta, side, 0.123)
+		_strand(b, from, to, r.randf_range(0.019, 0.025), hair.lightened(r.randf() * 0.08), 0.4)
 	# lati sopra le orecchie
 	for sx: float in [-1.0, 1.0]:
 		for k in 2:
@@ -329,9 +374,14 @@ func _hair(b: MeshBuilder, look: Dictionary) -> void:
 				var a := lerpf(-1.1, 1.1, i / 4.0)
 				_lock(b, Vector3(sin(a) * 0.07, 0.2, -0.06 - cos(a) * 0.02), Vector3(sin(a) * 0.5, -0.8, -1.0), r.randf_range(0.08, 0.11), 0.022, hair.darkened(r.randf() * 0.1))
 		1:
-			for i in 8:
-				var a := lerpf(-1.2, 1.2, i / 7.0)
-				_lock(b, top + Vector3(sin(a) * 0.05, -0.01, -0.03 - cos(a) * 0.02), Vector3(sin(a) * 0.8, 0.9, -0.7), r.randf_range(0.07, 0.11), 0.024, hair.lightened(r.randf() * 0.06))
+			# pettinati all'indietro, aderenti alla calotta; lunghi sulle spalle per le donne
+			for i in 9:
+				var a := lerpf(-1.05, 1.05, i / 8.0)
+				_swept(b, 0.55 + absf(a) * 0.15, 2.0, a, 0.118, 0.026, hair.lightened(r.randf() * 0.06))
+			if fem:
+				for i in 7:
+					var a := lerpf(-1.25, 1.25, i / 6.0)
+					_lock(b, Vector3(sin(a) * 0.08, 0.17, -0.06 - cos(a) * 0.03), Vector3(sin(a) * 0.22, -1.0, -0.3), 0.26 * r.randf_range(0.85, 1.1), 0.032, hair.darkened(r.randf() * 0.1), 0.45)
 		2:
 			for i in 7:
 				var a := lerpf(-1.25, 1.25, i / 6.0)
@@ -346,20 +396,29 @@ func _hair(b: MeshBuilder, look: Dictionary) -> void:
 			b.sphere("hair", 0.048, Vector3(0, 0.235, -0.085), hair, Vector3(1.0, 0.85, 1.0), 12, 7)
 			b.torus("hair", 0.04, 0.012, Vector3(0, 0.235, -0.085), hair.darkened(0.1), Vector3(0.5, 0, 0), 12, 5)
 		5:
-			for i in 7:
-				var a := lerpf(-1.0, 1.0, i / 6.0)
-				_lock(b, Vector3(a * 0.06, 0.245, 0.04), Vector3(a * 0.2, 0.15, -1.0), r.randf_range(0.15, 0.19), 0.026, hair.lightened(r.randf() * 0.05), 0.5)
+			# all'indietro e lunghi fino alla nuca, poi giù sul collo
+			for i in 9:
+				var a := lerpf(-1.05, 1.05, i / 8.0)
+				_swept(b, 0.5 + absf(a) * 0.15, 2.55, a, 0.119, 0.027, hair.lightened(r.randf() * 0.05), 4)
+				var nape := _cap_point(2.45, a, 0.112)
+				_lock(b, nape, Vector3(sin(a) * 0.3, -1.0, -0.25), r.randf_range(0.07, 0.11) * (1.6 if fem else 1.0), 0.026, hair.darkened(r.randf() * 0.08), 0.45)
 	var beard := int(look.get("beard", 0))
 	if beard > 0: _beard(b, hair, beard)
 
 func _beard(b: MeshBuilder, hair: Color, beard: int) -> void:
+	# la barba corta (1) è solo colore sul volto, vedi _head
+	if beard < 2: return
 	var c := hair.darkened(0.12)
-	if beard == 1:
-		# barba corta lungo la mandibola
-		b.loft("hair", [[0.02, 0.03, 0.03, 0.0, 0.036], [0.05, 0.062, 0.07, 0.0, 0.016], [0.085, 0.074, 0.088, 0.0, 0.004]], c, 14, false, Vector3.ZERO, 0.0)
-	else:
-		b.loft("hair", [[-0.03, 0.03, 0.03, 0.0, 0.05], [0.02, 0.055, 0.06, 0.0, 0.034], [0.06, 0.068, 0.078, 0.0, 0.014], [0.09, 0.074, 0.088, 0.0, 0.004]], c, 14, false)
-		b.box("hair", Vector3(0.05, 0.008, 0.01), Vector3(0, 0.083, 0.094), c)
+	# barba piena: volume sotto il mento e lungo la mandibola, ben staccato dalla
+	# pelle (niente compenetrazioni a chiazze), sotto il labbro inferiore
+	b.sphere("hair", 0.05, Vector3(0, 0.03, 0.044), c, Vector3(1.22, 0.86, 1.08), 20, 12)
+	b.sphere("hair", 0.03, Vector3(0, 0.012, 0.07), c.darkened(0.06), Vector3(1.0, 1.25, 0.9), 14, 8)
+	for sx: float in [-1.0, 1.0]:
+		b.sphere("hair", 0.022, Vector3(sx * 0.066, 0.07, 0.012), c, Vector3(0.7, 1.6, 1.0), 10, 7)
+	# baffi: un arco sottile tra naso e bocca
+	b.push(Transform3D(Basis(), Vector3(0.015, 0.083, 0.092)))
+	b.loft("hair", [[0.0, 0.002, 0.003, 0.0, -0.004], [0.008, 0.0045, 0.005, 0.0, 0.0], [0.015, 0.005, 0.0055, 0.0, 0.001], [0.022, 0.0045, 0.005, 0.0, 0.0], [0.03, 0.002, 0.003, 0.0, -0.004]], c, 8, true, Vector3(0, 0, PI * 0.5))
+	b.pop()
 
 func _hood(b: MeshBuilder, color: Color) -> void:
 	b.push(Transform3D(Basis(Vector3.RIGHT, -0.25), Vector3(0, 0.13, -0.015)))
@@ -465,7 +524,12 @@ func _dress_bandit(tint: Color, archer: bool) -> void:
 	var look := {"skin": Color("#a07a5e"), "hair": Color("#1e1914"), "fem": false, "style": 0, "beard": 1, "outfit": tint, "hood": true}
 	_body(look, {"shirt": leather, "sleeve": Color("#2e2620"), "fore": leather, "hand": Color("#241b15"), "pants": Color("#2a2420"), "boots": Color("#1d1713")})
 	_hood(_b("head"), tint.darkened(0.25))
-	_b("head").box("cloth", Vector3(0.17, 0.07, 0.05), Vector3(0, 0.075, 0.085), Color("#1c1816"))
+	# fazzoletto sul volto: stoffa che avvolge naso e mento, staccata dalla pelle
+	var hb := _b("head")
+	hb.push(Transform3D(Basis.from_scale(Vector3.ONE * float(get_meta("head", 1.0)) * 1.08), Vector3.ZERO))
+	var scarf := tint.darkened(0.35)
+	hb.loft("cloth", [[0.026, 0.06, 0.07, 0.0, 0.024, scarf.darkened(0.2)], [0.07, 0.079, 0.094, 0.0, 0.009], [0.106, 0.088, 0.105, 0.0, 0.003], [0.114, 0.074, 0.088, 0.0, 0.0]], scarf, 24, false)
+	hb.pop()
 	var tb := _b("spine")
 	tb.box("cloth", Vector3(0.08, 0.66, 0.02), Vector3(-0.05, 0.2, 0.117), tint, Vector3(0, 0, -0.6))
 	_cloth_panel(tb, 0.34, 0.46, 0.75, Vector3(0, 0.42, -0.13), tint.darkened(0.45), 0.1)

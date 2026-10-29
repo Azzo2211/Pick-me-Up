@@ -25,7 +25,9 @@ void fragment() {
 	c *= 0.9 + 0.12 * fine;
 	c = mix(c, stain_color * 0.8, smoothstep(0.62, 0.9, streak) * 0.25 * stains);
 	// intonaco scrostato: chiazze più basse con il mattone sotto
-	float flake = smoothstep(0.7, 0.74, fbm3(UV * 2.2 + 7.0));
+	float fv = fbm3(UV * 2.2 + 7.0);
+	float fwv = fwidth(fv) * 1.5;
+	float flake = smoothstep(0.7 - fwv, 0.74 + fwv, fv);
 	c = mix(c, vec3(0.42, 0.28, 0.2) * (0.8 + 0.3 * fine), flake * 0.85);
 	float height = (big - 0.5) * 0.006 + (fine - 0.5) * 0.003 - flake * 0.006;
 	NORMAL = bump_normal(NORMAL, VERTEX, height, relief);

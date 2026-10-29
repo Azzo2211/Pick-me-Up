@@ -32,7 +32,9 @@ void fragment() {
 	float up = clamp(wnrm.y, 0.0, 1.0);
 	float moss_mask = smoothstep(0.45, 0.8, up + (big - 0.5) * 0.6) * moss;
 	c = mix(c, moss_color * (0.8 + 0.4 * fine), moss_mask);
-	c = mix(c, lichen, smoothstep(0.78, 0.82, vnoise(p.xz * 3.0 + p.y)) * (1.0 - moss_mask) * 0.4);
+	float lv = vnoise(p.xz * 3.0 + p.y);
+	float lw = fwidth(lv);
+	c = mix(c, lichen, smoothstep(0.78 - lw, 0.82 + lw, lv) * (1.0 - moss_mask) * 0.4);
 	float height = big * 0.05 + mid * 0.02 + (fine - 0.5) * 0.006 - crack * 0.01;
 	NORMAL = bump_normal(NORMAL, VERTEX, height, 1.0);
 	ALBEDO = c * srgb_to_linear(COLOR.rgb);
