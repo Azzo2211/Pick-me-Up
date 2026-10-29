@@ -601,7 +601,7 @@ func open_tower_map() -> void:
 	row.add_theme_constant_override("separation", 22)
 	var left := VBoxContainer.new()
 	left.add_theme_constant_override("separation", 8)
-	var tower: TowerMap = TowerMapScript.new()
+	var tower = TowerMapScript.new()
 	tower.setup(GS, gate_floor)
 	# la mappa deve stare tutta nella finestra senza scorrere
 	tower.custom_minimum_size.y = clampf(main.size.y * 0.66 - 44.0 - 70.0, 400.0, 620.0)
@@ -618,12 +618,12 @@ func open_tower_map() -> void:
 	var modal_ref := []
 	var show_page := func(first: int):
 		tower.set_page(first)
-		page_label.text = "PIANI %d–%d" % [tower.first_floor, tower.first_floor + TowerMap.PER_PAGE - 1]
-	pager.add_child(UIKit.button("‹ Giù", func(): show_page.call(tower.first_floor - TowerMap.PER_PAGE), "ghost", 90))
+		page_label.text = "PIANI %d–%d" % [tower.first_floor, tower.first_floor + TowerMapScript.PER_PAGE - 1]
+	pager.add_child(UIKit.button("‹ Giù", func(): show_page.call(tower.first_floor - TowerMapScript.PER_PAGE), "ghost", 90))
 	pager.add_child(page_label)
-	pager.add_child(UIKit.button("Su ›", func(): show_page.call(tower.first_floor + TowerMap.PER_PAGE), "ghost", 90))
+	pager.add_child(UIKit.button("Su ›", func(): show_page.call(tower.first_floor + TowerMapScript.PER_PAGE), "ghost", 90))
 	var to_frontier := func():
-		show_page.call(int((max_floor - 1) / TowerMap.PER_PAGE) * TowerMap.PER_PAGE + 1)
+		show_page.call(int((max_floor - 1) / TowerMapScript.PER_PAGE) * TowerMapScript.PER_PAGE + 1)
 		tower.selected = max_floor
 		_tower_info(info, max_floor, modal_ref)
 	pager.add_child(UIKit.button("Prossimo piano", to_frontier, "gold", 0))
@@ -913,7 +913,7 @@ func _summon(pool: String, count: int) -> void:
 		main.toast("Evocazione bloccata", str(result.message), "warn")
 		return
 	last_summon = result.heroes
-	var event: SummonEvent = SummonEventScript.new()
+	var event = SummonEventScript.new()
 	event.setup(result.heroes, str(GS.SUMMON_POOLS[pool].name))
 	event.hero_pressed.connect(_open_from_summon)
 	main.modal_layer.add_child(event)

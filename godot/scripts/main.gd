@@ -64,7 +64,7 @@ func _ready() -> void:
 	GameState.state_changed.connect(_queue_refresh)
 	GameState.time_ticked.connect(_on_time_ticked)
 	GameState.hero_leveled.connect(_on_hero_leveled)
-	var loading: LoadingScreen = null
+	var loading = null
 	if not GameState.is_test_mode:
 		loading = LoadingScript.new()
 		add_child(loading)
@@ -640,7 +640,7 @@ func deploy(floor_index: int) -> void:
 	hub.focus_on("gate", 0)
 	await hub.world.play_deploy(party_ids)
 	var stage: Dictionary = result.stage
-	var loading: LoadingScreen = LoadingScript.new()
+	var loading = LoadingScript.new()
 	loading.setup("PIANO %d" % floor_index, "APERTURA DEL VARCO…", ("%s · %s" % [str(stage.get("name", "")), str(stage.get("biome", ""))]).to_upper(), Color(str(stage.get("color", "#f052c8"))).lightened(0.35))
 	loading.modulate.a = 0.0
 	add_child(loading)
@@ -674,6 +674,6 @@ func _on_battle_finished(result: Dictionary) -> void:
 	hub.world.restore_agents()
 	_refresh_all()
 	hub.reset_view()
-	var screen: MissionResultScreen = MissionResultScript.new()
+	var screen = MissionResultScript.new()
 	screen.setup(result, resolved)
 	modal_layer.add_child(screen)

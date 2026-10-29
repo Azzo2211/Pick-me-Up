@@ -28,7 +28,7 @@ var _notice: Label
 var _skip: Button
 var _continue: Button
 
-func setup(summoned: Array, pool_label: String) -> SummonEvent:
+func setup(summoned: Array, pool_label: String) -> Control:
 	heroes = summoned
 	pool_name = pool_label
 	count = summoned.size()

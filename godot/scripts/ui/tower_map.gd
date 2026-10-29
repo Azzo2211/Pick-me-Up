@@ -17,7 +17,7 @@ var cleared: Dictionary = {}
 var _time := 0.0
 var _hover := -1
 
-func setup(state: RiftwardState, selected_floor: int) -> TowerMap:
+func setup(state: RiftwardState, selected_floor: int) -> Control:
 	max_floor = int(state.data.world.max_floor)
 	selected = clampi(selected_floor, 1, state.MAX_FLOOR)
 	first_floor = int((selected - 1) / PER_PAGE) * PER_PAGE + 1

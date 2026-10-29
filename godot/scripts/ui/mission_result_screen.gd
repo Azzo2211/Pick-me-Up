@@ -22,7 +22,7 @@ var _holder: CenterContainer
 var _stars_shown := 0.0
 var _stars: Control
 
-func setup(mission_result: Dictionary, mission_resolved: Dictionary) -> MissionResultScreen:
+func setup(mission_result: Dictionary, mission_resolved: Dictionary) -> Control:
 	result = mission_result
 	resolved = mission_resolved
 	return self

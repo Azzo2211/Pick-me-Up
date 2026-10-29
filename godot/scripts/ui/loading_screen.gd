@@ -16,7 +16,7 @@ var _shown := 0.0
 var _t := 0.0
 var _closing := false
 
-func setup(title: String, status: String, detail: String = "", color: Color = UIKit.MAGENTA) -> LoadingScreen:
+func setup(title: String, status: String, detail: String = "", color: Color = UIKit.MAGENTA) -> Control:
 	title_text = title
 	status_text = status
 	detail_text = detail
