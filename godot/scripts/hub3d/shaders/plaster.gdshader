@@ -18,7 +18,7 @@ void fragment() {
 	float big = fbm(UV * 0.9 + wpos.xz * 0.05);
 	float streak = fbm3(vec2(UV.x * 6.0, UV.y * 0.6));
 	vec3 c = mix(base_color, stain_color, smoothstep(0.45, 0.85, big) * stains);
-	c *= 0.9 + 0.12 * vnoise(UV * 18.0);
+	c *= 0.9 + 0.12 * mix(0.5, vnoise(UV * 18.0), aa_keep(18.0, length(fwidth(UV))));
 	c = mix(c, stain_color * 0.8, smoothstep(0.62, 0.9, streak) * 0.25 * stains);
 	vec3 tint = srgb_to_linear(COLOR.rgb);
 	ALBEDO = c * tint;

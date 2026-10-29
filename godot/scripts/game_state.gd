@@ -1185,14 +1185,43 @@ func set_dev_mode(enabled: bool) -> void:
 
 func dev_unlock_all() -> void:
 	data.dev.all_content = true
-	data.world.max_floor = maxi(int(data.world.max_floor), 5)
-	for floor_index in range(1, int(data.world.max_floor) + 1): _materialize_stage(floor_index)
-	add_event("DEV", "Contenuti sbloccati", "Piani e requisiti di progressione ignorati per i test.", "warn")
+	data.world.max_floor = MAX_FLOOR
+	for floor_index in range(1, MAX_FLOOR + 1): _materialize_stage(floor_index)
+	add_event("DEV", "Contenuti sbloccati", "Tutti i %d piani della Torre si possono scegliere; requisiti di progressione ignorati." % MAX_FLOOR, "warn")
+	save_and_notify()
+
+## Segna come completati tutti i piani: sblocca evocazioni, espansioni e promozioni legate ai piani.
+func dev_clear_all_floors() -> void:
+	data.dev.all_content = true
+	debug_clear_floors(MAX_FLOOR)
+	data.world.max_floor = MAX_FLOOR
+	add_event("DEV", "Torre completata", "Piani 1–%d segnati come completati." % MAX_FLOOR, "warn")
+	save_and_notify()
+
+## Base al livello massimo con tutte le strutture costruite e al massimo livello.
+func dev_max_base() -> void:
+	data.world.base_level = BASE_LEVELS.size()
+	for id in FACILITY_ORDER:
+		data.facilities.get_or_add(id, {"level": 0})
+		data.facilities[id].level = mini(5, facility_max_level())
+	add_event("DEV", "Base al massimo", "Base Lv.%d, tutte le strutture costruite e potenziate." % base_level(), "warn")
+	save_and_notify()
+
+## Porta tutti gli eroi vivi al livello massimo della loro rarità.
+func dev_max_heroes() -> void:
+	for hero in data.heroes:
+		if hero.state != "ALIVE": continue
+		var guard := 0
+		while int(hero.level) < level_cap(hero) and guard < 200:
+			_apply_level_up(hero)
+			guard += 1
+		hero.xp = 0
+	add_event("DEV", "Eroi al livello massimo", "Ogni eroe vivo ha raggiunto il cap della sua rarità.", "warn")
 	save_and_notify()
 
 ## Segna come completati i piani fino a `up_to` (strumenti di sviluppo e test).
 func debug_clear_floors(up_to: int) -> void:
-	for f in range(1, up_to + 1):
+	for f in range(1, mini(up_to, MAX_FLOOR) + 1):
 		var record := _materialize_stage(f)
 		record.cleared = true
 		if not data.world.completed.has(f): data.world.completed.append(f)

@@ -14,11 +14,12 @@ uniform float moss = 0.25;
 
 void fragment() {
 	vec2 uv = UV;
+	float fw = length(fwidth(uv));
 	vec3 c;
 	if (style == 2) {
 		float strands = fbm(vec2(uv.x * 26.0, uv.y * 2.0));
 		float rows = fract(uv.y / 0.22);
-		c = mix(tile_b, tile_a, strands);
+		c = mix(tile_b, tile_a, mix(0.5, strands, aa_keep(26.0, fw)));
 		c *= mix(0.62, 1.0, smoothstep(0.0, 0.35, rows));
 		c *= 0.85 + 0.25 * vnoise(uv * 3.0);
 	} else {
@@ -29,7 +30,7 @@ void fragment() {
 		float h = hash12(cell);
 		c = mix(tile_a, tile_b, h);
 		if (style == 1) c *= 0.85 + 0.3 * fbm(vec2(t.x * 4.0, t.y * 0.8) + cell);
-		else c *= 0.9 + 0.18 * vnoise(uv * 20.0);
+		else c *= 0.9 + 0.18 * mix(0.5, vnoise(uv * 20.0), aa_keep(20.0, fw));
 		// ombra del bordo inferiore di ogni fila e fessure verticali
 		c *= mix(0.45, 1.0, smoothstep(0.0, 0.22, f.y));
 		c *= mix(0.6, 1.0, smoothstep(0.0, 0.06, min(f.x, 1.0 - f.x)));

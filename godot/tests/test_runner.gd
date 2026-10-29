@@ -37,6 +37,7 @@ func _initialize() -> void:
 	_test("oggetti vecchi senza id ricevono un id", _test_item_ids)
 	_test("luce della base salvata e migrata", _test_light_setting)
 	_test("tratti diversi e abilità in italiano", _test_traits_skills)
+	_test("sviluppo: tutti i piani, base e eroi al massimo", _test_dev_tools)
 	print("\nRisultato: %d passati, %d falliti" % [passed, failed])
 	quit(0 if failed == 0 else 1)
 
@@ -383,3 +384,19 @@ func _test_traits_skills() -> Array:
 	valid = valid and RiftwardState.skill_label("Mend") == "Cura"
 	game.free()
 	return [valid, "Tratti duplicati o abilità non tradotte"]
+
+func _test_dev_tools() -> Array:
+	var game := _fresh("dev-tools-seed")
+	game.set_dev_mode(true)
+	game.dev_unlock_all()
+	var valid: bool = int(game.data.world.max_floor) == game.MAX_FLOOR and game.get_stage(game.MAX_FLOOR).has("descriptor")
+	game.dev_clear_all_floors()
+	valid = valid and game.cleared_floor_count() == game.MAX_FLOOR and game.summon_pool_unlocked("transcendent")
+	game.dev_max_base()
+	valid = valid and game.base_level() == game.BASE_LEVELS.size()
+	for id in game.FACILITY_ORDER: valid = valid and game.facility_level(id) == 5
+	var top := game.dev_spawn_hero(7)
+	game.dev_max_heroes()
+	valid = valid and int(top.current_rarity) == 7 and int(top.level) == game.level_cap(top)
+	game.free()
+	return [valid, "Gli strumenti di sviluppo non sbloccano tutto"]

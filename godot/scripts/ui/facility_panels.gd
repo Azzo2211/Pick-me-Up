@@ -488,6 +488,10 @@ func _build_gate(body: VBoxContainer, footer: VBoxContainer) -> void:
 	if gate_floor < 1 or gate_floor > max_floor: gate_floor = int(GS.data.world.current_floor)
 	var selector := HBoxContainer.new()
 	selector.add_theme_constant_override("separation", 8)
+	if max_floor > 10:
+		var back10 := UIKit.button("«10", _shift_floor.bind(-10), "ghost", 58)
+		back10.disabled = gate_floor <= 1
+		selector.add_child(back10)
 	var prev := UIKit.button("‹", _shift_floor.bind(-1), "ghost", 52)
 	prev.add_theme_font_size_override("font_size", 28)
 	prev.disabled = gate_floor <= 1
@@ -500,6 +504,10 @@ func _build_gate(body: VBoxContainer, footer: VBoxContainer) -> void:
 	next.add_theme_font_size_override("font_size", 28)
 	next.disabled = gate_floor >= max_floor
 	selector.add_child(next)
+	if max_floor > 10:
+		var fwd10 := UIKit.button("10»", _shift_floor.bind(10), "ghost", 58)
+		fwd10.disabled = gate_floor >= max_floor
+		selector.add_child(fwd10)
 	body.add_child(selector)
 	var record := GS.get_stage(gate_floor)
 	var stage: Dictionary = record.descriptor
@@ -1055,14 +1063,20 @@ func build_settings(content: VBoxContainer) -> void:
 	content.add_child(lights)
 	var dev_on := bool(GS.data.dev.get("enabled", false))
 	content.add_child(section("Modalità sviluppo", "attiva" if dev_on else "spenta"))
-	content.add_child(UIKit.para("Risorse infinite e valori nascosti visibili, per provare il gioco velocemente. Spegnila per giocare con l'economia reale.", 15))
+	content.add_child(UIKit.para("Risorse infinite e valori nascosti visibili, per provare il gioco velocemente e vedere fin dove arriva. Spegnila per giocare con l'economia reale.", 15))
 	content.add_child(UIKit.button("Spegni la modalità sviluppo" if dev_on else "Attiva la modalità sviluppo", GS.set_dev_mode.bind(not dev_on), "ghost" if dev_on else "navy", 0))
 	if dev_on:
 		var grid := GridContainer.new()
 		grid.columns = 2
 		grid.add_theme_constant_override("h_separation", 8)
 		grid.add_theme_constant_override("v_separation", 8)
-		for entry in [["Ignora i requisiti", GS.dev_unlock_all], ["Ripristina il roster", GS.dev_restore_roster], ["Genera eroe 5★", GS.dev_spawn_hero.bind(5)], ["Avanza il tempo di 30 min", _dev_time]]:
+		for entry in [
+			["Sblocca tutti i piani (1–100)", GS.dev_unlock_all], ["Completa tutti i piani", GS.dev_clear_all_floors],
+			["Base e strutture al massimo", GS.dev_max_base], ["Eroi al livello massimo", GS.dev_max_heroes],
+			["Genera eroe 5★", GS.dev_spawn_hero.bind(5)], ["Genera eroe 6★", GS.dev_spawn_hero.bind(6)],
+			["Genera eroe 7★", GS.dev_spawn_hero.bind(7)], ["Ripristina il roster", GS.dev_restore_roster],
+			["Avanza il tempo di 30 min", _dev_time], ["Avanza il tempo di 8 ore", _dev_time.bind(480)],
+		]:
 			var b := UIKit.button(entry[0], entry[1], "navy", 0)
 			b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			grid.add_child(b)
@@ -1071,8 +1085,8 @@ func build_settings(content: VBoxContainer) -> void:
 	content.add_child(UIKit.para("Ricomincia da zero con un nuovo seme. Il salvataggio attuale verrà cancellato.", 15))
 	content.add_child(UIKit.button("Crea un nuovo mondo", _confirm_reset, "danger", 0))
 
-func _dev_time() -> void:
-	for i in 30: GS.advance_time(60.0)
+func _dev_time(minutes: int = 30) -> void:
+	for i in minutes: GS.advance_time(60.0)
 	GS.save_and_notify()
 
 func _confirm_reset() -> void:

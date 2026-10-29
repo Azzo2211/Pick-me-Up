@@ -1,5 +1,12 @@
 // Rumore procedurale e utilità condivise dagli shader del mondo.
 
+// Antialias del rumore: quanto tenere un dettaglio di frequenza `freq` quando
+// un pixel copre `fw` unità (fwidth delle coordinate). I dettagli più fini di
+// un pixel sfumano verso il loro valore medio invece di sfarfallare/sgranare.
+float aa_keep(float freq, float fw) {
+	return 1.0 - smoothstep(0.25, 0.8, freq * fw);
+}
+
 float hash12(vec2 p) {
 	vec3 p3 = fract(vec3(p.xyx) * 0.1031);
 	p3 += dot(p3, p3.yzx + 33.33);
