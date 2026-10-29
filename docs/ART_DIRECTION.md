@@ -9,10 +9,12 @@ Riftward is a mature anime-isekai dark fantasy, inspired by the feeling of Korea
 - Characters have real human proportions (~1.8 m, 1 world unit = 2 m), role-specific clothing (plate and tabard, leather and pauldrons, hooded cloaks, long robes, capes from 4★), real weapons. Enemies: hooded raiders and archers, Rift wolves, ogre brutes, stone golem guardians with glowing runes.
 - Performance: each building is one batched mesh (one surface per material); trees, bushes, rocks and grass use MultiMesh; few real lights, the rest are emissive surfaces and additive light pools on the ground.
 
-## UI style (2D)
-- Dark ornate panels (near-black violet with bronze double borders and corner ornaments), "system" windows in deep violet with lilac brackets for messages, toasts and summons.
-- Fonts: Cinzel for titles, Alegreya SC for headings, Alegreya for text (all SIL OFL, licences in `godot/assets/fonts`).
-- Heroes are shown as bronze-framed cards (emblem medallion, half-bust portrait, rarity stars, name plate); fallen heroes keep a dimmed card with "Caduto al Piano N".
+## UI style (2D) — "mixed" direction
+The 3D world stays fantasy; the interface is the System that summoned the Master (user decision, 2026-10-29, based on the Pick Me Up visual direction board).
+- Near-black blue panels, thin neon borders, cut corners and technical corner brackets. Accent colour by system: cyan for base/system windows, magenta for summoning, amber for resources and key actions, red for danger.
+- Fonts: Oxanium for titles and headings, Exo 2 for text (both SIL OFL, licences in `godot/assets/fonts`). Cinzel/Alegreya files are kept but no longer used by the UI.
+- Hero cards: neon frame in the rarity colour, rarity tag on top (COMMON, TRAINED, RARE, ELITE, EPIC, LEGEND, TRANSCEND), portrait, stars and name plate. The frame grows with rarity: 1★–2★ single line, 3★ double, 4★–5★ corner brackets and halo, 6★ pulsing halo with rising embers, 7★ animated iridescent frame with sparkles. 6★ and 7★ must be recognisable in half a second. Fallen heroes keep a grey card with "Caduto al Piano N".
+- Summoning is a full-screen event: the System opens a rift (spinning rings), the scene colour shifts toward the best rarity before any hero is shown (6★/7★ also get a System notice), a flash, then the cards flip one by one. "Salta" reveals everything at once.
 - Portraits are drawn in code as adult manhwa-style busts; colours come from the same deterministic appearance as the 3D model.
 
 ## Hub direction
