@@ -134,7 +134,7 @@ func _draw() -> void:
 	else:
 		_unit = minf(w, h) * 0.64
 		_origin = Vector2(w * 0.5, h * 0.48)
-	_line_w = maxf(0.9, _unit * 0.016)
+	_line_w = maxf(0.8, _unit * 0.0125)
 	if framed: _draw_backdrop()
 	var skin: Color = look.get("skin", Color("#e4c0a2"))
 	var hair: Color = look.get("hair", Color("#2a201b"))
@@ -338,18 +338,26 @@ func _draw_face(skin: Color, eyes: Color, hair: Color, fem: bool) -> void:
 	ufill(smooth([Vector2(0.16, -0.46), Vector2(0.31, -0.38), Vector2(0.345, -0.18), Vector2(0.34, 0.04), Vector2(0.31, 0.17), Vector2(jaw_x, 0.27), Vector2(0.17, 0.39), Vector2(0.09, 0.46), Vector2(0.12, 0.36), Vector2(0.21, 0.22), Vector2(0.25, 0.06), Vector2(0.24, -0.15), Vector2(0.20, -0.33)], true, 3), shade, false)
 	# ombra sotto la frangia
 	ufill(smooth([Vector2(-0.33, -0.22), Vector2(0, -0.30), Vector2(0.33, -0.22), Vector2(0.32, -0.14), Vector2(0, -0.20), Vector2(-0.32, -0.14)], true, 3), Color(shade.r, shade.g, shade.b, 0.75), false)
+	# luce morbida su fronte e naso, guance rosate
+	ufill(ellipse(Vector2(-0.06, -0.12), 0.13, 0.08, 16), Color(1, 0.96, 0.9, 0.10), false)
+	ufill(ellipse(Vector2(0.0, 0.12), 0.035, 0.09, 12), Color(1, 0.96, 0.9, 0.08), false)
+	for side in [-1.0, 1.0]:
+		var blush := Color("#e0707a")
+		for i in 3:
+			ufill(ellipse(Vector2(0.19 * side, 0.19), 0.07 - i * 0.018, 0.035 - i * 0.008, 14), Color(blush.r, blush.g, blush.b, 0.07 + (0.04 if fem else 0.0)), false)
 	if look.get("veteran", false):
 		uline([Vector2(-0.16, -0.24), Vector2(0, -0.255), Vector2(0.16, -0.24)], skin.darkened(0.28), 0.7)
 		for side in [-1.0, 1.0]: uline([Vector2(0.075 * side, 0.235), Vector2(0.115 * side, 0.30), Vector2(0.12 * side, 0.355)], skin.darkened(0.25), 0.8)
 	_draw_eyes(eyes, hair, skin, fem)
 	# naso
-	uline([Vector2(0.015, 0.08), Vector2(0.03, 0.20), Vector2(0.045, 0.235)], skin.darkened(0.3), 0.9)
+	uline([Vector2(0.015, 0.08), Vector2(0.03, 0.20), Vector2(0.045, 0.235)], Color(skin.darkened(0.35), 0.7), 0.8)
 	ufill([Vector2(-0.035, 0.245), Vector2(0.045, 0.235), Vector2(0.02, 0.255), Vector2(-0.02, 0.258)], skin.darkened(0.25), false)
 	# bocca
 	var mouth_y := 0.335
 	if fem:
 		ufill(smooth([Vector2(-0.065, mouth_y), Vector2(0, mouth_y - 0.012), Vector2(0.065, mouth_y), Vector2(0, mouth_y + 0.035)], true, 3), skin.lerp(Color("#b3545c"), 0.45), false)
 		uline([Vector2(-0.07, mouth_y), Vector2(0, mouth_y + 0.004), Vector2(0.07, mouth_y)], Color("#5e2c2c"), 1.0)
+		ufill(ellipse(Vector2(0.012, mouth_y + 0.02), 0.022, 0.007, 8), Color(1, 0.9, 0.9, 0.35), false)
 	else:
 		uline([Vector2(-0.075, mouth_y), Vector2(-0.02, mouth_y + 0.006), Vector2(0.03, mouth_y + 0.004), Vector2(0.075, mouth_y - 0.006)], Color("#5a302b"), 1.0)
 		uline([Vector2(-0.025, mouth_y + 0.05), Vector2(0.03, mouth_y + 0.05)], skin.darkened(0.2), 0.8)
@@ -359,12 +367,17 @@ func _draw_face(skin: Color, eyes: Color, hair: Color, fem: bool) -> void:
 		uline([Vector2(0.115, -0.12), Vector2(0.165, 0.0), Vector2(0.215, 0.15)], Color(0.35, 0.15, 0.15, 0.5), 0.6)
 
 func _eye_points(side: float, fem: bool) -> Dictionary:
-	return {
+	# occhi un po' più grandi e aperti, come nei manhwa
+	var c := Vector2(0.137 * side, 0.012)
+	var k := 1.14 if fem else 1.08
+	var pts := {
 		"inner": Vector2(0.05 * side, 0.035),
 		"outer": Vector2((0.228 if fem else 0.222) * side, 0.0 if fem else 0.006),
-		"top": Vector2(0.135 * side, -0.058 if fem else -0.044),
-		"bottom": Vector2(0.14 * side, 0.07 if fem else 0.06),
+		"top": Vector2(0.135 * side, -0.066 if fem else -0.05),
+		"bottom": Vector2(0.14 * side, 0.074 if fem else 0.062),
 	}
+	for key in pts: pts[key] = c + (pts[key] - c) * k
+	return pts
 
 func _eye_shape(side: float, fem: bool) -> Array:
 	var e := _eye_points(side, fem)
@@ -387,10 +400,12 @@ func _draw_eyes(eyes: Color, hair: Color, skin: Color, fem: bool) -> void:
 		var shape_px := TA(_eye_shape(side, fem))
 		draw_colored_polygon(shape_px, Color("#ece4dc"))
 		var iris_c := Vector2(0.137 * side, 0.014)
-		var iris_r := 0.05 if fem else 0.046
+		var iris_r := 0.058 if fem else 0.051
 		for poly in Geometry2D.intersect_polygons(TA(ellipse(iris_c, iris_r, iris_r * 1.1, 20)), shape_px): draw_colored_polygon(poly, eyes.darkened(0.25))
 		for poly in Geometry2D.intersect_polygons(TA(ellipse(iris_c + Vector2(0, 0.016), iris_r * 0.78, iris_r * 0.62, 16)), shape_px): draw_colored_polygon(poly, eyes.lightened(0.22))
+		for poly in Geometry2D.intersect_polygons(TA(ellipse(iris_c + Vector2(0, 0.024), iris_r * 0.55, iris_r * 0.32, 14)), shape_px): draw_colored_polygon(poly, eyes.lightened(0.45))
 		for poly in Geometry2D.intersect_polygons(TA(ellipse(iris_c, iris_r * 0.42, iris_r * 0.55, 12)), shape_px): draw_colored_polygon(poly, Color("#120a0c"))
+		draw_arc(T(iris_c), _unit * iris_r * 1.02, 0, TAU, 24, eyes.darkened(0.55), _line_w * 0.7, true)
 		# ombra della palpebra superiore sull'occhio
 		for poly in Geometry2D.intersect_polygons(TA(smooth([e.inner, e.top + Vector2(0, -0.02), e.outer, e.top + Vector2(0, 0.03)], true, 3)), shape_px): draw_colored_polygon(poly, Color(0.1, 0.05, 0.06, 0.35))
 		draw_circle(T(iris_c + Vector2(-0.018 * side + 0.004, -0.014)), _unit * 0.013, Color(1, 1, 1, 0.95))
