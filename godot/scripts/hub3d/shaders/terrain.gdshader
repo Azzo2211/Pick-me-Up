@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode diffuse_lambert, specular_schlick_ggx;
+render_mode diffuse_burley, specular_schlick_ggx;
 
 // Terreno dell'isola: erba, sterrato, selciato e roccia delle scogliere.
 // Maschere nei colori dei vertici: R sterrato, G selciato, B roccia, A occlusione.
@@ -17,38 +17,45 @@ uniform vec3 rock_a : source_color = vec3(0.44, 0.38, 0.32);
 uniform vec3 rock_b : source_color = vec3(0.24, 0.21, 0.20);
 uniform vec3 moss_color : source_color = vec3(0.17, 0.22, 0.09);
 uniform float cobble_scale = 2.4;
-uniform float flower_amount = 0.35;
+uniform float flower_amount = 0.12;
 
 varying vec3 wpos;
 varying vec3 wnrm;
 
 void vertex() {
 	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
-	wnrm = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
+	wnrm = safe_normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 }
 
 void fragment() {
 	vec2 p = wpos.xz;
+	float fw = length(fwidth(p));
 	float n1 = fbm(p * 0.16);
 	float n2 = fbm(p * 0.85 + 3.0);
-	float n3 = vnoise(p * 5.5);
+	float n3 = mix(0.5, vnoise(p * 5.5), aa_keep(5.5, fw));
 	vec3 grass = mix(grass_dark, grass_light, smoothstep(0.28, 0.78, n1));
 	grass = mix(grass, grass_dry, smoothstep(0.6, 0.85, n2) * 0.55);
 	grass *= 0.8 + 0.34 * n3;
-	float bloom = smoothstep(0.86, 0.9, vnoise(p * 7.0 + 11.0)) * smoothstep(0.55, 0.7, n2) * flower_amount;
+	float bv = vnoise(p * 7.0 + 11.0);
+	float bw = fwidth(bv);
+	float bloom = smoothstep(0.86 - bw, 0.9 + bw, bv) * smoothstep(0.55, 0.7, n2) * flower_amount * aa_keep(7.0, fw);
 	grass = mix(grass, mix(vec3(0.55, 0.48, 0.62), vec3(0.75, 0.66, 0.38), hash12(floor(p * 7.0))), bloom);
 
-	vec3 dirt = mix(dirt_color, dirt_light, n2) * (0.84 + 0.26 * vnoise(p * 9.0));
-	float pebble = smoothstep(0.8, 0.84, vnoise(p * 15.0));
+	vec3 dirt = mix(dirt_color, dirt_light, n2) * (0.84 + 0.26 * mix(0.5, vnoise(p * 9.0), aa_keep(9.0, fw)));
+	// sassolini: bordo largo almeno un paio di pixel, niente contorni a scalini
+	float pv = vnoise(p * 15.0);
+	float pw = fwidth(pv) * 1.5;
+	float pebble = smoothstep(0.8 - pw, 0.84 + pw, pv) * aa_keep(15.0, fw);
 	dirt = mix(dirt, dirt_light * 1.12, pebble * 0.55);
 	float rut = smoothstep(0.55, 0.9, fbm3(p * 2.5));
 	dirt *= 1.0 - rut * 0.12;
 
 	vec4 v = voronoi(p * cobble_scale);
 	float stone_id = hash12(v.zw);
-	vec3 cobble = mix(cobble_a, cobble_b, stone_id) * (0.86 + 0.24 * vnoise(p * 11.0));
+	vec3 cobble = mix(cobble_a, cobble_b, stone_id) * (0.86 + 0.24 * mix(0.5, vnoise(p * 11.0), aa_keep(11.0, fw)));
 	cobble *= mix(0.72, 1.0, smoothstep(0.02, 0.16, v.y));
-	cobble = mix(gap_color, cobble, smoothstep(0.025, 0.06, v.y));
+	float gap_w = fw * cobble_scale;
+	cobble = mix(mix(cobble, gap_color, 0.35), mix(gap_color, cobble, smoothstep(0.025 - gap_w, 0.06 + gap_w, v.y)), aa_keep(cobble_scale * 6.0, fw));
 	cobble = mix(cobble, moss_color, smoothstep(0.06, 0.0, v.y) * smoothstep(0.5, 0.8, n2) * 0.6);
 
 	float strata = sin(wpos.y * 2.7 + fbm(vec2(wpos.x + wpos.z, wpos.y) * 0.6) * 5.0) * 0.5 + 0.5;
@@ -63,6 +70,14 @@ void fragment() {
 	col = mix(col, cobble, pave_mask);
 	vec3 cliff = mix(rock, moss_color * 1.2, smoothstep(0.62, 0.8, fbm3(vec2(wpos.x + wpos.z, wpos.y * 0.6) * 0.9)) * 0.55);
 	col = mix(col, cliff, rock_mask);
+	// rilievo per pixel: ciottoli bombati, sassolini e solchi nello sterrato,
+	// erba irregolare, stratificazioni della roccia
+	float h_grass = (n3 - 0.5) * 0.006;
+	float h_dirt = pebble * 0.012 - rut * 0.012 + (n2 - 0.5) * 0.006;
+	float h_cobble = smoothstep(0.015, 0.2, v.y) * 0.035 * aa_keep(cobble_scale * 4.0, fw) + (stone_id - 0.5) * 0.006;
+	float h_rock = (strata - 0.5) * 0.06;
+	float height = mix(mix(mix(h_grass, h_dirt, dirt_mask), h_cobble, pave_mask), h_rock, rock_mask);
+	NORMAL = bump_normal(NORMAL, VERTEX, height, 1.0);
 	ALBEDO = col;
 	ROUGHNESS = mix(0.96, 0.82, pave_mask);
 	SPECULAR = 0.3;

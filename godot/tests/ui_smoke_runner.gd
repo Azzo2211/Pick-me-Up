@@ -33,8 +33,8 @@ func _run() -> void:
 	await _frames(5)
 	var world: HubWorld = main.hub.world
 	_check(main.hub != null and main.hub.visible, "la base 3D è la schermata principale")
-	_check(world.buildings.has("training") and world.buildings.has("dormitory") and world.buildings.has("merging") and world.buildings.has("gate"), "Base Lv.1: addestramento, dormitorio, fusione e portale presenti")
-	_check(not world.buildings.has("armory") and not world.buildings.has("workshop") and not world.buildings.has("warehouse"), "armeria, laboratorio e magazzino assenti al Lv.1")
+	_check(world.buildings.has("training") and world.buildings.has("dormitory") and world.buildings.has("merging") and world.buildings.has("gate") and world.buildings.has("warehouse") and world.buildings.has("alchemy"), "Base Lv.1: addestramento, dormitorio, fusione, portale, magazzino e alchimia presenti")
+	_check(not world.buildings.has("armory") and not world.buildings.has("workshop"), "armeria e laboratorio assenti al Lv.1")
 	_check(world.agents.size() == state.get_alive_heroes().size(), "ogni eroe vivo cammina nella base")
 	_check(world.nav.get_point_count() > 20 and world.site_nodes.has("training"), "rete di sentieri navigabile")
 	_check(world.buildings.training.floors == 1 and world.buildings.dormitory.floors == 1 and world.buildings.merging.floors == 1, "edifici del Lv.1 a un solo piano")
@@ -106,6 +106,18 @@ func _run() -> void:
 	await _frames(2)
 	main.close_all_modals()
 	await _frames(2)
+	main.open_shop()
+	await _frames(3)
+	var gold_before := state.resource_amount("gold")
+	main.panels._shop_buy("mat_wood")
+	await _frames(2)
+	_check(main.modal_layer.get_child_count() == 1 and state.resource_amount("gold") < gold_before, "negozio: acquisto di materiali")
+	main.close_all_modals()
+	main.panels.open_tower_map()
+	await _frames(3)
+	_check(main.modal_layer.get_child_count() == 1, "mappa della Torre in finestra")
+	main.close_all_modals()
+	await _frames(2)
 	# Missione completa
 	main.close_panel()
 	main.panels._auto_party()
@@ -125,6 +137,9 @@ func _run() -> void:
 			await create_timer(0.1).timeout
 			limit += 0.1
 	_check(main.battle == null and main.hub.visible and not main.busy, "fine missione e ritorno alla base")
+	var result_screen: Node = main.modal_layer.get_child(0) if main.modal_layer.get_child_count() > 0 else null
+	_check(result_screen != null and result_screen.has_method("skip_to_summary"), "resoconto della missione a schermo intero")
+	if result_screen != null and result_screen.has_method("skip_to_summary"): result_screen.call("skip_to_summary")
 	_check(state.data.active_mission.is_empty() and int(state.data.stages["1"].attempts) == 1, "missione registrata nel salvataggio")
 	print("Piano 1 %s · piani sbloccati %d → %d" % ["completato" if state.data.stages["1"].cleared else "fallito", max_floor_before, int(state.data.world.max_floor)])
 	main.queue_free()

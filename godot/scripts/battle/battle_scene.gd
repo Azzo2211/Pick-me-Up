@@ -428,7 +428,7 @@ func _build_hud() -> void:
 	boss_bar = ProgressBar.new()
 	boss_bar.show_percentage = false
 	boss_bar.custom_minimum_size = Vector2(760, 16)
-	boss_bar.add_theme_stylebox_override("background", UIKit.box(Color(0.05, 0.03, 0.04, 0.9), Color("#9c7448"), 2, 2, 0))
+	boss_bar.add_theme_stylebox_override("background", UIKit.box(Color(0.05, 0.03, 0.04, 0.9), Color("#2fb4cf"), 2, 2, 0))
 	boss_bar.add_theme_stylebox_override("fill", UIKit.box(Color("#b8323e"), Color.TRANSPARENT, 0, 1, 0))
 	bv.add_child(boss_bar)
 	boss_panel.add_child(bv)
@@ -512,6 +512,10 @@ func _toggle_speed() -> void:
 # =============================================================================
 
 func _create_heroes() -> void:
+	var party_ids := []
+	for hero_source in party_source:
+		if not hero_source.is_empty(): party_ids.append(str(hero_source.id))
+	var bonded := []
 	for i in party_source.size():
 		var source: Dictionary = party_source[i]
 		if source.is_empty(): continue
@@ -529,6 +533,11 @@ func _create_heroes() -> void:
 			"kills": 0, "damage": 0, "healing": 0, "ammo": int(d.ammo), "max_ammo": int(d.ammo), "status": "", "fear": 0.0,
 			"courage": int(source.personality.courage), "ranged": ranged, "threat": 0,
 		}
+		# legami: i compagni fidati danno forza e coraggio, i rivali tolgono coraggio
+		var bonus: Dictionary = GameState.party_bond_bonus(str(source.id), party_ids)
+		unit.attack = float(unit.attack) * float(bonus.attack)
+		unit.courage = int(unit.courage) + int(bonus.courage)
+		if int(bonus.close) > 0: bonded.append(str(source.name))
 		var model := CharacterModel.new()
 		world.add_child(model)
 		model.build_hero(source, GameState.hero_appearance(source))
@@ -540,6 +549,7 @@ func _create_heroes() -> void:
 		units.append(unit)
 		next_id += 1
 		_make_party_card(unit)
+	if bonded.size() >= 2: _log("Legami forti in squadra: %s combattono fianco a fianco." % ", ".join(bonded), "good")
 
 func _make_party_card(unit: Dictionary) -> void:
 	var card := PanelContainer.new()
@@ -565,7 +575,7 @@ func _make_party_card(unit: Dictionary) -> void:
 	hp.custom_minimum_size.y = 10
 	hp.max_value = float(unit.max_hp)
 	hp.value = float(unit.hp)
-	hp.add_theme_stylebox_override("background", UIKit.box(Color(0.05, 0.03, 0.04, 0.9), Color("#4d3c2e"), 1, 2, 0))
+	hp.add_theme_stylebox_override("background", UIKit.box(Color(0.05, 0.03, 0.04, 0.9), Color("#26344b"), 1, 2, 0))
 	hp.add_theme_stylebox_override("fill", UIKit.box(Color("#4fae7c"), Color.TRANSPARENT, 0, 1, 0))
 	hp.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	v.add_child(hp)
@@ -932,6 +942,16 @@ func _kill(target: Dictionary, attacker: Dictionary) -> void:
 	if attacker.get("hero", false): attacker.kills = int(attacker.kills) + 1
 	if target.hero:
 		_log("%s è caduto. Non tornerà." % target.name, "danger")
+		# chi gli era legato reagisce: dolore o furia
+		for ally in _heroes():
+			var value: int = GameState.bond(str(ally.id), str(target.id))
+			if value >= RiftwardState.BOND_CLOSE:
+				ally.attack = float(ally.attack) * 1.12
+				ally.courage = int(ally.courage) + 10
+				_log("%s è furioso per la caduta di %s." % [ally.name, target.name], "warn")
+			elif value >= RiftwardState.BOND_FRIEND:
+				ally.courage = int(ally.courage) - 12
+				_log("%s è scosso per la caduta di %s." % [ally.name, target.name], "warn")
 		var card: Dictionary = party_cards.get(target.entity_id, {})
 		if not card.is_empty(): card.card.modulate = Color(0.75, 0.55, 0.55, 0.75)
 		hero_died.emit(str(target.id), "Ucciso da " + str(attacker.name))
@@ -1140,7 +1160,12 @@ func _projectile(from: Dictionary, to: Dictionary) -> void:
 	effects.append({"node": node, "life": 0.28, "max": 0.28, "from": start, "to": finish})
 
 func _float_text(pos: Vector2, text: String, color: Color) -> void:
-	floaters.append({"pos": Vector3(pos.x + rng.randf_range(-0.3, 0.3), 1.9, pos.y), "text": text, "color": color, "life": 0.95})
+	# numeri vicini e recenti si impilano invece di sovrapporsi ("96" + "53" ≠ "9653")
+	var lift := 0.0
+	for f in floaters:
+		var p: Vector3 = f.pos
+		if float(f.life) > 0.6 and Vector2(p.x, p.z).distance_to(pos) < 0.8: lift += 0.32
+	floaters.append({"pos": Vector3(pos.x + rng.randf_range(-0.3, 0.3), 1.9 + minf(lift, 1.3), pos.y), "text": text, "color": color, "life": 0.95})
 
 func _update_effects(delta: float) -> void:
 	for e in effects:

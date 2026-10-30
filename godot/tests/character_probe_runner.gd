@@ -2,7 +2,7 @@ extends SceneTree
 
 ## Fila di personaggi (eroi per ruolo, abitanti, nemici) per controllare
 ## proporzioni, vestiti e pose. Salva tests/captures/characters.png
-## xvfb-run godot --path godot --rendering-driver opengl3 -s res://tests/character_probe_runner.gd -- --test-mode
+## xvfb-run godot --path godot -s res://tests/character_probe_runner.gd -- --test-mode
 
 func _initialize() -> void:
 	call_deferred("_run")

@@ -1,7 +1,7 @@
 extends SceneTree
 
 ## Cattura la battaglia su più piani (serve un display).
-## godot --path godot --rendering-driver opengl3 -s res://tests/battle_preview_runner.gd -- --test-mode
+## godot --path godot -s res://tests/battle_preview_runner.gd -- --test-mode
 
 func _initialize() -> void:
 	call_deferred("_run")

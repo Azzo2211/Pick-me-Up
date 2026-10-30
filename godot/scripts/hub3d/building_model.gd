@@ -49,7 +49,7 @@ func build(id: String, building_level: int, base_lv: int = 1) -> void:
 	_add_pick_body()
 
 func set_highlight(amount: float) -> void:
-	if _highlight != null: _highlight.set_shader_parameter("intensity", amount * 3.5)
+	if _highlight != null: _highlight.set_shader_parameter("intensity", amount * 2.6)
 
 func _roof_variant() -> String:
 	if facility_id in ["armory"]: return "slate"
@@ -149,6 +149,7 @@ func _light(pos: Vector3, color: Color, energy: float, radius: float, anim: Stri
 
 func _smoke(pos: Vector3, amount: int = 10) -> void:
 	var smoke := CPUParticles3D.new()
+	smoke.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	smoke.position = pos
 	smoke.amount = amount
 	smoke.lifetime = 4.0

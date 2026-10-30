@@ -59,6 +59,13 @@ func tri(key: String, a: Vector3, b: Vector3, c: Vector3, na: Vector3, nb: Vecto
 	var NA := (_normal_basis * na).normalized()
 	var NB := (_normal_basis * nb).normalized()
 	var NC := (_normal_basis * nc).normalized()
+	# normali nulle (vettori degeneri): si usa quella della faccia, mai zero
+	if NA.length_squared() < 0.5 or NB.length_squared() < 0.5 or NC.length_squared() < 0.5:
+		var face := (B - A).cross(C - A).normalized()
+		if face.length_squared() < 0.5: return
+		if NA.length_squared() < 0.5: NA = face
+		if NB.length_squared() < 0.5: NB = face
+		if NC.length_squared() < 0.5: NC = face
 	var col_b := col if cb.r < 0.0 else cb
 	var col_c := col if cc.r < 0.0 else cc
 	if (B - A).cross(C - A).dot(NA + NB + NC) < 0.0:
@@ -238,6 +245,78 @@ func sphere(key: String, radius: float, center: Vector3, col: Color = Color.WHIT
 			var top_pole := j == rings - 1
 			if not bottom_pole: tri(key, P[0], P[1], P[2], N[0], N[1], N[2], U[0], U[1], U[2], C[0], C[1], C[2])
 			if not top_pole: tri(key, P[0], P[2], P[3], N[0], N[2], N[3], U[0], U[2], U[3], C[0], C[2], C[3])
+
+## Forma morbida attraverso sezioni ellittiche lungo Y (corpi, arti, teste,
+## ciocche). Ogni sezione è un Array [y, rx, rz] con opzionali [cx, cz] (centro
+## spostato) e [Color]. Normali lisce calcolate dalla superficie; UV: U lungo il
+## giro (in unità), V lungo l'altezza. "caps" chiude le estremità con un vertice.
+func loft(key: String, sections: Array, col: Color = Color.WHITE, segments: int = 14, caps: bool = true, rot: Vector3 = Vector3.ZERO, start_angle: float = 0.0) -> void:
+	var n := sections.size()
+	if n < 2: return
+	var basis := Basis.from_euler(rot)
+	var grid: Array = []
+	var cols: Array = []
+	for si in n:
+		var sec: Array = sections[si]
+		var y := float(sec[0])
+		var rx := float(sec[1])
+		var rz := float(sec[2])
+		var cx := float(sec[3]) if sec.size() > 3 else 0.0
+		var cz := float(sec[4]) if sec.size() > 4 else 0.0
+		var c: Color = sec[5] if sec.size() > 5 else col
+		var row: Array = []
+		for k in segments:
+			var a := start_angle + TAU * k / segments
+			row.append(basis * Vector3(cx + cos(a) * rx, y, cz + sin(a) * rz))
+		grid.append(row)
+		cols.append(c)
+	# normali: media delle facce vicine (superficie liscia)
+	var normals: Array = []
+	for si in n:
+		var row_n: Array = []
+		for k in segments:
+			var p: Vector3 = grid[si][k]
+			var right: Vector3 = grid[si][(k + 1) % segments] - grid[si][(k - 1 + segments) % segments]
+			var up_i := mini(si + 1, n - 1)
+			var dn_i := maxi(si - 1, 0)
+			var along: Vector3 = grid[up_i][k] - grid[dn_i][k]
+			var nn := along.cross(right)
+			var center := Vector3.ZERO
+			for q in grid[si]: center += q
+			center /= segments
+			if nn.dot(p - center) < 0.0: nn = -nn
+			row_n.append(nn.normalized() if nn.length() > 1e-9 else (p - center).normalized())
+		normals.append(row_n)
+	var v_acc := 0.0
+	for si in n - 1:
+		var seg_len: float = (grid[si + 1][0] - grid[si][0]).length()
+		for k in segments:
+			var k2 := (k + 1) % segments
+			var circ := TAU * maxf(float(sections[si][1]), float(sections[si][2]))
+			var u0 := circ * k / segments
+			var u1 := circ * (k + 1) / segments
+			var a: Vector3 = grid[si][k]
+			var b: Vector3 = grid[si][k2]
+			var c: Vector3 = grid[si + 1][k2]
+			var d: Vector3 = grid[si + 1][k]
+			tri(key, a, b, c, normals[si][k], normals[si][k2], normals[si + 1][k2], Vector2(u0, v_acc), Vector2(u1, v_acc), Vector2(u1, v_acc + seg_len), cols[si], cols[si], cols[si + 1])
+			tri(key, a, c, d, normals[si][k], normals[si + 1][k2], normals[si + 1][k], Vector2(u0, v_acc), Vector2(u1, v_acc + seg_len), Vector2(u0, v_acc + seg_len), cols[si], cols[si + 1], cols[si + 1])
+		v_acc += seg_len
+	if caps:
+		for end in [0, n - 1]:
+			var center := Vector3.ZERO
+			for q in grid[end]: center += q
+			center /= segments
+			var other: Vector3 = Vector3.ZERO
+			for q in grid[1 if end == 0 else n - 2]: other += q
+			other /= segments
+			var outward := (center - other).normalized()
+			var tip := center + outward * 0.0
+			for k in segments:
+				var k2 := (k + 1) % segments
+				var na: Vector3 = (normals[end][k] + outward).normalized()
+				var nb: Vector3 = (normals[end][k2] + outward).normalized()
+				tri(key, grid[end][k], grid[end][k2], tip, na, nb, outward, Vector2.ZERO, Vector2.ZERO, Vector2.ZERO, cols[end])
 
 func dome(key: String, radius: float, center: Vector3, col: Color = Color.WHITE, height_scale: float = 1.0, segments: int = 18, rings: int = 10) -> void:
 	sphere(key, radius, center, col, Vector3(1, height_scale, 1), segments, rings * 2, true)

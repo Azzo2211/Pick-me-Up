@@ -25,6 +25,14 @@ Current implemented roles:
 
 Heroes are persistent individuals with identity/seed, role, personality, potential/growth, skills, equipment, morale, fatigue, relationships, wounds, and memories/events.
 
+### Bonds (relationships)
+- Every pair of heroes has a bond from −100 to +100 (`data.relationships`, key `idA::idB`). The starting value is deterministic from the world seed (−8…+26); *Socievole* adds 6, *Solitario* removes 6.
+- Labels: Rival ≤ −25, Acquaintance, Companion ≥ 15, Friend ≥ 40, Trusted friend ≥ 65 (shown in the hero dossier, "LEGAMI").
+- Growth: surviving a mission together +3 (victory) / +1.5 (defeat); training together +0.05 per minute; resting together +0.03 per minute. *Socievole* grows bonds ×1.35, *Solitario* ×0.65.
+- In battle: each trusted friend in the squad gives +5% attack and +8 courage, each friend +2% and +4 (max two of each); each rival −8 courage. When an ally falls, trusted friends react with fury (attack ×1.12, +10 courage), friends lose 12 courage.
+- After a mission, survivors who lost someone with bond ≥ 20 lose morale and keep a memory of it.
+- In the base, heroes with free time walk to a friend who is also idle, and personality picks their haunts (*Testardo/Tenace* near the training yard, *Occhio clinico/Memoria lunga/Frugale* near alchemy, storage or workshop, *Socievole* in the plaza, *Solitario* along the outer ring).
+
 ## Progression and rarity
 Modeled rarity/level caps:
 - 1★ → Lv.10
@@ -53,8 +61,9 @@ Locked reference values:
 - Normal summon: 10,000 Gold — 1★ 78% · 2★ 19% · 3★ 3%.
 - High-grade summon: 500 Gems — 3★ 93.5% · 4★ 5.5% · 5★ 1% (soft pity from pull 70, hard pity at 100).
 - Transcendent summon: 3,000 Gems, unlocked after Floor 20 — 5★ 98% · 6★ 1.8% · 7★ 0.2%.
-- No account energy system. Real economy by default; development mode is optional (Settings).
+- No account energy system. Real economy by default; development mode is optional (Settings). Settings also hold the base light (dusk/day/night) and the graphics quality (high/medium/low).
 - Starting resources: 60,000 Gold, 1,500 Gems, 1 Stone.
+- Shop (`GameState.SHOP_OFFERS`): only Gold and Gems, prices and quantities always shown, daily purchase limits (reset at midnight UTC). Purchases are refused when the Warehouse cap for that material is full. No item may undo risk (no revive, no death protection).
 
 ## Base, time and progression
 - Base level 1–5 (Nexus crystal). Requirements: Lv.2 Floor 3 + 40k Gold, Lv.3 Floor 6 + 120k, Lv.4 Floor 10 + 300k, Lv.5 Floor 15 + 700k.
@@ -67,6 +76,8 @@ Locked reference values:
 
 ## Facilities
 Facilities are both gameplay systems and physical places in the Godot hub.
+
+Availability: Training, Dormitory, Merging, Gate, **Warehouse and Alchemy** are built at Base Lv.1 (user decision, 2026-10-29); Armory unlocks at Base Lv.2 and Workshop at Base Lv.3, then must be built. Building badges flag real news only: idle trainees, tired heroes, a new floor at the Gate, gear waiting in storage for the Armory, a full Warehouse, injured heroes the Alchemy can treat.
 Important rule: **system availability and visual presence must stay coherent**. A facility that has not been built/unlocked should not appear as a finished physical building unless the user explicitly wants a construction/preview representation.
 
 Newer base/hub decisions in `GAME_VISION.md` override older facility visualization assumptions.

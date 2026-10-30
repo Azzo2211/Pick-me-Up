@@ -12,7 +12,7 @@ signal hero_leveled(hero_id: String, level: int)
 signal time_ticked
 
 const SAVE_PATH := "user://riftward_save.json"
-const SAVE_VERSION := 3
+const SAVE_VERSION := 4
 const PARTY_SIZE := 5
 const MAX_FLOOR := 100
 const OFFLINE_CAP_HOURS := 8.0
@@ -71,9 +71,9 @@ const FACILITIES := {
 	"merging": {"name": "Centro di Fusione", "short": "Fusione", "unlock": 1, "build_cost": 0, "upgrade_cost": 12000, "description": "La cupola azzurra dove gli eroi si fondono e vengono promossi di rarità."},
 	"gate": {"name": "Portale delle Missioni", "short": "Portale", "unlock": 1, "build_cost": 0, "upgrade_cost": 15000, "description": "Il varco sospeso verso la Torre. Da qui parte la squadra."},
 	"armory": {"name": "Armeria", "short": "Armeria", "unlock": 2, "build_cost": 25000, "upgrade_cost": 14000, "description": "Forgia e assegna armi e armature agli eroi."},
-	"warehouse": {"name": "Magazzino", "short": "Magazzino", "unlock": 3, "build_cost": 40000, "upgrade_cost": 16000, "description": "Deposito di materiali ed equipaggiamento. Aumenta le scorte massime."},
+	"warehouse": {"name": "Magazzino", "short": "Magazzino", "unlock": 1, "build_cost": 0, "upgrade_cost": 16000, "description": "Deposito di materiali ed equipaggiamento. Aumenta le scorte massime."},
 	"workshop": {"name": "Laboratorio", "short": "Laboratorio", "unlock": 3, "build_cost": 45000, "upgrade_cost": 18000, "description": "Raffina i materiali grezzi in componenti per la forgia e l'alchimia."},
-	"alchemy": {"name": "Centro Alchemico", "short": "Alchimia", "unlock": 4, "build_cost": 80000, "upgrade_cost": 26000, "description": "Distilla tonici che curano ferite e risollevano il morale."},
+	"alchemy": {"name": "Centro Alchemico", "short": "Alchimia", "unlock": 1, "build_cost": 0, "upgrade_cost": 26000, "description": "Distilla tonici che curano ferite e risollevano il morale."},
 }
 const FACILITY_ORDER := ["training", "dormitory", "merging", "gate", "armory", "warehouse", "workshop", "alchemy"]
 
@@ -170,7 +170,7 @@ func new_world(seed_text: String = "") -> void:
 		"facilities": _default_facilities(),
 		"assignments": {},
 		"pity": {"high": 0, "transcendent": 0}, "summon_counter": 0, "item_counter": 0,
-		"active_mission": {}, "tutorial_seen": false, "settings": {"light": "dusk"},
+		"active_mission": {}, "tutorial_seen": false, "settings": {"light": "dusk", "quality": "high"},
 		"dev": {"enabled": false, "unlimited_resources": false, "reveal_hidden": false, "god_mode": false, "all_content": false},
 	}
 	var starter_roles := ["Guardian", "Vanguard", "Lancer", "Ranger", "Support", "Mage"]
@@ -208,6 +208,7 @@ func _migrate() -> void:
 	for key in ["enabled", "unlimited_resources", "reveal_hidden", "god_mode", "all_content"]: data.dev.get_or_add(key, false)
 	data.get_or_add("settings", {})
 	data.settings.get_or_add("light", "dusk")
+	data.settings.get_or_add("quality", "high")
 	if from_version < 3:
 		# La v2 forzava la modalità sviluppo: la v3 torna a un'economia reale.
 		data.dev.enabled = false
@@ -219,6 +220,12 @@ func _migrate() -> void:
 	else:
 		var facilities: Dictionary = data.get_or_add("facilities", {})
 		for id in FACILITY_ORDER: facilities.get_or_add(id, {"level": 1 if int(FACILITIES[id].unlock) <= 1 else 0})
+	if from_version < 4:
+		# Dalla v4 Magazzino e Centro Alchemico esistono fin dalla Base Lv.1
+		# (come nell'immagine della base approvata): chi non li aveva li trova costruiti.
+		for id in ["warehouse", "alchemy"]:
+			var facility: Dictionary = data.facilities.get_or_add(id, {"level": 0})
+			if int(facility.get("level", 0)) < 1: facility["level"] = 1
 	_normalize_types()
 	for hero in data.heroes: _normalize_hero(hero)
 	if from_version < 3:
@@ -800,6 +807,18 @@ func advance_time(seconds: float) -> bool:
 			if float(hero.fatigue) <= 0.0 and float(hero.morale) >= 100.0 and injuries.is_empty():
 				finished.append(hero_id)
 			changed = true
+	# chi si allena o riposa insieme si conosce meglio
+	var by_place := {}
+	for hero_id in data.assignments:
+		var place := str(data.assignments[hero_id].facility)
+		if not by_place.has(place): by_place[place] = []
+		by_place[place].append(str(hero_id))
+	for place in by_place:
+		var ids: Array = by_place[place]
+		if ids.size() < 2 or ids.size() > 12: continue
+		var rate := 0.05 if place == "training" else 0.03
+		for i in ids.size():
+			for j in range(i + 1, ids.size()): change_bond(ids[i], ids[j], rate * minutes)
 	for hero_id in finished:
 		data.assignments.erase(hero_id)
 		var done := hero_by_id(hero_id)
@@ -1019,6 +1038,59 @@ func refine_material(recipe_id: String) -> Dictionary:
 	save_and_notify()
 	return {"ok": true}
 
+# --- Negozio -----------------------------------------------------------------
+## Solo valute di gioco, prezzi e quantità sempre visibili. Niente che annulli il
+## rischio: nessuna resurrezione o protezione dalla morte permanente.
+## `limit` è il numero di acquisti per giorno (si azzera a mezzanotte UTC).
+const SHOP_TABS := [["daily", "Offerte del giorno"], ["material", "Materiali"], ["premium", "Gemme"]]
+const SHOP_OFFERS := {
+	"daily_supplies": {"tab": "daily", "name": "Scorta da campo", "icon": "herbs", "color": "#4fe3a3", "price": {"gold": 1200}, "items": {"herbs": 4, "medicine": 2}, "limit": 1},
+	"daily_forge": {"tab": "daily", "name": "Kit di forgia", "icon": "ore", "color": "#ffbb4d", "price": {"gold": 3200}, "items": {"ore": 5, "leather": 3}, "limit": 1},
+	"daily_cores": {"tab": "daily", "name": "Nuclei instabili", "icon": "cores", "color": "#b57cff", "price": {"gold": 6000}, "items": {"cores": 2}, "limit": 1},
+	"daily_gems": {"tab": "daily", "name": "Cambio in Gemme", "icon": "gems", "color": "#46dcf2", "price": {"gold": 20000}, "items": {"gems": 60}, "limit": 1},
+	"mat_ore": {"tab": "material", "name": "Minerale", "icon": "ore", "color": "#9aa6b6", "price": {"gold": 700}, "items": {"ore": 5}, "limit": 5},
+	"mat_leather": {"tab": "material", "name": "Pelle", "icon": "leather", "color": "#c08a5a", "price": {"gold": 700}, "items": {"leather": 5}, "limit": 5},
+	"mat_wood": {"tab": "material", "name": "Legno", "icon": "wood", "color": "#6f8f3e", "price": {"gold": 500}, "items": {"wood": 5}, "limit": 5},
+	"mat_herbs": {"tab": "material", "name": "Erbe", "icon": "herbs", "color": "#4fe3a3", "price": {"gold": 500}, "items": {"herbs": 5}, "limit": 5},
+	"mat_medicine": {"tab": "material", "name": "Medicine", "icon": "medicine", "color": "#ff4f74", "price": {"gold": 1400}, "items": {"medicine": 3}, "limit": 3},
+	"mat_cores": {"tab": "material", "name": "Nuclei", "icon": "cores", "color": "#b57cff", "price": {"gold": 3000}, "items": {"cores": 2}, "limit": 3},
+	"gem_stone": {"tab": "premium", "name": "Pietra di promozione", "icon": "stones", "color": "#f052c8", "price": {"gems": 450}, "items": {"stones": 1}, "limit": 2},
+	"gem_chest": {"tab": "premium", "name": "Forziere raro", "icon": "star", "color": "#ffbb4d", "price": {"gems": 300}, "items": {"ore": 6, "leather": 6, "wood": 6, "cores": 3}, "limit": 1},
+	"gem_gold": {"tab": "premium", "name": "Sacca d'oro", "icon": "gold", "color": "#ffbb4d", "price": {"gems": 150}, "items": {"gold": 12000}, "limit": 3},
+}
+
+func shop_day() -> int:
+	return int(now() / 86400.0)
+
+func _shop_state() -> Dictionary:
+	var shop: Dictionary = data.get_or_add("shop", {"day": -1, "bought": {}})
+	if int(shop.get("day", -1)) != shop_day():
+		shop.day = shop_day()
+		shop.bought = {}
+	return shop
+
+func shop_remaining(offer_id: String) -> int:
+	var offer: Dictionary = SHOP_OFFERS.get(offer_id, {})
+	if offer.is_empty(): return 0
+	return maxi(0, int(offer.limit) - int(_shop_state().bought.get(offer_id, 0)))
+
+## Secondi al prossimo rinnovo delle offerte.
+func shop_refresh_in() -> int:
+	return int((shop_day() + 1) * 86400.0 - now())
+
+func shop_buy(offer_id: String) -> Dictionary:
+	var offer: Dictionary = SHOP_OFFERS.get(offer_id, {})
+	if offer.is_empty(): return {"ok": false, "message": "Offerta sconosciuta"}
+	if shop_remaining(offer_id) <= 0: return {"ok": false, "message": "Esaurito per oggi"}
+	for key in offer.items:
+		if MATERIALS.has(key) and resource_amount(key) >= material_cap(): return {"ok": false, "message": "Scorte piene di %s: potenzia il Magazzino" % MATERIALS[key].name}
+	if not pay(offer.price, "Negozio · " + str(offer.name), "shop"): return {"ok": false, "message": "Non hai abbastanza " + cost_text(offer.price)}
+	for key in offer.items: grant(key, int(offer.items[key]), "Negozio · " + str(offer.name), "shop")
+	var shop := _shop_state()
+	shop.bought[offer_id] = int(shop.bought.get(offer_id, 0)) + 1
+	save_and_notify()
+	return {"ok": true}
+
 func brew_potion(recipe_id: String, hero_id: String) -> Dictionary:
 	if not facility_built("alchemy"): return {"ok": false, "message": "Costruisci prima il Centro Alchemico"}
 	var recipe: Dictionary = ALCHEMY_RECIPES.get(recipe_id, {})
@@ -1158,9 +1230,101 @@ func finalize_mission(result: Dictionary) -> Dictionary:
 			var serious := hp_ratio < 0.12
 			hero.injuries.append({"name": "Ferita grave" if serious else "Ferita da combattimento", "severity": "Grave" if serious else "Moderata", "minutes": 45.0 if serious else 20.0})
 	var deaths: Array = run.deaths.duplicate()
+	var survivors := []
+	for hero_result in result.get("hero_results", []):
+		var alive_hero := hero_by_id(str(hero_result.id))
+		if not alive_hero.is_empty() and alive_hero.state == "ALIVE": survivors.append(str(hero_result.id))
+	_bonds_after_mission(survivors, deaths, bool(result.victory))
 	data.active_mission = {}
 	save_and_notify()
 	return {"ok": true, "gold": int(rewards.get("gold", 0)), "xp": int(rewards.get("xp", 0)), "rewards": rewards, "drops": drops, "level_ups": level_ups, "deaths": deaths, "first_clear": first_clear and bool(result.victory)}
+
+# =============================================================================
+# Legami tra eroi: nascono con un'affinità iniziale e crescono combattendo,
+# allenandosi e riposando insieme. Un amico che cade pesa sul morale.
+# =============================================================================
+
+const BOND_FRIEND := 40
+const BOND_CLOSE := 65
+const BOND_RIVAL := -25
+
+static func bond_key(a: String, b: String) -> String:
+	return a + "::" + b if a < b else b + "::" + a
+
+## Affinità iniziale (deterministica dal seme del mondo e dai tratti).
+func _initial_bond(a: String, b: String) -> float:
+	var rng := rng_for(str(data.world.seed) + ":bond:" + bond_key(a, b))
+	var value := float(rng.randi_range(-8, 26))
+	for id in [a, b]:
+		var hero := hero_by_id(id)
+		if hero.is_empty(): continue
+		if hero.get("traits", []).has("Socievole"): value += 6.0
+		if hero.get("traits", []).has("Solitario"): value -= 6.0
+	return value
+
+func bond(a: String, b: String) -> int:
+	if a == b or a.is_empty() or b.is_empty(): return 0
+	var key := bond_key(a, b)
+	if data.relationships.has(key): return roundi(float(data.relationships[key]))
+	return roundi(_initial_bond(a, b))
+
+func change_bond(a: String, b: String, amount: float) -> void:
+	if a == b or a.is_empty() or b.is_empty(): return
+	var gain := amount
+	if amount > 0.0:
+		for id in [a, b]:
+			var traits: Array = hero_by_id(id).get("traits", [])
+			if traits.has("Socievole"): gain *= 1.35
+			if traits.has("Solitario"): gain *= 0.65
+	var key := bond_key(a, b)
+	var current := float(data.relationships.get(key, _initial_bond(a, b)))
+	data.relationships[key] = snappedf(clampf(current + gain, -100.0, 100.0), 0.01)
+
+static func bond_label(value: int) -> String:
+	if value >= BOND_CLOSE: return "Amico fidato"
+	if value >= BOND_FRIEND: return "Amico"
+	if value >= 15: return "Compagno"
+	if value <= BOND_RIVAL: return "Rivale"
+	return "Conoscente"
+
+## Legami più forti (in positivo o negativo) di un eroe con gli eroi vivi.
+func hero_bonds(hero_id: String, limit: int = 4) -> Array:
+	var rows := []
+	for other in get_alive_heroes():
+		if str(other.id) == hero_id: continue
+		var value := bond(hero_id, str(other.id))
+		rows.append({"id": str(other.id), "name": str(other.name), "value": value, "label": bond_label(value)})
+	rows.sort_custom(func(x, y): return absi(int(x.value)) > absi(int(y.value)))
+	return rows.slice(0, limit)
+
+## Effetto dei legami in missione: compagni fidati in squadra danno coraggio e
+## un po' di forza, i rivali tolgono coraggio.
+func party_bond_bonus(hero_id: String, party_ids: Array) -> Dictionary:
+	var friends := 0
+	var close := 0
+	var rivals := 0
+	for other in party_ids:
+		var other_id := str(other)
+		if other_id == hero_id or other_id.is_empty(): continue
+		var value := bond(hero_id, other_id)
+		if value >= BOND_CLOSE: close += 1
+		elif value >= BOND_FRIEND: friends += 1
+		elif value <= BOND_RIVAL: rivals += 1
+	return {"attack": 1.0 + 0.05 * mini(close, 2) + 0.02 * mini(friends, 2), "courage": 8 * close + 4 * friends - 8 * rivals, "close": close, "friends": friends, "rivals": rivals}
+
+## Dopo una missione: chi è tornato insieme si lega di più; chi ha perso un amico ne soffre.
+func _bonds_after_mission(survivor_ids: Array, dead: Array, victory: bool) -> void:
+	for i in survivor_ids.size():
+		for j in range(i + 1, survivor_ids.size()):
+			change_bond(str(survivor_ids[i]), str(survivor_ids[j]), 3.0 if victory else 1.5)
+	for survivor_id in survivor_ids:
+		var hero := hero_by_id(str(survivor_id))
+		if hero.is_empty(): continue
+		for tomb in dead:
+			var value := bond(str(survivor_id), str(tomb.id))
+			if value >= 20:
+				hero.morale = clampi(int(hero.morale) - (4 + value / 12), 0, 100)
+				hero.memories.push_front("Ha visto cadere %s, %s." % [tomb.name, "un amico fidato" if value >= BOND_CLOSE else "un compagno"])
 
 # =============================================================================
 # Strumenti di sviluppo (attivabili dalle Impostazioni)
@@ -1175,6 +1339,16 @@ func set_light(preset: String) -> void:
 func light_preset() -> String:
 	return str(data.get("settings", {}).get("light", "dusk"))
 
+## Qualità grafica: "high" (ombre morbide, occlusione e luce rimbalzata, MSAA 4x),
+## "medium" (solo occlusione, MSAA 2x), "low" (niente effetti in screen space).
+func set_quality(level: String) -> void:
+	if not level in ["high", "medium", "low"]: return
+	data.settings.quality = level
+	save_and_notify()
+
+func quality() -> String:
+	return str(data.get("settings", {}).get("quality", "high"))
+
 func set_dev_mode(enabled: bool) -> void:
 	data.dev.enabled = enabled
 	if not enabled: data.dev.all_content = false
@@ -1185,14 +1359,43 @@ func set_dev_mode(enabled: bool) -> void:
 
 func dev_unlock_all() -> void:
 	data.dev.all_content = true
-	data.world.max_floor = maxi(int(data.world.max_floor), 5)
-	for floor_index in range(1, int(data.world.max_floor) + 1): _materialize_stage(floor_index)
-	add_event("DEV", "Contenuti sbloccati", "Piani e requisiti di progressione ignorati per i test.", "warn")
+	data.world.max_floor = MAX_FLOOR
+	for floor_index in range(1, MAX_FLOOR + 1): _materialize_stage(floor_index)
+	add_event("DEV", "Contenuti sbloccati", "Tutti i %d piani della Torre si possono scegliere; requisiti di progressione ignorati." % MAX_FLOOR, "warn")
+	save_and_notify()
+
+## Segna come completati tutti i piani: sblocca evocazioni, espansioni e promozioni legate ai piani.
+func dev_clear_all_floors() -> void:
+	data.dev.all_content = true
+	debug_clear_floors(MAX_FLOOR)
+	data.world.max_floor = MAX_FLOOR
+	add_event("DEV", "Torre completata", "Piani 1–%d segnati come completati." % MAX_FLOOR, "warn")
+	save_and_notify()
+
+## Base al livello massimo con tutte le strutture costruite e al massimo livello.
+func dev_max_base() -> void:
+	data.world.base_level = BASE_LEVELS.size()
+	for id in FACILITY_ORDER:
+		data.facilities.get_or_add(id, {"level": 0})
+		data.facilities[id].level = mini(5, facility_max_level())
+	add_event("DEV", "Base al massimo", "Base Lv.%d, tutte le strutture costruite e potenziate." % base_level(), "warn")
+	save_and_notify()
+
+## Porta tutti gli eroi vivi al livello massimo della loro rarità.
+func dev_max_heroes() -> void:
+	for hero in data.heroes:
+		if hero.state != "ALIVE": continue
+		var guard := 0
+		while int(hero.level) < level_cap(hero) and guard < 200:
+			_apply_level_up(hero)
+			guard += 1
+		hero.xp = 0
+	add_event("DEV", "Eroi al livello massimo", "Ogni eroe vivo ha raggiunto il cap della sua rarità.", "warn")
 	save_and_notify()
 
 ## Segna come completati i piani fino a `up_to` (strumenti di sviluppo e test).
 func debug_clear_floors(up_to: int) -> void:
-	for f in range(1, up_to + 1):
+	for f in range(1, mini(up_to, MAX_FLOOR) + 1):
 		var record := _materialize_stage(f)
 		record.cleared = true
 		if not data.world.completed.has(f): data.world.completed.append(f)

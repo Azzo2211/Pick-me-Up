@@ -13,5 +13,9 @@ if not exist "%GODOT_EXE%" (
   exit /b 1
 )
 
+rem Prima aggiorna font, immagini e script nuovi arrivati da GitHub,
+rem altrimenti il gioco non parte dopo un git pull.
+echo Aggiorno i file del gioco...
+start "Riftward - aggiornamento" /wait "%GODOT_EXE%" --headless --path "%PROJECT_DIR%" --import
 start "Riftward" "%GODOT_EXE%" --path "%PROJECT_DIR%"
 endlocal

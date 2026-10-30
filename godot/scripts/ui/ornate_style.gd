@@ -1,21 +1,22 @@
 extends StyleBox
 class_name OrnateStyle
 
-## Riquadro decorato disegnato in codice: fondo sfumato, angoli smussati,
-## doppio bordo, ornamenti agli angoli e alone opzionale.
+## Riquadro disegnato in codice: fondo sfumato, angoli tagliati, bordo
+## sottile, segni tecnici agli angoli e alone neon opzionale.
 ## Usato per pannelli, pulsanti, finestre di sistema e targhette.
+## (Il nome BRONZE dell'ornamento è storico: oggi disegna gli angoli tecnici.)
 
 enum Ornament { NONE, BRONZE, SYSTEM, PLATE }
 
-var fill_top := Color("#1d1724")
-var fill_bottom := Color("#0f0b13")
-var border := Color("#9c7448")
+var fill_top := Color("#121a27")
+var fill_bottom := Color("#0b1019")
+var border := Color("#2fb4cf")
 var border_width := 1.6
-var inner := Color(0.69, 0.51, 0.31, 0.35)
+var inner := Color(0.27, 0.86, 0.95, 0.12)
 var inner_inset := 4.0
 var chamfer := 6.0
 var ornament := Ornament.NONE
-var ornament_color := Color("#e2c08a")
+var ornament_color := Color("#46dcf2")
 var glow := Color(0, 0, 0, 0)
 var glow_size := 0.0
 var shadow := 0.0
@@ -86,43 +87,40 @@ func _diamond(item: RID, center: Vector2, size: float, color: Color) -> void:
 	RenderingServer.canvas_item_add_polygon(item, PackedVector2Array([center + Vector2(0, -size), center + Vector2(size, 0), center + Vector2(0, size), center + Vector2(-size, 0)]), PackedColorArray([color]))
 
 func _bronze_corners(item: RID, rect: Rect2) -> void:
+	# Angoli tecnici: una "L" luminosa staccata dal bordo, un trattino sul lato
+	# superiore e una fila di tacche in basso a destra.
 	var rs := RenderingServer
 	var c := minf(chamfer, minf(rect.size.x, rect.size.y) * 0.5)
+	var length := minf(34.0, minf(rect.size.x, rect.size.y) * 0.2)
 	var corners := [[rect.position, Vector2(1, 1)], [Vector2(rect.end.x, rect.position.y), Vector2(-1, 1)], [rect.end, Vector2(-1, -1)], [Vector2(rect.position.x, rect.end.y), Vector2(1, -1)]]
-	var length := minf(26.0, minf(rect.size.x, rect.size.y) * 0.22)
 	for corner in corners:
 		var o: Vector2 = corner[0]
 		var d: Vector2 = corner[1]
-		var mid := o + d * c * 0.5
-		_diamond(item, mid + d * 1.5, 3.2, ornament_color)
-		rs.canvas_item_add_line(item, o + Vector2(d.x * (c + 3.0), d.y * 0.8), o + Vector2(d.x * (c + length), d.y * 0.8), ornament_color, 1.6, true)
-		rs.canvas_item_add_line(item, o + Vector2(d.x * 0.8, d.y * (c + 3.0)), o + Vector2(d.x * 0.8, d.y * (c + length)), ornament_color, 1.6, true)
-		rs.canvas_item_add_circle(item, o + Vector2(d.x * (c + length + 3.0), d.y * 0.8), 1.4, ornament_color)
-		rs.canvas_item_add_circle(item, o + Vector2(d.x * 0.8, d.y * (c + length + 3.0)), 1.4, ornament_color)
-	if rect.size.x > 120.0:
-		_diamond(item, Vector2(rect.get_center().x, rect.position.y + 0.8), 3.0, ornament_color)
-		_diamond(item, Vector2(rect.get_center().x, rect.end.y - 0.8), 3.0, ornament_color)
+		var bracket := PackedVector2Array([o + Vector2(d.x * (c + length), d.y * -2.0), o + Vector2(d.x * c, d.y * -2.0), o + Vector2(d.x * -2.0, d.y * c), o + Vector2(d.x * -2.0, d.y * (c + length))])
+		rs.canvas_item_add_polyline(item, bracket, PackedColorArray([ornament_color]), 2.0, true)
+	if rect.size.x > 160.0:
+		var mid := rect.get_center().x
+		rs.canvas_item_add_line(item, Vector2(mid - 28.0, rect.position.y + 0.6), Vector2(mid + 28.0, rect.position.y + 0.6), ornament_color, 3.0, true)
+		var tc := Color(ornament_color.r, ornament_color.g, ornament_color.b, 0.55)
+		for k in 4:
+			var x := rect.end.x - c - 14.0 - k * 7.0
+			rs.canvas_item_add_line(item, Vector2(x, rect.end.y - 5.0), Vector2(x - 3.0, rect.end.y - 9.0), tc, 1.4, true)
 
 func _system_corners(item: RID, rect: Rect2) -> void:
+	# Finestra del Sistema: staffe a "L" agli angoli e un piccolo rombo.
 	var rs := RenderingServer
 	var corners := [[rect.position, Vector2(1, 1)], [Vector2(rect.end.x, rect.position.y), Vector2(-1, 1)], [rect.end, Vector2(-1, -1)], [Vector2(rect.position.x, rect.end.y), Vector2(1, -1)]]
-	var length := minf(30.0, minf(rect.size.x, rect.size.y) * 0.25)
+	var length := minf(28.0, minf(rect.size.x, rect.size.y) * 0.22)
 	for corner in corners:
 		var o: Vector2 = corner[0]
 		var d: Vector2 = corner[1]
 		var bracket := PackedVector2Array([o + Vector2(d.x * length, d.y * 3.0), o + Vector2(d.x * 3.0, d.y * 3.0), o + Vector2(d.x * 3.0, d.y * length)])
-		rs.canvas_item_add_polyline(item, bracket, PackedColorArray([ornament_color]), 2.4, true)
-		# piccolo ventaglio di schegge verso l'esterno
-		for k in 3:
-			var angle := atan2(-d.y, -d.x) + (k - 1) * 0.42
-			var dir := Vector2(cos(angle), sin(angle))
-			var side := Vector2(-dir.y, dir.x)
-			var base := o + d * 2.0
-			var tip := base + dir * (9.0 if k == 1 else 6.0)
-			rs.canvas_item_add_polygon(item, PackedVector2Array([base + side * 1.6, tip, base - side * 1.6]), PackedColorArray([ornament_color]))
-		_diamond(item, o + d * 9.0, 2.6, ornament_color)
+		rs.canvas_item_add_polyline(item, bracket, PackedColorArray([ornament_color]), 2.2, true)
+		_diamond(item, o + d * 9.0, 2.0, ornament_color)
 
 func _plate_marks(item: RID, rect: Rect2) -> void:
 	var y := rect.get_center().y
-	_diamond(item, Vector2(rect.position.x + chamfer * 0.5 + 4.0, y), 3.0, ornament_color)
-	_diamond(item, Vector2(rect.end.x - chamfer * 0.5 - 4.0, y), 3.0, ornament_color)
+	var h := minf(rect.size.y * 0.32, 9.0)
+	for side in [[rect.position.x + 3.0, 1.0], [rect.end.x - 3.0, -1.0]]:
+		var x: float = side[0]
+		RenderingServer.canvas_item_add_line(item, Vector2(x, y - h), Vector2(x, y + h), ornament_color, 2.0, true)

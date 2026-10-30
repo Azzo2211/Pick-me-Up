@@ -27,6 +27,7 @@ var name_tag: Label3D
 var rng := RandomNumberGenerator.new()
 var emote_timer := 0.0
 var body: StaticBody3D
+var traits: Array = []
 
 func setup(hub: HubWorld, hero: Dictionary, appearance: Dictionary) -> void:
 	world = hub
@@ -86,6 +87,7 @@ func set_collision_enabled(value: bool) -> void:
 
 func set_activity(new_activity: String, new_slot: int, hero: Dictionary) -> void:
 	hero_name = str(hero.name)
+	traits = hero.get("traits", [])
 	name_tag.text = "%s · Lv.%d" % [hero_name, int(hero.level)]
 	if new_activity == activity and new_slot == slot: return
 	activity = new_activity
@@ -160,9 +162,40 @@ func _choose_goal() -> void:
 			if not near_gate.is_empty():
 				_go(near_gate[rng.randi_range(0, near_gate.size() - 1)], ["idle", "talk", "idle"][rng.randi_range(0, 2)], _jitter(0.4))
 				return
+	if not villager and _personal_goal(sites): return
 	if not world.wander_nodes.is_empty():
 		var node: int = world.wander_nodes[rng.randi_range(0, world.wander_nodes.size() - 1)]
 		_go(node, ["idle", "talk", "idle", "idle"][rng.randi_range(0, 3)], _jitter(0.45))
+
+## Tempo libero secondo carattere e legami: chi ha un amico libero lo raggiunge
+## per chiacchierare, i tenaci guardano gli allenamenti, i curiosi passano
+## dall'alchimista o dal magazzino, i socievoli restano in piazza, i solitari
+## si allontanano.
+func _personal_goal(sites: Dictionary) -> bool:
+	var roll := rng.randf()
+	if roll < 0.45:
+		var friend: HubAgent = world.idle_friend_of(hero_id)
+		if friend != null and friend.goal_node >= 0:
+			_go(friend.goal_node, "talk", friend.goal_offset + _jitter(0.35) + Vector3(0.45, 0, 0))
+			pop_emote("♪", 1.6)
+			return true
+	if (traits.has("Testardo") or traits.has("Tenace")) and roll < 0.7 and sites.has("training"):
+		_go(sites.training.door, "idle", _jitter(0.5))
+		return true
+	if (traits.has("Occhio clinico") or traits.has("Memoria lunga") or traits.has("Frugale")) and roll < 0.7:
+		var places := []
+		for id in ["alchemy", "warehouse", "workshop"]:
+			if sites.has(id): places.append(id)
+		if not places.is_empty():
+			_go(sites[places[rng.randi_range(0, places.size() - 1)]].door, "idle", _jitter(0.4))
+			return true
+	if traits.has("Socievole") and not world.plaza_nodes.is_empty():
+		_go(world.plaza_nodes[rng.randi_range(0, world.plaza_nodes.size() - 1)], "talk", _jitter(0.5))
+		return true
+	if traits.has("Solitario") and not world.ring_nodes.is_empty():
+		_go(world.ring_nodes[rng.randi_range(0, world.ring_nodes.size() - 1)], "idle", _jitter(0.6))
+		return true
+	return false
 
 func _jitter(amount: float) -> Vector3:
 	return Vector3(rng.randf_range(-amount, amount), 0, rng.randf_range(-amount, amount))

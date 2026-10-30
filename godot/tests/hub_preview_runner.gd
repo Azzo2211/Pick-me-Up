@@ -34,16 +34,18 @@ func _run() -> void:
 	state.assign_hero(state.data.heroes[1].id, "training")
 	state.assign_hero(state.data.heroes[2].id, "dormitory")
 	view.refresh(state)
-	for i in 90: await process_frame
-	await create_timer(4.0).timeout
+	var fast := args.has("--fast")
+	for i in (16 if fast else 90): await process_frame
+	await create_timer(0.5 if fast else 4.0).timeout
 	var tag := "base5" if args.has("--base5") else "base3" if args.has("--base3") else "base2" if args.has("--base2") else "base1"
 	if state.light_preset() != "dusk": tag += "_" + state.light_preset()
 	_capture("res://tests/captures/preview_%s_overview.png" % tag)
 	if args.has("--overview-only"):
+		await create_timer(1.0).timeout
 		quit(0)
 		return
 	view.focus_on("training", 0)
-	await create_timer(1.0).timeout
+	await create_timer(0.3 if fast else 1.0).timeout
 	_capture("res://tests/captures/preview_%s_training.png" % tag)
 	view.focus_on("merging", 0)
 	await create_timer(1.0).timeout

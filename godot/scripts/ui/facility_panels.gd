@@ -6,6 +6,8 @@ class_name FacilityPanels
 
 const HeroPortraitScript := preload("res://scripts/hero_portrait.gd")
 const HeroCardScript := preload("res://scripts/ui/hero_card.gd")
+const SummonEventScript := preload("res://scripts/ui/summon_event.gd")
+const TowerMapScript := preload("res://scripts/ui/tower_map.gd")
 const ROSTER_PAGE := 24
 
 var main
@@ -15,6 +17,8 @@ var gate_tab := "mission"
 var gate_floor := -1
 var last_summon: Array = []
 var roster_limit := ROSTER_PAGE
+var shop_tab := "daily"
+var _shop_screen: VBoxContainer
 var dyn_rows: Dictionary = {}
 var rendered_signature := ""
 
@@ -136,8 +140,8 @@ func activity_pill(hero: Dictionary) -> PanelContainer:
 		"resting": return UIKit.pill("A riposo", UIKit.SKY)
 		"injured": return UIKit.pill("Ferito", UIKit.ROSE)
 		"party": return UIKit.pill("In squadra", UIKit.GOLD)
-		"dead": return UIKit.pill("Caduto", Color("#8a8086"))
-	return UIKit.pill("Libero", Color("#8a8494"))
+		"dead": return UIKit.pill("Caduto", Color("#7d8696"))
+	return UIKit.pill("Libero", Color("#7d8a9e"))
 
 func stars_label(rarity: int, size: int = 15) -> Label:
 	return UIKit.label(GS.stars(rarity), size, UIKit.rarity_color(rarity), UIKit.body_bold())
@@ -248,7 +252,7 @@ func stat_tile(title: String, value: String, color: Color = UIKit.INK) -> PanelC
 	card.add_theme_stylebox_override("panel", UIKit.ornate("inset", 10.0))
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", -2)
+	box.add_theme_constant_override("separation", 0)
 	box.add_child(UIKit.label(title.to_upper(), 12, UIKit.MUTED, UIKit.head_medium()))
 	box.add_child(UIKit.label(value, 23, color, UIKit.head_font()))
 	card.add_child(box)
@@ -399,9 +403,9 @@ func _build_merging(body: VBoxContainer) -> void:
 			var empty := PanelContainer.new()
 			empty.custom_minimum_size = Vector2(112, 174)
 			var st := UIKit.ornate("inset", 0.0)
-			st.border = Color("#5b4a7a") if i == 0 else Color("#3a2e26")
+			st.border = Color("#3f6a8c") if i == 0 else Color("#22304a")
 			empty.add_theme_stylebox_override("panel", st)
-			var q := UIKit.title("?", 34, Color("#5b4a7a"))
+			var q := UIKit.title("?", 34, Color("#3f6a8c"))
 			q.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			q.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 			empty.add_child(q)
@@ -487,6 +491,10 @@ func _build_gate(body: VBoxContainer, footer: VBoxContainer) -> void:
 	if gate_floor < 1 or gate_floor > max_floor: gate_floor = int(GS.data.world.current_floor)
 	var selector := HBoxContainer.new()
 	selector.add_theme_constant_override("separation", 8)
+	if max_floor > 10:
+		var back10 := UIKit.button("«10", _shift_floor.bind(-10), "ghost", 58)
+		back10.disabled = gate_floor <= 1
+		selector.add_child(back10)
 	var prev := UIKit.button("‹", _shift_floor.bind(-1), "ghost", 52)
 	prev.add_theme_font_size_override("font_size", 28)
 	prev.disabled = gate_floor <= 1
@@ -499,7 +507,12 @@ func _build_gate(body: VBoxContainer, footer: VBoxContainer) -> void:
 	next.add_theme_font_size_override("font_size", 28)
 	next.disabled = gate_floor >= max_floor
 	selector.add_child(next)
+	if max_floor > 10:
+		var fwd10 := UIKit.button("10»", _shift_floor.bind(10), "ghost", 58)
+		fwd10.disabled = gate_floor >= max_floor
+		selector.add_child(fwd10)
 	body.add_child(selector)
+	body.add_child(UIKit.button("Mappa della Torre", open_tower_map, "ghost", 0))
 	var record := GS.get_stage(gate_floor)
 	var stage: Dictionary = record.descriptor
 	var color := Color(str(stage.get("color", "#3c7968")))
@@ -510,7 +523,7 @@ func _build_gate(body: VBoxContainer, footer: VBoxContainer) -> void:
 	var tags := HBoxContainer.new()
 	tags.add_theme_constant_override("separation", 6)
 	tags.add_child(UIKit.pill(_type_label(str(stage.type)), color.lightened(0.25)))
-	tags.add_child(UIKit.pill(str(stage.biome), Color("#8a8494")))
+	tags.add_child(UIKit.pill(str(stage.biome), Color("#7d8a9e")))
 	if bool(record.cleared): tags.add_child(UIKit.pill("Completato", UIKit.TEAL))
 	v.add_child(tags)
 	var name_label := UIKit.title(str(stage.name), 22, UIKit.INK)
@@ -579,9 +592,112 @@ func _shift_floor(delta: int) -> void:
 func _confirm_deploy(floor_index: int) -> void:
 	main.confirm("Partenza per il Piano %d" % floor_index, "In missione gli eroi combattono da soli: tu puoi dare solo ordini generali.\n\nChi cade non torna. Non esistono resurrezioni.", "Attraversa il Portale", main.deploy.bind(floor_index), "gold")
 
+# --- Mappa della Torre ---------------------------------------------------------
+
+func open_tower_map() -> void:
+	var max_floor := int(GS.data.world.max_floor)
+	if gate_floor < 1 or gate_floor > max_floor: gate_floor = int(GS.data.world.current_floor)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 22)
+	var left := VBoxContainer.new()
+	left.add_theme_constant_override("separation", 8)
+	var tower = TowerMapScript.new()
+	tower.setup(GS, gate_floor)
+	# la mappa deve stare tutta nella finestra senza scorrere
+	tower.custom_minimum_size.y = clampf(main.size.y * 0.66 - 44.0 - 70.0, 400.0, 620.0)
+	var pager := HBoxContainer.new()
+	pager.alignment = BoxContainer.ALIGNMENT_CENTER
+	pager.add_theme_constant_override("separation", 8)
+	var page_label := UIKit.label("", 15, UIKit.CYAN, UIKit.head_font())
+	page_label.custom_minimum_size.x = 140
+	page_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var info := VBoxContainer.new()
+	info.custom_minimum_size.x = 400
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info.add_theme_constant_override("separation", 8)
+	var modal_ref := []
+	var show_page := func(first: int):
+		tower.set_page(first)
+		page_label.text = "PIANI %d–%d" % [tower.first_floor, tower.first_floor + TowerMapScript.PER_PAGE - 1]
+	pager.add_child(UIKit.button("‹ Giù", func(): show_page.call(tower.first_floor - TowerMapScript.PER_PAGE), "ghost", 90))
+	pager.add_child(page_label)
+	pager.add_child(UIKit.button("Su ›", func(): show_page.call(tower.first_floor + TowerMapScript.PER_PAGE), "ghost", 90))
+	var to_frontier := func():
+		show_page.call(int((max_floor - 1) / TowerMapScript.PER_PAGE) * TowerMapScript.PER_PAGE + 1)
+		tower.selected = max_floor
+		_tower_info(info, max_floor, modal_ref)
+	pager.add_child(UIKit.button("Prossimo piano", to_frontier, "gold", 0))
+	show_page.call(tower.first_floor)
+	left.add_child(pager)
+	left.add_child(tower)
+	row.add_child(left)
+	row.add_child(info)
+	tower.floor_selected.connect(func(f: int): _tower_info(info, f, modal_ref))
+	_tower_info(info, gate_floor, modal_ref)
+	var modal: Control = await main.open_modal("Mappa della Torre", "Piano più alto raggiunto: %d di %d" % [max_floor, GS.MAX_FLOOR], row, 1000)
+	modal_ref.append(modal)
+
+## Scheda del piano scelto sulla mappa: rischio, squadra e ricompense prima di entrare.
+func _tower_info(info: VBoxContainer, floor_index: int, modal_ref: Array) -> void:
+	UIKit.clear(info)
+	var max_floor := int(GS.data.world.max_floor)
+	info.add_child(UIKit.eyebrow("PIANO %d%s" % [floor_index, " · GUARDIANO" if floor_index % 5 == 0 else ""]))
+	if floor_index > max_floor:
+		info.add_child(UIKit.title("???", 30, UIKit.MUTED))
+		info.add_child(UIKit.pill("Bloccato", Color("#5b6678")))
+		info.add_child(UIKit.para("Il Sistema non mostra questo piano finché non completi il Piano %d." % (max_floor), 16))
+		return
+	var record := GS.get_stage(floor_index)
+	var stage: Dictionary = record.descriptor
+	var color := Color(str(stage.get("color", "#3c7968")))
+	var tags := HBoxContainer.new()
+	tags.add_theme_constant_override("separation", 6)
+	tags.add_child(UIKit.pill(_type_label(str(stage.type)), color.lightened(0.25)))
+	tags.add_child(UIKit.pill(str(stage.biome), Color("#7d8a9e")))
+	if bool(record.cleared): tags.add_child(UIKit.pill("Completato", UIKit.TEAL))
+	elif floor_index == max_floor: tags.add_child(UIKit.pill("Prossimo", UIKit.GOLD))
+	info.add_child(tags)
+	var name_label := UIKit.title(str(stage.name), 26, UIKit.INK)
+	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	info.add_child(name_label)
+	info.add_child(UIKit.para(str(stage.description), 15))
+	var objective := UIKit.para("Obiettivo: " + str(stage.objective), 15, UIKit.INK)
+	objective.add_theme_font_override("font", UIKit.body_bold())
+	info.add_child(objective)
+	var threat := int(stage.get("threat_budget", 100))
+	var threat_color := UIKit.TEAL if threat < 600 else UIKit.GOLD if threat < 1800 else UIKit.ROSE
+	info.add_child(_bar_line("Minaccia", float(threat), 3800.0, threat_color, str(threat)))
+	var ready := GS.party_readiness()
+	info.add_child(UIKit.label("Potenza della squadra: %s · grado %s" % [GS.format_number(ready.score), ready.grade], 15, UIKit.INK_SOFT, UIKit.body_bold()))
+	var rewards := GS.floor_rewards(floor_index, int(record.attempts) + 1, not bool(record.cleared))
+	var tiles := HBoxContainer.new()
+	tiles.add_theme_constant_override("separation", 8)
+	tiles.add_child(stat_tile("Oro", GS.format_number(rewards.gold), UIKit.GOLD))
+	tiles.add_child(stat_tile("Esperienza", str(int(rewards.xp)), UIKit.TEAL))
+	if rewards.has("gems"): tiles.add_child(stat_tile("Gemme", str(int(rewards.gems)), UIKit.SKY))
+	if rewards.has("stones"): tiles.add_child(stat_tile("Pietre", str(int(rewards.stones)), UIKit.VIOLET))
+	info.add_child(tiles)
+	info.add_child(UIKit.label("Tentativi %d%s" % [int(record.attempts), (" · Record %ds" % roundi(float(record.best_time))) if float(record.best_time) > 0 else ""], 14, UIKit.MUTED, UIKit.body_bold()))
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 10)
+	actions.add_child(UIKit.button("Scegli questo piano", _tower_choose.bind(floor_index, modal_ref, false), "primary", 0))
+	var go := UIKit.button("Parti", _tower_choose.bind(floor_index, modal_ref, true), "gold", 140)
+	go.disabled = not ready.ready
+	actions.add_child(go)
+	info.add_child(UIKit.hsep(4))
+	info.add_child(actions)
+
+func _tower_choose(floor_index: int, modal_ref: Array, deploy: bool) -> void:
+	gate_floor = floor_index
+	if not modal_ref.is_empty(): main.close_modal(modal_ref[0])
+	if main.current_panel == "gate": main._render_panel()
+	if deploy: _confirm_deploy(floor_index)
+
 func _build_squad(body: VBoxContainer) -> void:
 	body.add_child(info_card("Due eroi in prima linea, due al centro, uno in retroguardia. Guardiani e Avanguardie davanti, Lancieri e Supporti al centro, Ranger o Maghi dietro."))
 	body.add_child(UIKit.button("Formazione consigliata", _auto_party, "primary", 0))
+	body.add_child(_formation_board())
+	body.add_child(section("Dettagli dei posti"))
 	var party := GS.get_party()
 	for i in GS.PARTY_SIZE:
 		var hero: Dictionary = party[i]
@@ -593,6 +709,84 @@ func _build_squad(body: VBoxContainer) -> void:
 			var mismatch: bool = str(GS.ROLES[hero.role].line) != line
 			var extra: Control = UIKit.label("Ruolo da %s" % _line_label(str(GS.ROLES[hero.role].line)).to_lower(), 13, UIKit.ROSE, UIKit.body_bold()) if mismatch else bars(hero)
 			body.add_child(hero_row(hero, [small_button("Cambia", _pick_slot.bind(i), "primary"), small_button("Togli", _clear_slot.bind(i), "ghost")], extra, false))
+
+## Schema visivo della formazione: tre linee di posti, riserve trascinabili sotto.
+## Trascina una carta della riserva su un posto, o tocca un posto per scegliere.
+func _formation_board() -> Control:
+	var board := PanelContainer.new()
+	board.add_theme_stylebox_override("panel", UIKit.ornate("inset", 12.0))
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 8)
+	board.add_child(v)
+	var party := GS.get_party()
+	for line_def in [["Front", [0, 1], "PRIMA LINEA"], ["Mid", [2, 3], "CENTRO"], ["Rear", [4], "RETROGUARDIA"]]:
+		var label := UIKit.eyebrow(line_def[2])
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		v.add_child(label)
+		var row := HBoxContainer.new()
+		row.alignment = BoxContainer.ALIGNMENT_CENTER
+		row.add_theme_constant_override("separation", 14)
+		for slot in line_def[1]: row.add_child(_formation_slot(slot, party[slot], str(line_def[0])))
+		v.add_child(row)
+	var reserve := GS.get_alive_heroes().filter(func(h): return not GS.data.party.has(h.id))
+	reserve.sort_custom(func(a, b): return GS.hero_power(a) > GS.hero_power(b))
+	v.add_child(UIKit.divider())
+	v.add_child(UIKit.label("RISERVA · trascina una carta su un posto", 12, UIKit.INK_SOFT, UIKit.head_medium()))
+	var flow := HFlowContainer.new()
+	flow.add_theme_constant_override("h_separation", 8)
+	flow.add_theme_constant_override("v_separation", 8)
+	for hero in reserve.slice(0, 18):
+		var card: HeroCard = HeroCardScript.new()
+		card.setup(hero, 70.0)
+		card.tooltip_text = "%s · %s · Lv.%d" % [hero.name, GS.role_label(hero.role), int(hero.level)]
+		card.set_drag_forwarding(_drag_hero.bind(str(hero.id), card), Callable(), Callable())
+		card.pressed.connect(main.open_hero)
+		flow.add_child(card)
+	if reserve.is_empty(): flow.add_child(UIKit.label("Tutti gli eroi vivi sono già in squadra.", 14, UIKit.MUTED))
+	v.add_child(flow)
+	return board
+
+func _formation_slot(slot: int, hero: Dictionary, line: String) -> Control:
+	var holder := VBoxContainer.new()
+	holder.add_theme_constant_override("separation", 2)
+	var target: Control
+	if hero.is_empty():
+		var empty := UIKit.button("+", _pick_slot.bind(slot), "ghost", 96)
+		empty.custom_minimum_size = Vector2(96, 149)
+		empty.add_theme_font_size_override("font_size", 30)
+		empty.tooltip_text = "Posto %d · scegli un eroe" % (slot + 1)
+		target = empty
+	else:
+		var card: HeroCard = HeroCardScript.new()
+		card.setup(hero, 96.0)
+		card.pressed.connect(func(_id): _pick_slot(slot))
+		card.tooltip_text = "Tocca per cambiare · %s" % hero.name
+		target = card
+	target.set_drag_forwarding(Callable(), _can_drop_hero, _drop_hero.bind(slot))
+	holder.add_child(target)
+	var note := "Posto %d" % (slot + 1)
+	var color := UIKit.MUTED
+	if not hero.is_empty():
+		var fits := str(GS.ROLES[hero.role].line) == line
+		note = GS.role_label(hero.role) if fits else "Fuori ruolo"
+		color = UIKit.INK_SOFT if fits else UIKit.ROSE
+	var l := UIKit.label(note, 12, color, UIKit.body_bold())
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	holder.add_child(l)
+	return holder
+
+func _drag_hero(_at: Vector2, hero_id: String, card: HeroCard) -> Variant:
+	var preview: HeroCard = HeroCardScript.new()
+	preview.setup(card.hero, 70.0)
+	preview.modulate.a = 0.85
+	card.set_drag_preview(preview)
+	return {"hero_id": hero_id}
+
+func _can_drop_hero(_at: Vector2, data: Variant) -> bool:
+	return data is Dictionary and data.has("hero_id")
+
+func _drop_hero(_at: Vector2, data: Variant, slot: int) -> void:
+	_assign_slot(str(data.hero_id), slot)
 
 func _pick_slot(slot: int) -> void:
 	var line: String = GS.FORMATION_LINES[slot]
@@ -675,7 +869,7 @@ func _build_crystal(body: VBoxContainer) -> void:
 
 func _pool_card(pool: String) -> PanelContainer:
 	var info: Dictionary = GS.SUMMON_POOLS[pool]
-	var color: Color = {"normal": UIKit.SKY, "high": UIKit.VIOLET, "transcendent": Color("#e65872")}[pool]
+	var color: Color = {"normal": UIKit.CYAN, "high": UIKit.MAGENTA, "transcendent": UIKit.rarity_color(6)}[pool]
 	var card := PanelContainer.new()
 	card.add_theme_stylebox_override("panel", UIKit.tinted(color, 14.0))
 	var v := VBoxContainer.new()
@@ -712,45 +906,17 @@ func _upgrade_base() -> void:
 		main.toast("Base Lv.%d" % int(result.level), ("Nuovi cantieri: " + ", ".join(result.unlocked)) if not result.unlocked.is_empty() else "Gli edifici possono crescere di un piano.", "good")
 	else: main.toast("Non ancora", str(result.message), "warn")
 
-## Evocazione: le carte arrivano coperte e si girano una alla volta.
+## Evocazione: evento a schermo intero (vedi SummonEvent).
 func _summon(pool: String, count: int) -> void:
 	var result := GS.summon(pool, count)
 	if not result.ok:
 		main.toast("Evocazione bloccata", str(result.message), "warn")
 		return
 	last_summon = result.heroes
-	var grid := GridContainer.new()
-	grid.columns = mini(5, result.heroes.size())
-	grid.add_theme_constant_override("h_separation", 12)
-	grid.add_theme_constant_override("v_separation", 12)
-	var cards: Array = []
-	var best := 1
-	for hero in result.heroes:
-		var card: HeroCard = HeroCardScript.new()
-		card.setup(hero, 150.0 if count > 1 else 230.0)
-		card.set_face_down(true)
-		card.pressed.connect(_open_from_summon)
-		grid.add_child(card)
-		cards.append(card)
-		best = maxi(best, int(hero.current_rarity))
-	var holder := CenterContainer.new()
-	holder.add_child(grid)
-	await main.open_modal("Evocazione" if best < 5 else "Risonanza leggendaria", "%d evocazioni · %s" % [count, GS.SUMMON_POOLS[pool].name], holder, 880 if count > 1 else 340, [], Callable(), "system")
-	await main.get_tree().create_timer(0.35).timeout
-	for card in cards:
-		if not is_instance_valid(card): return
-		_flip(card)
-		await main.get_tree().create_timer(0.16 if card.rarity < 4 else 0.45).timeout
-
-func _flip(card: HeroCard) -> void:
-	card.pivot_offset = card.size * 0.5
-	var tween := card.create_tween()
-	tween.tween_property(card, "scale:x", 0.0, 0.12)
-	tween.tween_callback(card.set_face_down.bind(false))
-	tween.tween_property(card, "scale:x", 1.0, 0.14)
-	if card.rarity >= 4:
-		tween.tween_property(card, "scale", Vector2(1.08, 1.08), 0.12)
-		tween.tween_property(card, "scale", Vector2.ONE, 0.18)
+	var event = SummonEventScript.new()
+	event.setup(result.heroes, str(GS.SUMMON_POOLS[pool].name))
+	event.hero_pressed.connect(_open_from_summon)
+	main.modal_layer.add_child(event)
 
 func _open_from_summon(hero_id: String) -> void:
 	main.open_hero(hero_id)
@@ -874,6 +1040,7 @@ func _build_roster(body: VBoxContainer) -> void:
 	tiles.add_child(stat_tile("Allenamento", str(counts.get("training", 0)), UIKit.TEAL))
 	tiles.add_child(stat_tile("Riposo", str(counts.get("resting", 0)), UIKit.SKY))
 	body.add_child(tiles)
+	body.add_child(UIKit.button("Apri il roster completo", main.open_roster, "primary", 0))
 	body.add_child(UIKit.para("Tocca una carta per aprire la scheda dell'eroe.", 15))
 	var grid := _card_grid(2)
 	for i in mini(alive.size(), roster_limit):
@@ -901,6 +1068,88 @@ func _build_roster(body: VBoxContainer) -> void:
 		for record in GS.data.memorial.slice(0, 30):
 			memorial.add_child(_memorial_card(record, 144.0))
 		body.add_child(memorial)
+
+# =============================================================================
+# Roster completo (schermata a griglia densa con filtri)
+# =============================================================================
+
+var roster_role := ""
+var roster_stars := 0
+var roster_state := ""
+var roster_sort := "rarity"
+var _roster_screen: VBoxContainer
+
+func chip(text: String, selected: bool, callback: Callable) -> Button:
+	var b := UIKit.button(text, callback, "primary" if selected else "ghost", 0)
+	b.custom_minimum_size.y = 34
+	b.add_theme_font_size_override("font_size", 14)
+	return b
+
+func build_roster_screen(content: VBoxContainer) -> void:
+	_roster_screen = content
+	content.add_theme_constant_override("separation", 10)
+	var alive := GS.get_alive_heroes()
+	var filters := GridContainer.new()
+	filters.columns = 2
+	filters.add_theme_constant_override("h_separation", 12)
+	filters.add_theme_constant_override("v_separation", 6)
+	var roles := [["", "Tutti"]]
+	for role in GS.ROLES: roles.append([role, GS.role_label(role)])
+	var stars := [[0, "Tutte"]]
+	for r in range(1, 8): stars.append([r, "%d★" % r])
+	var states := [["", "Tutti"], ["idle", "Liberi"], ["party", "In squadra"], ["training", "Allenamento"], ["resting", "Riposo"], ["injured", "Feriti"]]
+	var sorts := [["rarity", "Rarità"], ["level", "Livello"], ["power", "Potenza"], ["name", "Nome"]]
+	for group in [["RUOLO", roles, roster_role, "role"], ["STELLE", stars, roster_stars, "stars"], ["STATO", states, roster_state, "state"], ["ORDINA", sorts, roster_sort, "sort"]]:
+		filters.add_child(UIKit.eyebrow(group[0]))
+		var row := HFlowContainer.new()
+		row.add_theme_constant_override("h_separation", 6)
+		row.add_theme_constant_override("v_separation", 6)
+		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		for option in group[1]:
+			row.add_child(chip(option[1], option[0] == group[2], _set_roster_filter.bind(group[3], option[0])))
+		filters.add_child(row)
+	content.add_child(filters)
+	var shown := alive.filter(func(h):
+		if not roster_role.is_empty() and str(h.role) != roster_role: return false
+		if roster_stars > 0 and int(h.current_rarity) != roster_stars: return false
+		if not roster_state.is_empty() and GS.hero_activity(h) != roster_state: return false
+		return true)
+	match roster_sort:
+		"level": shown.sort_custom(func(a, b): return int(a.level) > int(b.level))
+		"power": shown.sort_custom(func(a, b): return GS.hero_power(a) > GS.hero_power(b))
+		"name": shown.sort_custom(func(a, b): return str(a.name) < str(b.name))
+		_: shown.sort_custom(func(a, b): return int(a.current_rarity) * 1000 + int(a.level) > int(b.current_rarity) * 1000 + int(b.level))
+	content.add_child(UIKit.label("%d eroi su %d" % [shown.size(), alive.size()], 14, UIKit.INK_SOFT, UIKit.body_bold()))
+	var grid := GridContainer.new()
+	grid.columns = 7
+	grid.add_theme_constant_override("h_separation", 12)
+	grid.add_theme_constant_override("v_separation", 14)
+	for hero in shown:
+		var cell := VBoxContainer.new()
+		cell.add_theme_constant_override("separation", 3)
+		var card: HeroCard = HeroCardScript.new()
+		card.setup(hero, 158.0)
+		card.pressed.connect(main.open_hero)
+		cell.add_child(card)
+		var lv := UIKit.label("%s · Lv.%d" % [GS.role_label(hero.role), int(hero.level)], 13, UIKit.INK_SOFT, UIKit.body_bold())
+		cell.add_child(lv)
+		cell.add_child(activity_pill(hero))
+		grid.add_child(cell)
+	content.add_child(grid)
+	if shown.is_empty(): content.add_child(UIKit.para("Nessun eroe con questi filtri.", 16))
+
+func _set_roster_filter(key: String, value) -> void:
+	match key:
+		"role": roster_role = value
+		"stars": roster_stars = value
+		"state": roster_state = value
+		"sort": roster_sort = value
+	refresh_roster_screen()
+
+func refresh_roster_screen() -> void:
+	if not is_instance_valid(_roster_screen): return
+	UIKit.clear(_roster_screen)
+	build_roster_screen(_roster_screen)
 
 func _memorial_card(record: Dictionary, width: float) -> HeroCard:
 	var hero := GS.hero_by_id(str(record.id))
@@ -990,6 +1239,31 @@ func build_dossier(content: VBoxContainer, hero: Dictionary, modal_ref: Array) -
 		dv.add_child(UIKit.para("Ferite: " + ", ".join(inj), 15, UIKit.ROSE))
 	derived.add_child(dv)
 	content.add_child(derived)
+	if hero.state == "ALIVE":
+		var bonds: Array = GS.hero_bonds(str(hero.id), 4)
+		if not bonds.is_empty():
+			var bond_panel := PanelContainer.new()
+			bond_panel.add_theme_stylebox_override("panel", UIKit.ornate("card", 14.0))
+			var bv := VBoxContainer.new()
+			bv.add_theme_constant_override("separation", 6)
+			bv.add_child(UIKit.label("LEGAMI", 16, UIKit.GOLD, UIKit.head_font()))
+			for row in bonds:
+				var line := HBoxContainer.new()
+				line.add_theme_constant_override("separation", 10)
+				var who := UIKit.label(str(row.name), 15, UIKit.INK, UIKit.body_bold())
+				who.custom_minimum_size.x = 190
+				line.add_child(who)
+				var value := int(row.value)
+				var tone: Color = UIKit.TEAL if value >= RiftwardState.BOND_FRIEND else UIKit.ROSE if value <= RiftwardState.BOND_RIVAL else UIKit.SKY
+				var bar := UIKit.bar(float(value + 100), 200.0, tone, 10.0)
+				bar.custom_minimum_size.x = 160
+				bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+				line.add_child(bar)
+				line.add_child(UIKit.label(str(row.label), 14, tone, UIKit.body_bold()))
+				bv.add_child(line)
+			bv.add_child(UIKit.para("I legami crescono combattendo, allenandosi e riposando insieme. In squadra un amico fidato dà forza e coraggio; perderlo pesa sul morale.", 13, UIKit.MUTED))
+			bond_panel.add_child(bv)
+			content.add_child(bond_panel)
 	var notes := PanelContainer.new()
 	notes.add_theme_stylebox_override("panel", UIKit.ornate("system", 16.0))
 	var nv := VBoxContainer.new()
@@ -1069,6 +1343,94 @@ func build_materials(content: VBoxContainer, columns: int = 3) -> void:
 	content.add_child(grid)
 	content.add_child(UIKit.para("I materiali si trovano completando i piani della Torre.", 15))
 
+# --- Negozio -------------------------------------------------------------------
+
+func build_shop(content: VBoxContainer) -> void:
+	_shop_screen = content
+	content.add_theme_constant_override("separation", 14)
+	var top := HBoxContainer.new()
+	top.add_theme_constant_override("separation", 14)
+	for key in ["gold", "gems", "stones"]:
+		var pill := HBoxContainer.new()
+		pill.add_theme_constant_override("separation", 6)
+		pill.add_child(UIKit.icon(key, 22))
+		pill.add_child(UIKit.label(GS.display_resource(key), 18, UIKit.INK, UIKit.head_font()))
+		top.add_child(pill)
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top.add_child(spacer)
+	var left := GS.shop_refresh_in()
+	top.add_child(UIKit.label("NUOVE OFFERTE TRA %dH %02dM" % [left / 3600, (left % 3600) / 60], 13, UIKit.CYAN, UIKit.head_medium()))
+	content.add_child(top)
+	content.add_child(tabs(GS.SHOP_TABS, shop_tab, _set_shop_tab))
+	var grid := GridContainer.new()
+	grid.columns = 4
+	grid.add_theme_constant_override("h_separation", 14)
+	grid.add_theme_constant_override("v_separation", 14)
+	for offer_id in GS.SHOP_OFFERS:
+		if GS.SHOP_OFFERS[offer_id].tab == shop_tab: grid.add_child(_shop_card(offer_id))
+	content.add_child(grid)
+	content.add_child(UIKit.para("Solo valute di gioco, prezzi e quantità sempre visibili. Nessun oggetto riporta in vita un eroe o protegge dalla morte permanente.", 14, UIKit.MUTED))
+
+func _shop_card(offer_id: String) -> PanelContainer:
+	var offer: Dictionary = GS.SHOP_OFFERS[offer_id]
+	var color := Color(str(offer.color))
+	var remaining := GS.shop_remaining(offer_id)
+	var card := PanelContainer.new()
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.add_theme_stylebox_override("panel", UIKit.tinted(color, 14.0))
+	if remaining <= 0: card.modulate = Color(1, 1, 1, 0.55)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 6)
+	var halo := Control.new()
+	halo.custom_minimum_size = Vector2(0, 96)
+	halo.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var paint := func():
+		var c := halo.size * 0.5
+		for i in 5: halo.draw_circle(c, 46.0 - i * 5.0, Color(color, 0.05))
+		halo.draw_circle(c, 32.0, Color(color, 0.16))
+		halo.draw_arc(c, 32.0, 0, TAU, 48, color, 2.0, true)
+	halo.draw.connect(paint)
+	var icon_center := CenterContainer.new()
+	icon_center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	icon_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon_center.add_child(UIKit.icon(str(offer.icon), 40))
+	halo.add_child(icon_center)
+	v.add_child(halo)
+	var name_label := UIKit.label(str(offer.name).to_upper(), 15, UIKit.INK, UIKit.head_font())
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(name_label)
+	var parts := []
+	for key in offer.items:
+		var label: String = {"gold": "Oro", "gems": "Gemme", "stones": "Pietre"}.get(key, GS.MATERIALS.get(key, {}).get("name", key))
+		parts.append("%s ×%s" % [label, GS.format_number(offer.items[key])])
+	var items := UIKit.label(" · ".join(parts), 14, color.lightened(0.2), UIKit.body_bold())
+	items.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	items.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	v.add_child(items)
+	var limit := UIKit.label("Oggi %d/%d" % [remaining, int(offer.limit)], 13, UIKit.MUTED, UIKit.head_medium())
+	limit.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(limit)
+	var price_key: String = offer.price.keys()[0]
+	var buy := UIKit.button(("%s %s" % [GS.format_number(offer.price[price_key]), {"gold": "Oro", "gems": "Gemme"}.get(price_key, price_key)]) if remaining > 0 else "Esaurito", _shop_buy.bind(offer_id), "gold" if price_key == "gold" else "violet", 0)
+	buy.disabled = remaining <= 0 or not GS.can_afford(offer.price)
+	if remaining > 0 and not GS.can_afford(offer.price): buy.tooltip_text = "Non hai abbastanza " + GS.cost_text(offer.price)
+	v.add_child(buy)
+	card.add_child(v)
+	return card
+
+func _set_shop_tab(tab: String) -> void:
+	shop_tab = tab
+	refresh_shop_screen()
+
+func _shop_buy(offer_id: String) -> void:
+	main.report(GS.shop_buy(offer_id), "Acquistato", str(GS.SHOP_OFFERS[offer_id].name))
+
+func refresh_shop_screen() -> void:
+	if not is_instance_valid(_shop_screen): return
+	UIKit.clear(_shop_screen)
+	build_shop(_shop_screen)
+
 func build_settings(content: VBoxContainer) -> void:
 	content.add_theme_constant_override("separation", 10)
 	content.add_child(UIKit.para("Il salvataggio è locale e si aggiorna da solo, con una copia di sicurezza. Il tempo della base scorre anche a gioco chiuso, fino a 8 ore.", 16))
@@ -1080,16 +1442,31 @@ func build_settings(content: VBoxContainer) -> void:
 		lb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		lights.add_child(lb)
 	content.add_child(lights)
+	content.add_child(section("Qualità grafica"))
+	var qualities := HBoxContainer.new()
+	qualities.add_theme_constant_override("separation", 8)
+	for option in [["high", "Alta"], ["medium", "Media"], ["low", "Bassa"]]:
+		var qb := UIKit.button(option[1], GS.set_quality.bind(option[0]), "primary" if GS.quality() == option[0] else "ghost", 0)
+		qb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		qualities.add_child(qb)
+	content.add_child(qualities)
+	content.add_child(UIKit.para("Alta: ombre morbide, occlusione e luce rimbalzata. Media o Bassa se il gioco rallenta.", 14, UIKit.MUTED))
 	var dev_on := bool(GS.data.dev.get("enabled", false))
 	content.add_child(section("Modalità sviluppo", "attiva" if dev_on else "spenta"))
-	content.add_child(UIKit.para("Risorse infinite e valori nascosti visibili, per provare il gioco velocemente. Spegnila per giocare con l'economia reale.", 15))
+	content.add_child(UIKit.para("Risorse infinite e valori nascosti visibili, per provare il gioco velocemente e vedere fin dove arriva. Spegnila per giocare con l'economia reale.", 15))
 	content.add_child(UIKit.button("Spegni la modalità sviluppo" if dev_on else "Attiva la modalità sviluppo", GS.set_dev_mode.bind(not dev_on), "ghost" if dev_on else "navy", 0))
 	if dev_on:
 		var grid := GridContainer.new()
 		grid.columns = 2
 		grid.add_theme_constant_override("h_separation", 8)
 		grid.add_theme_constant_override("v_separation", 8)
-		for entry in [["Ignora i requisiti", GS.dev_unlock_all], ["Ripristina il roster", GS.dev_restore_roster], ["Genera eroe 5★", GS.dev_spawn_hero.bind(5)], ["Avanza il tempo di 30 min", _dev_time]]:
+		for entry in [
+			["Sblocca tutti i piani (1–100)", GS.dev_unlock_all], ["Completa tutti i piani", GS.dev_clear_all_floors],
+			["Base e strutture al massimo", GS.dev_max_base], ["Eroi al livello massimo", GS.dev_max_heroes],
+			["Genera eroe 5★", GS.dev_spawn_hero.bind(5)], ["Genera eroe 6★", GS.dev_spawn_hero.bind(6)],
+			["Genera eroe 7★", GS.dev_spawn_hero.bind(7)], ["Ripristina il roster", GS.dev_restore_roster],
+			["Avanza il tempo di 30 min", _dev_time], ["Avanza il tempo di 8 ore", _dev_time.bind(480)],
+		]:
 			var b := UIKit.button(entry[0], entry[1], "navy", 0)
 			b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			grid.add_child(b)
@@ -1098,49 +1475,9 @@ func build_settings(content: VBoxContainer) -> void:
 	content.add_child(UIKit.para("Ricomincia da zero con un nuovo seme. Il salvataggio attuale verrà cancellato.", 15))
 	content.add_child(UIKit.button("Crea un nuovo mondo", _confirm_reset, "danger", 0))
 
-func _dev_time() -> void:
-	for i in 30: GS.advance_time(60.0)
+func _dev_time(minutes: int = 30) -> void:
+	for i in minutes: GS.advance_time(60.0)
 	GS.save_and_notify()
 
 func _confirm_reset() -> void:
 	main.confirm("Nuovo mondo", "Perderai eroi, base e progressi attuali. Continuare?", "Ricomincia", main.reset_world, "danger")
-
-# =============================================================================
-# Resoconto missione
-# =============================================================================
-
-func reason_text(reason: String) -> String:
-	return {"clear": "zona ripulita", "survived": "resistito fino alla fine", "intel": "punti messi in sicurezza", "boss": "guardiano abbattuto", "party_wipe": "squadra annientata", "extracted": "ritirata", "timeout": "tempo scaduto", "beacon_lost": "faro perduto", "abandoned": "missione abbandonata", "defended": "faro difeso"}.get(reason, reason)
-
-func build_mission_result(content: VBoxContainer, result: Dictionary, resolved: Dictionary) -> void:
-	content.add_theme_constant_override("separation", 12)
-	if bool(result.victory):
-		var tiles := HBoxContainer.new()
-		tiles.add_theme_constant_override("separation", 8)
-		var rewards: Dictionary = resolved.get("rewards", {})
-		tiles.add_child(stat_tile("Oro", "+" + GS.format_number(rewards.get("gold", 0)), UIKit.GOLD))
-		tiles.add_child(stat_tile("Esperienza", "+%d" % int(rewards.get("xp", 0)), UIKit.TEAL))
-		if rewards.has("gems"): tiles.add_child(stat_tile("Gemme", "+%d" % int(rewards.gems), UIKit.SKY))
-		if rewards.has("stones"): tiles.add_child(stat_tile("Pietre", "+%d" % int(rewards.stones), UIKit.VIOLET))
-		content.add_child(tiles)
-		var drops: Dictionary = resolved.get("drops", {})
-		if not drops.is_empty():
-			var parts := []
-			for key in drops: parts.append("%s +%d" % [GS.MATERIALS[key].name, int(drops[key])])
-			content.add_child(info_card("Bottino: " + " · ".join(parts), "good"))
-		for up in resolved.get("level_ups", []):
-			content.add_child(UIKit.label("▲ %s sale dal Lv.%d al Lv.%d" % [up.name, int(up.from), int(up.to)], 16, UIKit.TEAL, UIKit.body_bold()))
-	else:
-		content.add_child(info_card("Il piano resta identico: ritenta con una squadra più forte o più riposata.", "warn"))
-	var deaths: Array = resolved.get("deaths", [])
-	if not deaths.is_empty():
-		content.add_child(section("Caduti", "%d" % deaths.size()))
-		var grid := _card_grid(4)
-		for record in deaths: grid.add_child(_memorial_card(record, 150.0))
-		var holder := CenterContainer.new()
-		holder.add_child(grid)
-		content.add_child(holder)
-	var injured := []
-	for hero in GS.get_party():
-		if not hero.is_empty() and not hero.injuries.is_empty(): injured.append(hero.name)
-	if not injured.is_empty(): content.add_child(info_card("Feriti: %s. Mandali al Dormitorio prima della prossima missione." % ", ".join(injured), "warn"))
