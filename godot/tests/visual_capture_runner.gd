@@ -132,7 +132,13 @@ func _run() -> void:
 	_capture("res://tests/captures/capture_hub_level3.png")
 	# Battaglia
 	main.deploy(1)
-	await _wait(9.0)
+	# su PC lenti (o senza scheda video) l'ingresso nel portale dura di più:
+	# si aspetta che la battaglia esista davvero, poi che il varco si dissolva
+	var waited := 0.0
+	while main.battle == null and waited < 120.0:
+		await _wait(0.5)
+		waited += 0.5
+	await _wait(5.0)
 	_capture("res://tests/captures/capture_battle.png")
 	if main.battle != null:
 		main.battle.speed_scale = 2.0
