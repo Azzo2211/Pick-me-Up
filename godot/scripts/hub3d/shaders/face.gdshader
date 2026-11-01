@@ -1,10 +1,10 @@
 shader_type spatial;
 render_mode cull_back, diffuse_lambert, specular_disabled;
 
-// Volto anime disegnato sulla testa base: occhi grandi con iride a sfumatura,
-// riflessi e ciglia, sopracciglia, naso accennato e bocca. Le UV sono le
-// coordinate frontali della sfera unitaria della testa (x a destra, y in alto),
-// l'alfa del colore dei vertici vale 1 sul davanti e 0 sul retro.
+// Volto anime disegnato sulla testa base del kit: occhi grandi con iride a
+// sfumatura, riflessi e ciglia, sopracciglia, naso accennato e bocca. Le UV sono
+// coordinate frontali della testa (0 = altezza degli occhi, 1 = 10 cm), la seconda
+// UV (y) vale 1 sul davanti e 0 sui lati e dietro.
 // I tre volti del foglio (bello, comune, rude) cambiano solo questi parametri.
 #include "res://scripts/hub3d/shaders/toon.gdshaderinc"
 
@@ -36,12 +36,17 @@ uniform float scar = 0.0;
 uniform float freckles = 0.0;
 uniform float closed = 0.0;
 
+uniform vec3 skin_color : source_color = vec3(0.96, 0.83, 0.72);
+
 varying vec2 fp;
 varying float front;
 
 void vertex() {
 	fp = UV;
-	front = COLOR.a;
+	front = UV2.y;
+	// ombre morbide come negli anime: la normale si piega verso quella di una sfera
+	vec3 ball = normalize(VERTEX - vec3(0.0, 0.15, -0.02));
+	NORMAL = normalize(mix(NORMAL, ball, 0.65));
 }
 
 float cover(float d, float px) {
@@ -66,7 +71,9 @@ vec4 eye(vec2 p, float side, float px) {
 	q.y -= eye_tilt * q.x;
 	vec2 e = q / vec2(eye_w, eye_h);
 	float scale = min(eye_w, eye_h);
-	float r = length(e);
+	// palpebra superiore più dritta (occhio a mandorla), inferiore tonda
+	vec2 es = vec2(e.x, e.y > 0.0 ? e.y * (1.0 + 0.22 * (1.0 - e.x * e.x)) : e.y);
+	float r = length(es);
 	vec4 o = vec4(0.0);
 	if (closed > 0.5) {
 		float y = -0.15 - 0.25 * e.x * e.x;
@@ -95,7 +102,7 @@ vec4 eye(vec2 p, float side, float px) {
 	col = mix(col, vec3(1.0), max(h1, h2 * 0.85));
 	o = vec4(col * white, white);
 	// ciglia superiori: tratto spesso sul bordo alto, più spesso verso l'esterno
-	float th = (0.13 + 0.09 * max(e.x, 0.0)) * lash;
+	float th = (0.17 + 0.12 * max(e.x, 0.0)) * lash;
 	float upper = smoothstep(-0.25, 0.05, e.y + 0.25 * e.x);
 	float lash_d = (abs(r - 1.0 - th * 0.15) - th * 0.5) * scale;
 	float lash_a = cover(lash_d, px) * upper;
@@ -131,7 +138,7 @@ float brow(vec2 p, float side, float px) {
 }
 
 void fragment() {
-	vec3 skin = COLOR.rgb;
+	vec3 skin = skin_color;
 	vec3 col = skin;
 	float px = max(fwidth(fp.x), fwidth(fp.y)) * 0.9;
 	float f = smoothstep(0.25, 0.55, front);

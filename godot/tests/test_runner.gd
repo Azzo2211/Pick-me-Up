@@ -42,6 +42,7 @@ func _initialize() -> void:
 	_test("pacchetto personaggi: aspetto salvato e migrato", _test_character_pack)
 	_test("popolani 1★-2★: mestiere, consiglio e scelta della classe", _test_commoners)
 	_test("aspetto a pezzi: archetipo, volto, capelli, età", _test_modular_look)
+	_test("kit 3D: corpi vestiti, teste, capelli e accessori", _test_character_kit)
 	_test("pacchetto animazioni: 40 clip sullo scheletro", _test_motion_pack)
 	print("\nRisultato: %d passati, %d falliti" % [passed, failed])
 	quit(0 if failed == 0 else 1)
@@ -494,6 +495,43 @@ func _test_commoners() -> Array:
 	valid = valid and bool(legacy.commoner) and bool(legacy.class_chosen) and str(legacy.role) == role and game.COMMONER_JOBS.has(str(legacy.job))
 	game.free()
 	return [valid, "Popolani senza mestiere, consiglio sbagliato o scelta della classe non applicata"]
+
+func _test_character_kit() -> Array:
+	var kit := load("res://scripts/characters/character_kit.gd")
+	var look_script := load("res://scripts/characters/hero_look.gd")
+	var valid := true
+	var missing := []
+	for outfit in ["villager", "guard", "merchant", "scholar", "hunter"]:
+		var inst: Node = kit.body_instance(outfit)
+		if inst == null:
+			missing.append("body_" + outfit)
+			continue
+		var skels := inst.find_children("*", "Skeleton3D", true, false)
+		var meshes := inst.find_children("*", "MeshInstance3D", true, false)
+		valid = valid and skels.size() == 1 and meshes.size() == 1
+		if skels.size() == 1:
+			var sk := skels[0] as Skeleton3D
+			for joint in CharacterModel.JOINT_NAMES: valid = valid and sk.find_bone(joint) >= 0
+		if meshes.size() == 1:
+			var mi := meshes[0] as MeshInstance3D
+			for key in ["fem", "slim", "athletic", "muscular", "chubby"]: valid = valid and mi.find_blend_shape_by_name(key) >= 0
+		inst.free()
+	var pieces := ["head", "glasses", "headband", "beard_short", "beard_goatee"]
+	for arch in look_script.ARCHETYPES.values():
+		for h in arch.hair_m + arch.hair_f:
+			if not pieces.has("hair_" + str(h)): pieces.append("hair_" + str(h))
+	for piece in pieces:
+		if kit.part(piece) == null: missing.append(piece)
+	# un eroe costruito dal kit ha lo scheletro e la testa con il volto
+	var game := _fresh("kit-seed")
+	var hero: Dictionary = game.data.heroes[0]
+	var model := CharacterModel.new()
+	model.build_hero(hero, RiftwardState.appearance_for(hero))
+	valid = valid and model._skel != null and model._face_mat != null and model.head.get_child_count() >= 2
+	model.free()
+	game.free()
+	valid = valid and missing.is_empty()
+	return [valid, "pezzi mancanti: %s" % [missing] if not missing.is_empty() else "5 vestiti, %d pezzi della testa" % pieces.size()]
 
 func _test_modular_look() -> Array:
 	var game := _fresh("modular-look-seed")

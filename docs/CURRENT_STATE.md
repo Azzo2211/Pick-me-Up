@@ -27,6 +27,8 @@ godot/project.godot
 | Hero portraits: photo of the hero's 3D character, procedural drawing as fallback (headless) | `godot/scripts/hero_portrait.gd`, `godot/scripts/ui/portrait_studio.gd` |
 | Modular hero look from the user's character sheet (archetype, 3 faces, 4 hairstyles, body, age) | `godot/scripts/characters/hero_look.gd` |
 | Anime shading: two-tone toon light, outline, drawn face | `godot/scripts/hub3d/shaders/toon.gdshader(inc)`, `outline.gdshader`, `face.gdshader` |
+| Hero 3D kit modelled in Blender: clothed bodies, base head, hair, accessories (glb) | `godot/assets/characters/kit/`, loaded by `godot/scripts/characters/character_kit.gd`; shaders `kit_toon`, `kit_outline`, `hair` |
+| Kit sources (Python + Blender module, not needed to play) | `tools/character_kit/` |
 | 3D base: island, walls, streets, plaza, forest, navigation, labels | `godot/scripts/hub3d/hub_world.gd` |
 | Camera, picking, hover/click | `godot/scripts/hub3d/hub_view.gd` |
 | Buildings (level N = N storeys, batched meshes) | `godot/scripts/hub3d/building_model.gd`, `portal.gdshader` |
@@ -42,7 +44,7 @@ godot/project.godot
 Run from the repository root (Godot executable on PATH or full path):
 
 ```text
-godot --headless --path godot -s res://tests/test_runner.gd -- --test-mode          # 31 rule tests
+godot --headless --path godot -s res://tests/test_runner.gd -- --test-mode          # 32 rule tests
 godot --headless --path godot -s res://tests/ui_smoke_runner.gd -- --test-mode      # 29 UI checks incl. a full mission
 godot --headless --path godot -s res://tests/balance_probe_runner.gd -- --test-mode # balance table (optional --levels= --floors=)
 godot --path godot -s res://tests/visual_capture_runner.gd -- --test-mode           # UI screenshots → godot/tests/captures/
@@ -51,6 +53,17 @@ godot --path godot -s res://tests/battle_preview_runner.gd -- --test-mode       
 godot --path godot -s res://tests/character_probe_runner.gd -- --test-mode          # character line-up
 godot --path godot -s res://tests/look_sheet_runner.gd -- --test-mode --out DIR    # character sheet tiles: 4 archetypes front/side/back, 3 faces, 4 hairstyles
 godot --path godot -s res://tests/portrait_preview_runner.gd -- --test-mode         # cards and portraits with the 3D photos
+godot --path godot -s res://tests/card_preview_runner.gd -- --test-mode --out DIR [--only guard,scholar]  # real card photos per archetype
+godot --path godot -s res://tests/hair_sheet_runner.gd -- --test-mode --out DIR    # all 13 hairstyles, 4 views
+```
+
+Rebuilding the character kit (only after changing `tools/character_kit/*.py`):
+
+```text
+pip install bpy==5.2.3                                    # Blender as a Python module, needs Python 3.13
+python tools/character_kit/build_kit.py                   # all bodies + parts.glb into godot/assets/characters/kit/
+python tools/character_kit/build_kit.py godot/assets/characters/kit guard,parts   # only some pieces
+godot --headless --path godot --import                    # reimport the glb files
 ```
 
 `tests/captures/` contains `.gdignore`, so screenshots are not imported as game assets.
@@ -79,7 +92,8 @@ godot --path godot -s res://tests/portrait_preview_runner.gd -- --test-mode     
 - 1★ and 2★ heroes are commoners summoned at random with a job (`COMMONER_JOBS` in `game_state.gd`: farmer, smith, merchant, archivist, town guard…). Their stats come from the job. They recommend a class that suits their stats and job (`class_advice`, with a second choice and an in-character line) but the player chooses it in the dossier (`choose_class`): the class brings its skill and starter weapons. Until then they fight with their job tool as the recommended class. The starter squad and older saves count as having chosen. From 3★ the Nexus gives a class.
 - Hero looks follow the user's character sheet (Guard, Merchant, Scholar, Villager): `hero.look` = archetype, face (3 per archetype; the rarer the hero, the likelier the handsome face), hairstyle (4 per archetype and sex, 13 meshes), body (slim, average, athletic, muscular, chubby) and age (greying hair, wrinkles). Commoners take the archetype of their job, others of their class (Ranger dresses as a hunter). Clothes change when a commoner picks a class; face and hair stay. Colours come from the character generator, with the category chosen by job or class.
 - Cards show a photo of the same 3D character (`portrait_studio.gd`): a bust shot in its own viewport with a transparent background, cached in memory and in `user://portraits3d`, retaken only when the look, class or rarity changes. Without a display (headless tests) the old drawn portrait is used.
-- Characters use a two-tone toon shader with a pixel-width outline (inverted hull); the face is drawn by a shader on the base head (anime eyes with gradient iris and highlights, brows, mouth, blush, stubble, age lines). The Compatibility renderer lights in sRGB space, so the toon shaders use vertex colours as they are.
+- Heroes are built from a 3D kit modelled in Blender after the user's character sheet (`tools/character_kit`, exported to `godot/assets/characters/kit/`): one clothed body per outfit (villager, guard, merchant, scholar, hunter) skinned to the same 13 joints as `character_model.gd`, with body types and the female body as blend shapes; a base head with blend shapes for the three faces, the female face and full cheeks; 13 hair meshes; glasses, headband and two beards. Meshes carry no colours: the second UV says which palette slot each face is (skin, cloth, leather, metal, trim...) and `character_kit.gd` fills the palette per hero (outfit colours from the sheet, small per-hero variations, brass trim for commoners and gold from 4★, class colour only once the class is chosen). Animations keep moving the joint pivots; `_sync_skeleton` copies them onto the Skeleton3D each frame.
+- Characters use a two-tone toon shader with a pixel-width outline (inverted hull); the face is drawn by a shader on the kit head (anime eyes with gradient iris and highlights, lashes, brows, mouth, blush, stubble, age lines). Metal gets a painted vertical highlight instead of a light reflection. The Compatibility renderer lights in sRGB space, so the palette colours are used as they are.
 - Hero looks come from the character generator (saved as `appearance` and `category` on each hero; older saves get one on load): hair, eye and skin colour, beard, scars, freckles, glasses, eye size, height and build. Red eyes are 1 in 100,000. Look never affects role, stars or stats.
 - Humans in the base and in battle play the motion clips for idle, walk, talk, cheer, death, bow shots and spells, with short blends between them. Sitting, resting, training and sword/spear swings stay procedural. If the GLB is missing or not imported yet, every pose falls back to procedural.
 - Mission end: one silent "Eroe perduto" card per fallen hero, then a Stage Clear screen with a 3-star grade (victory, nobody fell, nobody under 30% HP), rewards, survivors and the floor unlocked, or a failure summary.

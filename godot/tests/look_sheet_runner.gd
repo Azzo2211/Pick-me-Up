@@ -72,7 +72,11 @@ func _run() -> void:
 	cam = Camera3D.new()
 	world.add_child(cam)
 	cam.current = true
+	var only := []
+	var oa := args.find("--only")
+	if oa >= 0 and oa + 1 < args.size(): only = args[oa + 1].split(",")
 	for archetype in ["guard", "merchant", "scholar", "villager"]:
+		if not only.is_empty() and not archetype in only: continue
 		var arch: Dictionary = LookScript.ARCHETYPES[archetype]
 		# corpo intero: davanti, lato, dietro
 		var body := _model(_hero(archetype, 1, str(arch.hair_m[0]), false, "body"))
