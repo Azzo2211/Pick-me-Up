@@ -231,7 +231,12 @@ func _photo_quad(dest: Rect2, src: Rect2, top_alpha: float = 1.0, bottom_alpha: 
 func _draw_photo() -> void:
 	var w := size.x
 	var h := size.y
-	if framing == "bust":
+	if framing == "window":
+		# nelle carte: tutta la finestra, il volto intero senza dissolvenze
+		_photo_quad(Rect2(0, 0, w, h), _photo_region(w / h))
+		_vignette(Rect2(0, 0, w, h), 0.1, 0.22)
+		draw_polygon(PackedVector2Array([Vector2(0, h * 0.8), Vector2(w, h * 0.8), Vector2(w, h), Vector2(0, h)]), PackedColorArray([Color(VIGNETTE, 0.0), Color(VIGNETTE, 0.0), Color(VIGNETTE, 0.45), Color(VIGNETTE, 0.45)]))
+	elif framing == "bust":
 		# nelle carte: volto in alto a tutta larghezza, che sfuma verso nome e stelle
 		var dest_h := minf(h, w / 0.84)
 		var src := _photo_region(w / dest_h)

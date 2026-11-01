@@ -83,12 +83,27 @@ func _process(delta: float) -> void:
 		_tilt = Vector2.ZERO
 		set_process(false)
 
+## Vero se l'eroe ha un ritratto dipinto.
+func has_photo() -> bool:
+	return portrait != null and portrait.photo != null
+
+## Finestra del ritratto dipinto: un riquadro dentro la cornice, con stelle e
+## nome sotto, come nella guida visiva. La foto non tocca mai gli angoli tagliati.
+func _window_rect() -> Rect2:
+	return Rect2(Vector2(size.x * 0.085, size.y * 0.075), Vector2(size.x * 0.83, size.y * 0.66))
+
 func _layout() -> void:
 	var w := size.x
 	var h := size.y
 	var inset := w * 0.075
-	art.position = Vector2(inset * 0.62, inset * 0.62)
-	art.size = Vector2(w - inset * 1.24, h * 0.84 - inset)
+	if has_photo():
+		var win := _window_rect()
+		art.position = win.position
+		art.size = win.size
+		portrait.framing = "window"
+	else:
+		art.position = Vector2(inset * 0.62, inset * 0.62)
+		art.size = Vector2(w - inset * 1.24, h * 0.84 - inset)
 	portrait.position = Vector2.ZERO
 	portrait.size = art.size
 	portrait.custom_minimum_size = Vector2.ZERO
@@ -191,8 +206,10 @@ func _draw_overlay() -> void:
 	var inner := rect.grow(-w * 0.045)
 	var o := overlay
 	# sfumatura scura in basso dietro stelle e nome
-	var fade := PackedVector2Array([Vector2(inner.position.x, h * 0.6), Vector2(inner.end.x, h * 0.6), Vector2(inner.end.x, inner.end.y), Vector2(inner.position.x, inner.end.y)])
+	var fade_top := _window_rect().end.y if has_photo() else h * 0.6
+	var fade := PackedVector2Array([Vector2(inner.position.x, fade_top), Vector2(inner.end.x, fade_top), Vector2(inner.end.x, inner.end.y), Vector2(inner.position.x, inner.end.y)])
 	o.draw_polygon(fade, PackedColorArray([Color(BG, 0), Color(BG, 0), Color(BG, 0.96), Color(BG, 0.96)]))
+	if has_photo(): _draw_window_frame(o, color)
 	if _animated(): _draw_particles(o, inner)
 	if not dead and (_lift > 0.0 or _animated()): _draw_sheen(o, inner, cut)
 	o.draw_polyline(OrnateStyle.closed(OrnateStyle.octagon(inner, cut * 0.8)), Color(color.r, color.g, color.b, 0.45 if not dead else 0.2), 1.0, true)
@@ -247,11 +264,28 @@ func _draw_overlay() -> void:
 			o.draw_string(font, Vector2(w * 0.5 - lw * 0.5, y0 + i * big * 1.1), line, HORIZONTAL_ALIGNMENT_LEFT, -1, big, Color(1.0, 0.45, 0.5, 0.9))
 
 ## Riflesso di luce che scorre sulla carta seguendo il mouse: dà profondità al ritratto.
+## Cornice della finestra del ritratto: linea del colore di rarità e staffe agli angoli.
+func _draw_window_frame(o: Control, color: Color) -> void:
+	var win := _window_rect()
+	var line := Color(color.r, color.g, color.b, 0.85 if not dead else 0.35)
+	o.draw_rect(win.grow(1.0), Color("#05080d"), false, 2.0)
+	o.draw_rect(win.grow(2.5), line, false, 1.2)
+	if dead: return
+	var l := win.size.x * 0.14
+	var c := color.lightened(0.3)
+	for corner in [[win.position, Vector2(1, 1)], [Vector2(win.end.x, win.position.y), Vector2(-1, 1)], [win.end, Vector2(-1, -1)], [Vector2(win.position.x, win.end.y), Vector2(1, -1)]]:
+		var p: Vector2 = corner[0] - corner[1] * 2.5
+		var d: Vector2 = corner[1]
+		o.draw_polyline(PackedVector2Array([p + Vector2(d.x * l, 0), p, p + Vector2(0, d.y * l)]), c, 2.2, true)
+
 func _draw_sheen(o: Control, inner: Rect2, cut: float) -> void:
 	var strength := maxf(_lift, 0.35 if _animated() else 0.0)
 	if strength <= 0.01: return
 	var art_rect := Rect2(inner.position, Vector2(inner.size.x, inner.size.y * 0.8))
 	var clip := OrnateStyle.octagon(art_rect, cut * 0.8)
+	if has_photo():
+		art_rect = _window_rect()
+		clip = PackedVector2Array([art_rect.position, Vector2(art_rect.end.x, art_rect.position.y), art_rect.end, Vector2(art_rect.position.x, art_rect.end.y)])
 	var cx := art_rect.position.x + art_rect.size.x * (0.5 + _tilt.x * 0.55)
 	var skew := art_rect.size.y * 0.45
 	var bands := [[art_rect.size.x * 0.34, 0.07], [art_rect.size.x * 0.12, 0.10]]
