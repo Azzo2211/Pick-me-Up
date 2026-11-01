@@ -7,6 +7,11 @@ class_name CharacterModel
 
 const METER := 0.5
 const Motion := preload("res://scripts/hub3d/motion_library.gd")
+const ToonShader := preload("res://scripts/hub3d/shaders/toon.gdshader")
+const OutlineShader := preload("res://scripts/hub3d/shaders/outline.gdshader")
+const FaceShader := preload("res://scripts/hub3d/shaders/face.gdshader")
+const CharacterGeneratorScript := preload("res://scripts/characters/character_generator.gd")
+const HeroLookScript := preload("res://scripts/characters/hero_look.gd")
 ## Animazione base → clip del pacchetto di animazioni. Quello che manca qui resta
 ## procedurale: "sit" e "rest" (pose tarate su panche e letti), "train" e i colpi di
 ## spada e lancia, che nei clip si leggono meno bene da lontano.
@@ -55,6 +60,10 @@ var _action := ""
 var _pose: Dictionary = {}
 var _fade_from: Dictionary = {}
 var _fade_t := 1.0
+## Spessore del contorno anime in pixel (i ritratti delle carte lo alzano).
+var outline_px := 1.3
+var _face_mat: ShaderMaterial
+static var _toon_cache: Dictionary = {}
 
 # =============================================================================
 # Costruzione: eroi
@@ -63,38 +72,21 @@ var _fade_t := 1.0
 func build_hero(hero: Dictionary, appearance: Dictionary) -> void:
 	var role := str(hero.get("role", "Guardian"))
 	var rarity := int(hero.get("current_rarity", 1))
-	var fem := bool(appearance.get("fem", false))
-	var look := {
-		"skin": appearance.get("skin", Color("#c99d7c")), "hair": appearance.get("hair", Color("#3a2a20")),
-		"eyes": appearance.get("eyes", Color("#3b5a7a")), "style": int(appearance.get("hair_style", 0)), "fem": fem,
-		"beard": int(appearance.get("beard", 0)) if not fem else 0, "outfit": _muted(appearance.get("outfit", Color("#4b5a7a")), 0.25),
-		"accent": _muted(appearance.get("accent", Color("#b08a4a")), 0.15), "rarity": rarity, "role": role,
-		# dettagli che vengono dal ritratto dipinto
-		"bald": bool(appearance.get("bald", false)), "elf": bool(appearance.get("elf", false)), "glasses": bool(appearance.get("glasses", false)),
-		"covered": bool(appearance.get("covered", false)), "beast": str(appearance.get("beast", "")), "long": bool(appearance.get("long_hair", false)),
-	}
-	var height := clampf(float(appearance.get("height", 1.0)), 0.9, 1.1)
-	var build := clampf(float(appearance.get("build", 1.0)), 0.9, 1.1)
-	_build_rig({"scale": (0.95 if fem else 1.0) * height, "shoulder": (0.18 if fem else 0.205) * build, "hip": (0.095 if fem else 0.1) * build})
-	_dress_hero(look)
-	_finish()
+	var outfit := str(appearance.get("outfit_kind", HeroLookScript.CLASS_OUTFIT.get(role, "villager")))
+	_build_anime(appearance, role, rarity, outfit, str(appearance.get("prop", "")))
 
-## Abitante della base (non combattente).
+## Abitante della base (non combattente): un popolano con il suo mestiere, senza attrezzo.
 func build_villager(seed_value: int) -> void:
 	var r := RandomNumberGenerator.new()
 	r.seed = seed_value
-	var fem := r.randf() < 0.5
-	var skins := [Color("#e3bf9f"), Color("#c99d7c"), Color("#a8775a"), Color("#7c5440"), Color("#f0d0b4")]
-	var hairs := [Color("#2b1f18"), Color("#4a3322"), Color("#7a5634"), Color("#a08060"), Color("#8c8c8c"), Color("#1c1c22")]
-	var cloths := [Color("#6b4f3a"), Color("#4f5b45"), Color("#5b4a5f"), Color("#7a6a4f"), Color("#4a5566"), Color("#8a5a3c")]
-	var look := {
-		"skin": skins[r.randi() % skins.size()], "hair": hairs[r.randi() % hairs.size()], "eyes": Color("#3a3028"),
-		"style": r.randi_range(0, 4), "fem": fem, "beard": 0 if fem else r.randi_range(0, 2),
-		"outfit": cloths[r.randi() % cloths.size()], "accent": Color("#c9b48a"), "rarity": 1, "role": "Villager",
-	}
-	_build_rig({"scale": 0.94 if fem else 0.98, "shoulder": 0.18 if fem else 0.2, "hip": 0.1})
-	_dress_hero(look)
-	_finish()
+	var jobs := ["Contadino", "Fabbro", "Carpentiere", "Cuoco", "Minatore", "Mercante", "Bottegaio", "Locandiere", "Erborista", "Archivista"]
+	var job: String = jobs[r.randi() % jobs.size()]
+	var names: Array = RiftwardState.FIRST_NAMES
+	var fake := {"id": "V-%d" % seed_value, "name": "%s Villa" % names[r.randi() % names.size()], "commoner": true, "class_chosen": false,
+		"job": job, "native_rarity": 1, "role": "Villager", "hue": r.randi_range(0, 359)}
+	fake["appearance"] = CharacterGeneratorScript.generate(str(fake.id) + ":appearance", str(RiftwardState.COMMONER_JOBS[job].category))
+	var look := RiftwardState.appearance_for(fake)
+	_build_anime(look, "Villager", 1, str(look.outfit_kind), "")
 
 # =============================================================================
 # Costruzione: nemici
@@ -163,12 +155,41 @@ func _build_rig(p: Dictionary) -> void:
 func _b(part: String) -> MeshBuilder:
 	if _parts.has(part): return _parts[part]
 	var b := MeshBuilder.new()
-	b.material("cloth", WorldMaterials.lit(Color.WHITE, 0.9))
-	b.material("metal", WorldMaterials.metal(Color.WHITE, 0.38, 0.8))
-	b.material("dull", WorldMaterials.metal(Color.WHITE, 0.6, 0.45))
+	b.material("cloth", toon_material("cloth", outline_px))
+	b.material("metal", toon_material("metal", outline_px))
+	b.material("dull", toon_material("dull", outline_px))
+	b.material("fine", toon_material("fine", 0.0))
 	b.material("rock", WorldMaterials.terrain())
 	_parts[part] = b
 	return b
+
+## Materiali anime condivisi: due toni di ombra e contorno scuro.
+static func toon_material(kind: String, px: float) -> ShaderMaterial:
+	var key := "%s|%.2f" % [kind, px]
+	if _toon_cache.has(key): return _toon_cache[key]
+	var m := ShaderMaterial.new()
+	m.shader = ToonShader
+	match kind:
+		"metal":
+			m.set_shader_parameter("toon_spec", 0.55)
+			m.set_shader_parameter("toon_shade", 0.3)
+			m.set_shader_parameter("toon_rim", 0.28)
+		"dull", "fine":
+			m.set_shader_parameter("toon_spec", 0.45)
+			m.set_shader_parameter("toon_rim", 0.22)
+	# "fine": dettagli sottili (occhiali) senza contorno, che li ingrosserebbe
+	if px > 0.0: m.next_pass = outline_material(px)
+	_toon_cache[key] = m
+	return m
+
+static func outline_material(px: float) -> ShaderMaterial:
+	var key := "outline|%.2f" % px
+	if _toon_cache.has(key): return _toon_cache[key]
+	var m := ShaderMaterial.new()
+	m.shader = OutlineShader
+	m.set_shader_parameter("width_px", px)
+	_toon_cache[key] = m
+	return m
 
 func _glow(part: String, color: Color, energy: float = 2.2) -> String:
 	var key := "glow_" + color.to_html()
@@ -249,8 +270,13 @@ func _body(look: Dictionary, colors: Dictionary) -> void:
 		var fb := _b("fore_" + side)
 		fb.cylinder(fore_key, 0.046 * limb, 0.038 * limb, 0.25, Vector3(0, -0.125, 0), fore, 8)
 		var handb := _b("hand_" + side)
-		handb.box("cloth", Vector3(0.062 * limb, 0.085 * limb, 0.034 * limb), Vector3(0, -0.035, 0.005), hand)
-	_head(look)
+		if look.get("anime", false):
+			handb.sphere("cloth", 0.042 * limb, Vector3(0, -0.04, 0.004), hand, Vector3(0.78, 1.15, 0.55), 10, 6)
+			handb.sphere("cloth", 0.016 * limb, Vector3(0, -0.018, 0.026), hand, Vector3(1.0, 1.6, 0.9), 6, 4, false, Vector3(0.5, 0, 0))
+		else:
+			handb.box("cloth", Vector3(0.062 * limb, 0.085 * limb, 0.034 * limb), Vector3(0, -0.035, 0.005), hand)
+	if look.get("anime", false): _anime_head(look)
+	else: _head(look)
 
 func _head(look: Dictionary) -> void:
 	var hs := float(get_meta("head", 1.0))
@@ -517,6 +543,617 @@ func _cloth_panel(b: MeshBuilder, top_w: float, bottom_w: float, height: float, 
 	# il trapezio sta nel piano XZ: lo ruoto in verticale (Z locale = alto)
 	b.push(Transform3D(Basis(Vector3.RIGHT, tilt) * Basis(Vector3(1, 0, 0), Vector3(0, 0, -1), Vector3(0, 1, 0)), top_center))
 	b.extrude("cloth", shape, -0.012, 0.012, color, true, true)
+	b.pop()
+
+# =============================================================================
+# Eroi a pezzi (foglio dei personaggi): corpo, testa base, volto, capelli, vestiti
+# =============================================================================
+
+## Corporature del foglio: spalle, fianchi, arti e busto.
+const BODY_SHAPES := {
+	"slim": {"shoulder": 0.19, "hip": 0.095, "limb": 0.92, "torso": Vector3(0.92, 1.0, 0.92)},
+	"average": {"shoulder": 0.2, "hip": 0.1, "limb": 1.0, "torso": Vector3(1.0, 1.0, 1.0)},
+	"athletic": {"shoulder": 0.212, "hip": 0.1, "limb": 1.05, "torso": Vector3(1.06, 1.0, 1.0)},
+	"muscular": {"shoulder": 0.228, "hip": 0.105, "limb": 1.16, "torso": Vector3(1.15, 1.02, 1.08)},
+	"chubby": {"shoulder": 0.212, "hip": 0.112, "limb": 1.1, "torso": Vector3(1.16, 1.0, 1.28)},
+}
+const HEAD_C := Vector3(0, 0.135, 0.005)
+const HEAD_R := 0.112
+## Testa un po' più grande del vero, come negli anime: si legge anche da lontano.
+const HEAD_SCALE := 1.1
+
+func _build_anime(look_in: Dictionary, role: String, rarity: int, outfit: String, prop: String) -> void:
+	var look := look_in.duplicate()
+	look["anime"] = true
+	look["role"] = role
+	look["rarity"] = rarity
+	var fem: bool = look.get("fem", false)
+	var shape: Dictionary = BODY_SHAPES.get(str(look.get("body", "average")), BODY_SHAPES.average)
+	var height := clampf(float(look.get("height", 1.0)), 0.93, 1.07)
+	if int(look.get("age", 28)) < 18: height *= 0.97
+	var torso: Vector3 = shape.torso
+	if fem: torso = Vector3(torso.x * 0.92, torso.y, torso.z)
+	_build_rig({"scale": (0.95 if fem else 1.0) * height, "shoulder": float(shape.shoulder) * (0.87 if fem else 1.0),
+		"hip": float(shape.hip) * (1.08 if fem else 1.0), "limb": float(shape.limb) * (0.9 if fem else 1.0), "torso": torso})
+	match outfit:
+		"guard": _outfit_guard(look)
+		"merchant": _outfit_merchant(look)
+		"scholar": _outfit_scholar(look)
+		"hunter": _outfit_hunter(look)
+		_: _outfit_villager(look)
+	if str(look.get("body", "")) == "chubby":
+		var t: Vector3 = get_meta("torso", Vector3.ONE)
+		_b("spine").sphere("cloth", 0.15, Vector3(0, 0.1, 0.035 * t.z), look.get("_shirt", look.outfit), Vector3(1.15 * t.x, 0.95, 0.85 * t.z), 12, 8)
+	if role == "Villager":
+		attack_style = "melee"
+	elif not prop.is_empty():
+		_prop(prop, look)
+	else:
+		_class_weapon(role, look)
+	_finish()
+
+# --- Testa base e volto ------------------------------------------------------------
+
+## Punto della testa base a partire dalla direzione sulla sfera unitaria (z avanti):
+## cranio tondo, mascella che si stringe verso un mento piccolo, viso un po' piatto.
+static func _head_point(u: Vector3) -> Vector3:
+	var p := Vector3(u.x * 0.93, u.y, u.z * 0.97)
+	if u.y < 0.12:
+		var t := clampf((0.12 - u.y) / 1.12, 0.0, 1.0)
+		p.x *= 1.0 - 0.42 * pow(t, 1.2)
+		p.y = u.y * (1.0 + 0.2 * t)
+		p.z *= (1.0 - 0.06 * t) if u.z > 0.0 else (1.0 - 0.38 * t)
+	if u.z > 0.0: p.z *= 1.0 - 0.08 * u.z
+	return HEAD_C + p * HEAD_R
+
+static func _unit_dir(theta: float, phi: float) -> Vector3:
+	return Vector3(cos(phi) * sin(theta), sin(phi), cos(phi) * cos(theta))
+
+func _anime_head(look: Dictionary) -> void:
+	var b := _b("head")
+	var skin: Color = look.skin
+	_face_mat = _make_face_material(look)
+	b.material("face", _face_mat)
+	b.push(Transform3D(Basis.from_scale(Vector3.ONE * HEAD_SCALE), Vector3(0, -0.012, 0)))
+	_head_shell(b, "face", skin)
+	# orecchie
+	for sx in [-1.0, 1.0]:
+		var ear := _head_point(Vector3(sx, -0.1, -0.06).normalized())
+		b.sphere("cloth", 0.026, ear + Vector3(sx * 0.004, 0, 0), skin.darkened(0.03), Vector3(0.42, 1.0, 0.72), 8, 6, false, Vector3(0, 0, -sx * 0.12))
+	_anime_hair(b, look)
+	if int(look.get("beard", 0)) >= 2: _beard_shell(b, (look.hair as Color).darkened(0.06))
+	if look.get("glasses", false):
+		var frame := Color("#2b2421")
+		for sx in [-1.0, 1.0]:
+			var e := _head_point(Vector3(sx * 0.36, -0.1, 0.93).normalized()) + Vector3(0, 0, 0.012)
+			b.torus("fine", 0.019, 0.0022, e, frame, Vector3(PI * 0.5, 0, 0), 16, 4)
+		b.box("fine", Vector3(0.03, 0.003, 0.003), _head_point(Vector3(0, -0.06, 1.0)) + Vector3(0, 0, 0.012), frame)
+	if look.get("headband", false):
+		b.torus("cloth", HEAD_R * 0.99, 0.011, HEAD_C + Vector3(0, HEAD_R * 0.42, -0.004), look.get("_band", Color("#b8473a")), Vector3(0.22, 0, 0), 24, 6)
+	b.pop()
+
+## Barba corta: un guscio sottile che segue mascella e mento, dalle basette in giù,
+## lasciando libera la bocca.
+func _beard_shell(b: MeshBuilder, col: Color) -> void:
+	var cols := 18
+	var rows := 6
+	var grid := []
+	for i in cols + 1:
+		var x := lerpf(-0.97, 0.97, float(i) / cols)
+		var top := lerpf(-0.74, -0.08, smoothstep(0.22, 0.88, absf(x)))
+		var bottom := -sqrt(maxf(0.0, 1.0 - x * x)) * 0.995
+		var column := []
+		for j in rows + 1:
+			var y := lerpf(top, bottom, float(j) / rows)
+			var z := sqrt(maxf(0.0, 1.0 - x * x - y * y))
+			var u := Vector3(x, y, z).normalized()
+			column.append(HEAD_C + (_head_point(u) - HEAD_C) * 1.03)
+		grid.append(column)
+	for i in cols:
+		for j in rows:
+			var a: Vector3 = grid[i][j]
+			var bb: Vector3 = grid[i + 1][j]
+			var c: Vector3 = grid[i + 1][j + 1]
+			var d: Vector3 = grid[i][j + 1]
+			b.tri("cloth", a, bb, c, (a - HEAD_C).normalized(), (bb - HEAD_C).normalized(), (c - HEAD_C).normalized(), Vector2.ZERO, Vector2.ZERO, Vector2.ZERO, col)
+			b.tri("cloth", a, c, d, (a - HEAD_C).normalized(), (c - HEAD_C).normalized(), (d - HEAD_C).normalized(), Vector2.ZERO, Vector2.ZERO, Vector2.ZERO, col)
+
+## Sfera deformata della testa base. UV = coordinate frontali (per disegnare il volto),
+## alfa del colore = quanto il punto sta sul davanti.
+func _head_shell(b: MeshBuilder, key: String, skin: Color) -> void:
+	var lon := 36
+	var lat := 22
+	var P := []
+	var U := []
+	for j in lat + 1:
+		var phi := lerpf(-PI * 0.5 + 0.015, PI * 0.5 - 0.015, float(j) / lat)
+		var row_p := []
+		var row_u := []
+		for i in lon + 1:
+			var u := _unit_dir(TAU * float(i) / lon - PI, phi)
+			row_p.append(_head_point(u))
+			row_u.append(u)
+		P.append(row_p)
+		U.append(row_u)
+	var N := []
+	for j in lat + 1:
+		var row_n := []
+		for i in lon + 1:
+			var ia := (i - 1 + lon) % lon
+			var ib := (i + 1) % lon
+			var ja := maxi(j - 1, 0)
+			var jb := mini(j + 1, lat)
+			var n: Vector3 = (P[jb][i] - P[ja][i]).cross(P[j][ib] - P[j][ia])
+			var p: Vector3 = P[j][i]
+			if n.length_squared() < 1e-12: n = p - HEAD_C
+			n = n.normalized()
+			if n.dot(p - HEAD_C) < 0.0: n = -n
+			row_n.append(n)
+		N.append(row_n)
+	for j in lat:
+		for i in lon:
+			var q := [[j, i], [j, i + 1], [j + 1, i + 1], [j + 1, i]]
+			var pp := []
+			var nn := []
+			var uu := []
+			var cc := []
+			for k in q:
+				var u: Vector3 = U[k[0]][k[1]]
+				pp.append(P[k[0]][k[1]])
+				nn.append(N[k[0]][k[1]])
+				uu.append(Vector2(u.x, u.y))
+				cc.append(Color(skin.r, skin.g, skin.b, clampf(u.z, 0.0, 1.0)))
+			b.tri(key, pp[0], pp[1], pp[2], nn[0], nn[1], nn[2], uu[0], uu[1], uu[2], cc[0], cc[1], cc[2])
+			b.tri(key, pp[0], pp[2], pp[3], nn[0], nn[2], nn[3], uu[0], uu[2], uu[3], cc[0], cc[2], cc[3])
+
+## I tre volti del foglio come parametri del disegno del volto.
+func _make_face_material(look: Dictionary) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = FaceShader
+	var fem: bool = look.get("fem", false)
+	var face := int(look.get("face", 1))
+	var archetype := str(look.get("archetype", "villager"))
+	var age := int(look.get("age", 28))
+	var hair: Color = look.get("hair", Color("#3a2a20"))
+	var size := float(look.get("eye_size", 1.0)) * (1.05 if age < 20 else 1.0)
+	var p := {
+		"eye_w": 0.15, "eye_h": 0.15, "lash": 1.0, "lash_flick": 0.0, "crease": 0.35, "brow_thick": 0.02,
+		"brow_gap": 0.085, "brow_tilt": 0.0, "brow_arch": 0.03, "mouth_w": 0.085, "mouth_curve": 0.008, "blush": 0.0, "lips": 0.0,
+	}
+	match face:
+		0:
+			p.merge({"eye_w": 0.158, "eye_h": 0.185, "lash": 1.15, "crease": 0.3, "brow_thick": 0.016, "brow_arch": 0.035, "mouth_w": 0.07, "mouth_curve": 0.014, "blush": 0.25}, true)
+		2:
+			p.merge({"eye_w": 0.145, "eye_h": 0.105, "lash": 0.95, "crease": 0.6, "brow_thick": 0.03, "brow_gap": 0.06, "brow_tilt": 0.7, "brow_arch": 0.012, "mouth_w": 0.1, "mouth_curve": -0.004}, true)
+	# sfumature per archetipo, come nel foglio
+	if archetype == "merchant" and face == 1: p.mouth_curve = 0.03
+	if archetype == "villager" and face == 0: p.mouth_curve = 0.032
+	if archetype == "scholar" and face == 1:
+		p.eye_h = 0.125
+		p.crease = 0.55
+	if fem:
+		p.lash = float(p.lash) * 1.25
+		p.lash_flick = 1.0 if face == 0 else 0.6
+		p.brow_thick = float(p.brow_thick) * 0.75
+		p.brow_tilt = float(p.brow_tilt) * 0.4
+		p.blush = float(p.blush) + 0.45
+		p.lips = 0.6
+		p.mouth_w = float(p.mouth_w) * 0.88
+	p.eye_w = float(p.eye_w) * size
+	p.eye_h = float(p.eye_h) * size
+	for key in p: m.set_shader_parameter(key, p[key])
+	# sul viso l'ombra è più morbida: occhi e bocca restano leggibili
+	m.set_shader_parameter("toon_shade", 0.56)
+	m.set_shader_parameter("iris_color", look.get("eyes", Color("#3b5a7a")))
+	m.set_shader_parameter("brow_color", hair.darkened(0.3).lerp(Color("#2a1d16"), 0.25))
+	m.set_shader_parameter("age_lines", clampf((age - 38) / 18.0, 0.0, 1.0) + (0.25 if face == 2 else 0.0))
+	m.set_shader_parameter("stubble", 0.9 if int(look.get("beard", 0)) >= 1 else 0.0)
+	m.set_shader_parameter("stubble_color", hair.darkened(0.2))
+	m.set_shader_parameter("scar", 1.0 if look.get("scar", false) else 0.0)
+	m.set_shader_parameter("freckles", 1.0 if look.get("freckles", false) else 0.0)
+	m.next_pass = outline_material(outline_px)
+	return m
+
+## Occhi chiusi (caduti).
+func set_eyes_closed(value: bool) -> void:
+	if _face_mat != null: _face_mat.set_shader_parameter("closed", 1.0 if value else 0.0)
+
+# --- Capelli: calotta più ciocche, 13 tagli -------------------------------------
+
+## Calotta: copre cranio e nuca, lascia libera la fronte sotto l'attaccatura.
+## Per ogni meridiano parte dall'attaccatura (bordo liscio) e sale fino in cima.
+func _scalp(b: MeshBuilder, col: Color, front_y: float = 0.4, side_y: float = -0.12, back_y: float = -0.62, k: float = 1.05) -> void:
+	var lon := 36
+	var rows := 8
+	var grid := []
+	for i in lon + 1:
+		var th := TAU * float(i) / lon - PI
+		var dz := cos(th)
+		var line := lerpf(side_y, front_y, pow(dz, 0.8)) if dz > 0.0 else lerpf(side_y, back_y, pow(-dz, 0.8))
+		var phi0 := asin(clampf(line, -0.98, 0.98))
+		var column := []
+		for j in rows + 1:
+			var phi := lerpf(phi0, PI * 0.5 - 0.01, pow(float(j) / rows, 0.85))
+			var p := HEAD_C + (_head_point(_unit_dir(th, phi)) - HEAD_C) * k
+			column.append(p)
+		grid.append(column)
+	var c0 := col.darkened(0.08)
+	for i in lon:
+		for j in rows:
+			var a: Vector3 = grid[i][j]
+			var bb: Vector3 = grid[i + 1][j]
+			var c: Vector3 = grid[i + 1][j + 1]
+			var d: Vector3 = grid[i][j + 1]
+			b.tri("cloth", a, bb, c, (a - HEAD_C).normalized(), (bb - HEAD_C).normalized(), (c - HEAD_C).normalized(), Vector2.ZERO, Vector2.ZERO, Vector2.ZERO, c0)
+			b.tri("cloth", a, c, d, (a - HEAD_C).normalized(), (c - HEAD_C).normalized(), (d - HEAD_C).normalized(), Vector2.ZERO, Vector2.ZERO, Vector2.ZERO, c0)
+
+## Ciocca: nastro affusolato lungo una curva di Bézier (radice → punta).
+func _lock(b: MeshBuilder, p0: Vector3, p1: Vector3, p2: Vector3, w0: float, w1: float, th: float, col: Color, col_tip: Color, steps: int = 7, sides: int = 6) -> void:
+	var rings := []
+	var norms := []
+	var cols := []
+	for s_i in steps + 1:
+		var t := float(s_i) / steps
+		var c := p0 * (1.0 - t) * (1.0 - t) + p1 * 2.0 * (1.0 - t) * t + p2 * t * t
+		var tan := ((p1 - p0) * 2.0 * (1.0 - t) + (p2 - p1) * 2.0 * t).normalized()
+		var out := (c - HEAD_C).normalized()
+		var side := tan.cross(out)
+		if side.length_squared() < 1e-6: side = tan.cross(Vector3.FORWARD)
+		side = side.normalized()
+		var nrm := side.cross(tan).normalized()
+		var w := lerpf(w0, w1, pow(t, 1.3))
+		var h := th * (w / maxf(w0, 0.0001)) + 0.0015
+		var ring := []
+		var rn := []
+		for k in sides:
+			var a := TAU * float(k) / sides
+			ring.append(c + side * cos(a) * w + nrm * sin(a) * h)
+			rn.append((side * cos(a) / maxf(w, 0.0005) + nrm * sin(a) / maxf(h, 0.0005)).normalized())
+		rings.append(ring)
+		norms.append(rn)
+		cols.append(col.lerp(col_tip, t))
+	for s_i in steps:
+		for k in sides:
+			var k2 := (k + 1) % sides
+			var a: Vector3 = rings[s_i][k]
+			var bb: Vector3 = rings[s_i][k2]
+			var c: Vector3 = rings[s_i + 1][k2]
+			var d: Vector3 = rings[s_i + 1][k]
+			b.tri("cloth", a, bb, c, norms[s_i][k], norms[s_i][k2], norms[s_i + 1][k2], Vector2.ZERO, Vector2.ZERO, Vector2.ZERO, cols[s_i], cols[s_i], cols[s_i + 1])
+			b.tri("cloth", a, c, d, norms[s_i][k], norms[s_i + 1][k2], norms[s_i + 1][k], Vector2.ZERO, Vector2.ZERO, Vector2.ZERO, cols[s_i], cols[s_i + 1], cols[s_i + 1])
+
+## Ciocca dalla calotta: radice e punta come direzioni sulla testa (theta 0 = davanti,
+## phi = altezza), `drop` la allunga verso il basso oltre la testa, `k` la scosta.
+func _hair_lock(b: MeshBuilder, col: Color, t0: float, f0: float, t1: float, f1: float, drop: float, w: float, k: float = 1.12, bulge: float = 1.16, wave: float = 0.0, tip: float = 0.12) -> void:
+	var root := HEAD_C + (_head_point(_unit_dir(t0, f0)) - HEAD_C) * 1.03
+	var end := HEAD_C + (_head_point(_unit_dir(t1, f1)) - HEAD_C) * k + Vector3(0, -drop, 0)
+	if drop > 0.0:
+		# le ciocche lunghe ricadono dietro le spalle, non dentro il busto
+		var back := _unit_dir(t1, 0.0)
+		end += Vector3(back.x * 0.012, 0, minf(back.z, 0.0) * 0.03 - 0.01)
+	var mid_dir := _unit_dir(lerp_angle(t0, t1, 0.5), lerpf(f0, f1, 0.5))
+	var mid := HEAD_C + (_head_point(mid_dir) - HEAD_C) * bulge + Vector3(0, -drop * 0.35, 0)
+	if wave != 0.0: mid += _unit_dir(lerp_angle(t0, t1, 0.5) + PI * 0.5, 0.0) * wave
+	_lock(b, root, mid, end, w, w * tip, w * 0.32, col, col.darkened(0.16))
+
+## Frangia: ciocche larghe che scendono sulla fronte e si sovrappongono.
+func _fringe(b: MeshBuilder, col: Color, count: int, spread: float, f1: float, swept: float = 0.0, w: float = 0.058, jag: float = 0.06, k: float = 1.1) -> void:
+	for i in count:
+		var x := lerpf(-spread, spread, float(i) / maxf(1.0, count - 1.0))
+		var fall := f1 + absf(x) * 0.35 - jag * float(i % 2)
+		_hair_lock(b, col, x * 0.7, 1.05, x + swept, fall, 0.0, w, k, 1.2, 0.0, 0.3)
+
+## Corona di ciocche attorno alla testa (lascia libera la faccia).
+func _crown(b: MeshBuilder, col: Color, count: int, f1: float, drop: float, w: float, k: float, wave: float = 0.0, face_gap: float = 0.8, back_extra: float = 0.0, r: RandomNumberGenerator = null) -> void:
+	for i in count:
+		var t := -PI + TAU * (i + 0.5) / count
+		if absf(t) < face_gap: continue
+		var back := smoothstep(1.6, 2.6, absf(t))
+		var jitter := r.randf_range(-0.12, 0.12) if r != null else 0.0
+		_hair_lock(b, col, t, 0.95, t + signf(t) * 0.1 + jitter, f1 - back * back_extra, drop * (0.6 + 0.4 * back), w, k, 1.2, wave * (1.0 if i % 2 == 0 else -1.0), 0.22)
+
+func _anime_hair(b: MeshBuilder, look: Dictionary) -> void:
+	var hair: Color = look.hair
+	var kind := str(look.get("hair_kind", "short"))
+	var r := RandomNumberGenerator.new()
+	r.seed = int(look.get("seed", 1))
+	var top := hair.lightened(0.05)
+	match kind:
+		"crop":
+			_scalp(b, hair, 0.5, -0.02, -0.45, 1.035)
+			_fringe(b, top, 5, 0.5, 0.62, 0.0, 0.05, 0.03, 1.06)
+		"short":
+			_scalp(b, hair, 0.46, -0.08, -0.55)
+			for i in 12:
+				var t := -PI + TAU * (i + 0.5) / 12.0
+				if absf(t) < 0.5: continue
+				_hair_lock(b, top, t, 1.1, t + r.randf_range(-0.2, 0.2), 0.3, 0.0, 0.06, 1.2, 1.18, 0.0, 0.25)
+			_fringe(b, top, 6, 0.55, 0.38, 0.12, 0.055, 0.08)
+		"messy":
+			_scalp(b, hair, 0.44, -0.12, -0.6)
+			for i in 16:
+				var t := -PI + TAU * (i + r.randf()) / 16.0
+				if absf(t) < 0.5: continue
+				_hair_lock(b, top, t, r.randf_range(0.9, 1.2), t + r.randf_range(-0.5, 0.5), r.randf_range(-0.1, 0.35), 0.0, r.randf_range(0.05, 0.065), r.randf_range(1.22, 1.36), 1.2, 0.0, 0.2)
+			_fringe(b, top, 7, 0.65, 0.3, r.randf_range(-0.15, 0.15), 0.055, 0.12, 1.14)
+		"slicked":
+			_scalp(b, hair, 0.56, -0.08, -0.6, 1.05)
+			for i in 9:
+				var t := -0.8 + i * 0.2
+				_hair_lock(b, top, t, 0.62, PI - t * 0.4, 0.2, 0.0, 0.06, 1.08, 1.13, 0.0, 0.3)
+			for i in 5: _hair_lock(b, hair, PI - 0.8 + i * 0.4, 0.1, PI - 0.8 + i * 0.4, -0.55, 0.0, 0.05, 1.07, 1.09, 0.0, 0.3)
+			_hair_lock(b, top, 0.25, 0.7, 0.35, 0.35, 0.0, 0.035, 1.1, 1.18, 0.0, 0.2)
+		"wavy", "medium", "layered", "bob":
+			var length: float = {"wavy": -0.4, "medium": -0.5, "layered": -0.6, "bob": -0.66}[kind]
+			var wave := 0.014 if kind == "wavy" else 0.0
+			_scalp(b, hair, 0.44, -0.12, -0.62)
+			_crown(b, hair, 18, length, 0.0, 0.065, 1.12 if kind != "bob" else 1.06, wave, 0.72, 0.08)
+			if kind == "layered": _crown(b, top, 12, -0.05, 0.0, 0.065, 1.2, 0.0, 0.75)
+			if kind == "bob": _fringe(b, top, 8, 0.7, 0.2, 0.0, 0.06, 0.0)
+			else: _fringe(b, top, 7, 0.62, 0.3, 0.2, 0.058, 0.08)
+		"long_straight", "long_wavy":
+			var wave := 0.018 if kind == "long_wavy" else 0.0
+			_scalp(b, hair, 0.44, -0.12, -0.62)
+			_crown(b, hair, 20, -0.9, 0.16, 0.07, 1.08, wave, 0.78, 0.0)
+			_fringe(b, top, 7, 0.62, 0.22 if kind == "long_straight" else 0.3, 0.0 if kind == "long_straight" else 0.15, 0.058, 0.03 if kind == "long_straight" else 0.08)
+		"tied_back", "braid", "bun":
+			_scalp(b, hair, 0.46, -0.1, -0.6, 1.05)
+			for i in 9:
+				var t := -0.9 + i * 0.225
+				_hair_lock(b, top, t, 0.6, PI - t * 0.2, 0.15 if kind != "bun" else 0.5, 0.0, 0.055, 1.05, 1.12, 0.0, 0.3)
+			for sx in [-1.0, 1.0]: _hair_lock(b, top, sx * 0.62, 0.8, sx * 0.8, -0.3, 0.0, 0.04, 1.08, 1.16, 0.0, 0.2)
+			if kind == "tied_back":
+				var tie := HEAD_C + (_head_point(_unit_dir(PI, 0.1)) - HEAD_C) * 1.08
+				b.torus("cloth", 0.018, 0.008, tie, Color("#4a2a1e"), Vector3(PI * 0.5, 0, 0), 10, 4)
+				for i in 3:
+					var off := Vector3((i - 1) * 0.014, 0, 0)
+					_lock(b, tie + off, tie + off + Vector3(0, -0.06, -0.05), tie + off + Vector3((i - 1) * 0.022, -0.22, -0.035), 0.03, 0.006, 0.012, hair, hair.darkened(0.18))
+			elif kind == "braid":
+				var p := HEAD_C + (_head_point(_unit_dir(PI, -0.1)) - HEAD_C) * 1.06
+				for i in 8:
+					var q := p + Vector3(0.008 * (1 if i % 2 == 0 else -1), -0.034 * i, -0.012 - 0.004 * i)
+					b.sphere("cloth", 0.024 - i * 0.0012, q, hair.darkened(0.04 * (i % 2)), Vector3(1.1, 0.85, 0.9), 8, 5)
+				b.torus("cloth", 0.012, 0.006, p + Vector3(0, -0.28, -0.045), Color("#4a2a1e"), Vector3(PI * 0.5, 0, 0), 10, 4)
+				_lock(b, p + Vector3(0, -0.29, -0.045), p + Vector3(0, -0.32, -0.05), p + Vector3(0, -0.36, -0.045), 0.016, 0.004, 0.01, hair, hair.darkened(0.2))
+			else:
+				var bun := HEAD_C + (_head_point(_unit_dir(PI, 0.55)) - HEAD_C) * 1.2
+				b.sphere("cloth", 0.046, bun, hair, Vector3(1.0, 0.9, 0.95), 12, 8)
+				b.torus("cloth", 0.03, 0.009, bun + Vector3(0, -0.01, 0.025), hair.darkened(0.12), Vector3(1.0, 0, 0), 12, 5)
+
+# --- Vestiti dei 4 archetipi (più il cacciatore per il Ranger) --------------------
+
+func _outfit_guard(look: Dictionary) -> void:
+	var role := str(look.role)
+	var rarity := int(look.get("rarity", 1))
+	var steel := Color("#8e97a4")
+	var dark := Color("#585f6b")
+	var red := Color("#9b2a2f").lerp(look.outfit, 0.15)
+	if rarity >= 4: red = red.lerp(_muted(UIKit.rarity_color(rarity), 0.25), 0.45)
+	var under := Color("#5a2a2c")
+	var leather := Color("#5b3e28")
+	var light := role == "Lancer" or (rarity <= 2 and role != "Guardian")
+	_body(look, {"shirt": steel, "shirt_key": "metal", "sleeve": under, "fore": steel, "fore_key": "metal", "hand": Color("#4b4f57"),
+		"thigh": under, "shin": steel, "shin_key": "metal", "boots": Color("#3a2c22"), "pelvis": under, "belt": leather})
+	var tb := _b("spine")
+	_breastplate(tb, steel, "metal")
+	tb.torus("metal", 0.07, 0.022, Vector3(0, 0.44, 0), dark, Vector3.ZERO, 14, 6)
+	tb.box("dull", Vector3(0.012, 0.22, 0.02), Vector3(0, 0.28, 0.128), dark)
+	# spallacci a lamelle
+	for side in ["l", "r"]:
+		var ab := _b("arm_" + side)
+		var big := 1.0 if role == "Guardian" else 0.85 if not light else 0.7
+		ab.sphere("metal", 0.1 * big, Vector3(0, 0.005, 0), steel, Vector3(1.2, 0.85, 1.15), 14, 8, true)
+		ab.sphere("metal", 0.088 * big, Vector3(0, -0.05, 0), dark.lightened(0.2), Vector3(1.22, 0.7, 1.15), 14, 8, true)
+		_b("fore_" + side).cylinder("metal", 0.05, 0.046, 0.12, Vector3(0, -0.16, 0), steel, 12)
+	# falda a piastre sopra la tunica
+	var hb := _b("hips")
+	var t: Vector3 = get_meta("torso", Vector3.ONE)
+	hb.push(Transform3D(Basis.from_scale(Vector3(t.x, 1, 0.78 * t.z)), Vector3.ZERO))
+	hb.cylinder("cloth", 0.17, 0.21, 0.26, Vector3(0, -0.13, 0), under, 16, Vector3.ZERO, false)
+	for i in 2: hb.cylinder("metal", 0.172 + i * 0.012, 0.184 + i * 0.012, 0.07, Vector3(0, 0.02 - i * 0.065, 0), steel.darkened(0.06 * i), 16, Vector3.ZERO, false)
+	hb.pop()
+	hb.box("cloth", Vector3(0.13, 0.36, 0.014), Vector3(0, -0.2, 0.15 * t.z), red)
+	hb.box("dull", Vector3(0.05, 0.04, 0.02), Vector3(0, 0.08, 0.12 * t.z), Color("#c9a85c"))
+	for side in ["l", "r"]: _b("shin_" + side).sphere("metal", 0.05, Vector3(0, -0.01, 0.03), steel, Vector3(1.1, 0.9, 0.9), 10, 6)
+	# mantello rosso dalle spalle, come nel foglio
+	_cloth_panel(tb, 0.38, 0.6 if not light else 0.5, 1.05 if not light else 0.8, Vector3(0, 0.45, -0.14 * t.z), red, 0.1)
+	tb.box("dull", Vector3(0.44, 0.04, 0.05), Vector3(0, 0.43, -0.12 * t.z), Color("#c9a85c"))
+	look["_shirt"] = steel
+
+func _outfit_merchant(look: Dictionary) -> void:
+	var shirt := Color("#d9cdb3")
+	var vest: Color = _muted(look.outfit, 0.1)
+	var pants := Color("#86684a")
+	var boots := Color("#3b2a1e")
+	var leather := Color("#6a4529")
+	_body(look, {"shirt": shirt, "sleeve": shirt, "fore": shirt, "hand": look.skin, "pants": pants, "thigh": pants, "shin": pants, "boots": boots, "belt": leather, "pelvis": pants})
+	var tb := _b("spine")
+	var t: Vector3 = get_meta("torso", Vector3.ONE)
+	# gilet aperto sul davanti, con bottoni
+	tb.push(Transform3D(Basis.from_scale(Vector3(t.x, t.y, 0.68 * t.z)), Vector3.ZERO))
+	tb.cylinder("cloth", 0.198, 0.162, 0.4, Vector3(0, 0.2, 0), vest, 16, Vector3.ZERO, false)
+	tb.pop()
+	tb.box("cloth", Vector3(0.06, 0.4, 0.012), Vector3(0, 0.2, 0.128 * t.z), shirt)
+	for i in 4: tb.sphere("dull", 0.008, Vector3(0.04, 0.08 + i * 0.08, 0.13 * t.z), Color("#c9a85c"), Vector3.ONE, 6, 4)
+	tb.torus("cloth", 0.06, 0.018, Vector3(0, 0.44, 0.01), look.accent, Vector3(0.2, 0, 0), 12, 6)
+	tb.box("cloth", Vector3(0.05, 0.09, 0.02), Vector3(0.02, 0.36, 0.11 * t.z), look.accent, Vector3(0, 0, 0.2))
+	# polsini e pantaloni larghi infilati negli stivali
+	for side in ["l", "r"]:
+		_b("fore_" + side).torus("cloth", 0.044, 0.012, Vector3(0, -0.22, 0), shirt.darkened(0.06), Vector3.ZERO, 10, 5)
+		var lb := _b("leg_" + side)
+		lb.cylinder("cloth", 0.085, 0.078, 0.36, Vector3(0, -0.22, 0), pants, 12)
+		var sb := _b("shin_" + side)
+		sb.sphere("cloth", 0.068, Vector3(0, -0.14, 0), pants, Vector3(1.0, 1.4, 1.0), 10, 6)
+		sb.cylinder("cloth", 0.064, 0.058, 0.22, Vector3(0, -0.31, 0), boots, 12)
+	# cintura con borselli
+	var hb := _b("hips")
+	for sx in [-1.0, 1.0]:
+		hb.box("cloth", Vector3(0.07, 0.08, 0.05), Vector3(sx * 0.13 * t.x, 0.02, 0.07 * t.z), leather, Vector3(0, sx * 0.5, 0))
+		hb.box("cloth", Vector3(0.072, 0.025, 0.052), Vector3(sx * 0.13 * t.x, 0.06, 0.07 * t.z), leather.darkened(0.15), Vector3(0, sx * 0.5, 0))
+	hb.sphere("cloth", 0.035, Vector3(-0.05, -0.02, 0.125 * t.z), Color("#7c5a36"), Vector3(1, 1.2, 0.8), 8, 5)
+	look["_shirt"] = vest
+
+func _outfit_scholar(look: Dictionary) -> void:
+	var role := str(look.role)
+	var robe := Color("#d3cab6")
+	if role == "Mage" or str(look.get("category", "")) in ["Mage", "Alchemist", "Scholar"]: robe = _muted(look.outfit, 0.15).lightened(0.05)
+	var stole := Color("#c9a85c") if role != "Mage" else Color("#3c4f86").lerp(look.accent, 0.3)
+	if robe.get_luminance() < 0.45: stole = Color("#d8c27a")
+	_body(look, {"shirt": robe, "sleeve": robe, "fore": robe.darkened(0.04), "pants": robe.darkened(0.2), "boots": Color("#3a2c22"), "belt": stole.darkened(0.3), "pelvis": robe})
+	var t: Vector3 = get_meta("torso", Vector3.ONE)
+	var hb := _b("hips")
+	hb.push(Transform3D(Basis.from_scale(Vector3(t.x, 1, 0.85 * t.z)), Vector3.ZERO))
+	hb.cylinder("cloth", 0.17, 0.3, 0.86, Vector3(0, -0.45, 0), robe.darkened(0.05), 18, Vector3.ZERO, false)
+	hb.cylinder("cloth", 0.172, 0.172, 0.06, Vector3(0, 0.07, 0), stole.darkened(0.25), 16)
+	hb.pop()
+	# stola: due bande dalle spalle fino in fondo alla veste
+	var tb := _b("spine")
+	for sx in [-1.0, 1.0]:
+		tb.box("cloth", Vector3(0.055, 0.5, 0.012), Vector3(sx * 0.065 * t.x, 0.2, 0.124 * t.z), stole, Vector3(0, 0, sx * 0.1))
+		hb.box("cloth", Vector3(0.055, 0.62, 0.012), Vector3(sx * 0.065 * t.x, -0.36, 0.2 * t.z), stole, Vector3(-0.17, 0, 0))
+	tb.torus("cloth", 0.075, 0.026, Vector3(0, 0.43, -0.01), stole, Vector3(-0.15, 0, 0), 14, 6)
+	# cappuccio abbassato sulla schiena
+	tb.sphere("cloth", 0.09, Vector3(0, 0.4, -0.13 * t.z), robe.darkened(0.08), Vector3(1.4, 0.8, 0.6), 10, 6)
+	# maniche larghe
+	for side in ["l", "r"]: _b("fore_" + side).cylinder("cloth", 0.058, 0.094, 0.22, Vector3(0, -0.14, 0), robe, 14)
+	look["_shirt"] = robe
+
+func _outfit_villager(look: Dictionary) -> void:
+	var r := RandomNumberGenerator.new()
+	r.seed = int(look.get("seed", 1)) + 11
+	var shirts := [Color("#d8ccb2"), Color("#cbc1a9"), Color("#b4bfc4"), Color("#d2bf9f")]
+	var shirt: Color = shirts[r.randi() % shirts.size()]
+	var pants: Color = [Color("#6b4f37"), Color("#4f4a3c"), Color("#5a4636")][r.randi() % 3]
+	var apron: Color = Color("#7a5534") if r.randf() < 0.5 else _muted(look.outfit, 0.2)
+	var boots := Color("#3b2a1e")
+	_body(look, {"shirt": shirt, "sleeve": shirt, "fore": look.skin, "hand": look.skin, "pants": pants, "boots": boots, "belt": Color("#4a3322"), "pelvis": pants})
+	var t: Vector3 = get_meta("torso", Vector3.ONE)
+	# maniche arrotolate al gomito
+	for side in ["l", "r"]: _b("fore_" + side).torus("cloth", 0.05, 0.016, Vector3(0, -0.01, 0), shirt.darkened(0.05), Vector3.ZERO, 12, 6)
+	# bretelle davanti e dietro
+	var tb := _b("spine")
+	for sx in [-1.0, 1.0]:
+		tb.box("cloth", Vector3(0.026, 0.42, 0.012), Vector3(sx * 0.075 * t.x, 0.2, 0.123 * t.z), Color("#4a3322"), Vector3(0, 0, -sx * 0.06))
+		tb.box("cloth", Vector3(0.026, 0.42, 0.012), Vector3(sx * 0.06 * t.x, 0.2, -0.123 * t.z), Color("#4a3322"), Vector3(0, 0, sx * 0.12))
+	tb.cylinder("cloth", 0.062, 0.066, 0.05, Vector3(0, 0.43, 0), shirt.darkened(0.08), 12)
+	# grembiule dalla cintura alle ginocchia
+	var hb := _b("hips")
+	_cloth_panel(hb, 0.26, 0.32, 0.5, Vector3(0, 0.09, 0.128 * t.z), apron, -0.08)
+	tb.box("cloth", Vector3(0.2, 0.16, 0.012), Vector3(0, 0.06, 0.125 * t.z), apron)
+	look["headband"] = r.randf() < 0.4 and str(look.get("hair_kind", "")) in ["messy", "crop", "wavy", "short"]
+	look["_band"] = [Color("#b8473a"), Color("#3e5f8a"), Color("#d8cfb8")][r.randi() % 3]
+	look["_shirt"] = shirt
+
+func _outfit_hunter(look: Dictionary) -> void:
+	var tunic: Color = _muted(look.outfit, 0.15)
+	var leather := Color("#5d4029")
+	var dark_leather := Color("#3c2a1c")
+	var pants := Color("#4a4434")
+	_body(look, {"shirt": tunic, "sleeve": tunic.darkened(0.08), "fore": leather, "hand": dark_leather, "pants": pants, "boots": Color("#33261b"), "belt": dark_leather, "pelvis": tunic.darkened(0.1)})
+	var t: Vector3 = get_meta("torso", Vector3.ONE)
+	var tb := _b("spine")
+	_breastplate(tb, leather, "cloth")
+	# mantellina con cappuccio abbassato
+	_cloth_panel(tb, 0.36, 0.46, 0.62, Vector3(0, 0.45, -0.135 * t.z), tunic.darkened(0.15), 0.12)
+	tb.sphere("cloth", 0.095, Vector3(0, 0.41, -0.12 * t.z), tunic.darkened(0.2), Vector3(1.45, 0.8, 0.65), 10, 6)
+	# faretra e cinghia
+	tb.rod("cloth", Vector3(0.1, 0.0, -0.16 * t.z), Vector3(-0.06, 0.48, -0.17 * t.z), 0.045, 0.05, leather, 10)
+	for i in 4: tb.rod("cloth", Vector3(-0.05 + i * 0.012, 0.44, -0.17 * t.z), Vector3(-0.08 + i * 0.015, 0.56, -0.18 * t.z), 0.008, 0.012, Color("#d8d0c0"), 4)
+	tb.box("cloth", Vector3(0.03, 0.62, 0.012), Vector3(0.0, 0.22, 0.13 * t.z), dark_leather, Vector3(0, 0, 0.62))
+	var hb := _b("hips")
+	hb.push(Transform3D(Basis.from_scale(Vector3(t.x, 1, 0.8 * t.z)), Vector3.ZERO))
+	hb.cylinder("cloth", 0.168, 0.2, 0.22, Vector3(0, -0.12, 0), tunic, 16, Vector3.ZERO, false)
+	hb.pop()
+	look["_shirt"] = leather
+
+# --- Armi di classe e attrezzi dei mestieri ------------------------------------
+
+func _class_weapon(role: String, look: Dictionary) -> void:
+	var steel := Color("#b4bac4")
+	var gold := Color("#c9a85c")
+	match role:
+		"Guardian":
+			_sword(_b("hand_r"), 0.78, 0.045, steel, gold)
+			_shield(_b("fore_l"), Color("#8f2a2f").lerp(look.outfit, 0.2), gold, steel)
+			attack_style = "melee"
+		"Vanguard":
+			_sword(_b("hand_r"), 1.15, 0.065, steel, gold)
+			attack_style = "heavy"
+		"Lancer":
+			_spear(_b("hand_r"), steel, gold)
+			attack_style = "thrust"
+		"Ranger":
+			_bow(_b("hand_l"), Color("#5a3d26"))
+			upright_l = true
+			attack_style = "bow"
+		"Mage":
+			_staff(_b("hand_r"), Color("#3b2a1e"), (look.accent as Color).lightened(0.25))
+			upright_r = true
+			attack_style = "cast"
+		"Support":
+			_healer_staff(_b("hand_r"), Color("#d9cfb8"), Color("#7ef0b2"))
+			upright_r = true
+			attack_style = "cast"
+		_:
+			attack_style = "melee"
+
+## Attrezzo del mestiere, in mano ai popolani che non hanno ancora una classe.
+func _prop(prop: String, look: Dictionary) -> void:
+	var wood := Color("#7a5634")
+	var iron := Color("#8d939b")
+	var b := _b("hand_r")
+	match prop:
+		"bow":
+			_bow(_b("hand_l"), Color("#6a4a2c"))
+			upright_l = true
+			attack_style = "bow"
+			return
+		"staff":
+			b.push(Transform3D(Basis(Vector3.RIGHT, 0.12), Vector3(0, -0.04, 0.02)))
+			b.rod("cloth", Vector3(0, -0.9, 0), Vector3(0, 0.75, 0), 0.02, 0.026, wood, 7)
+			b.sphere("cloth", 0.035, Vector3(0, 0.78, 0), wood.darkened(0.2), Vector3.ONE, 8, 5)
+			b.pop()
+			upright_r = true
+			attack_style = "cast"
+			return
+		"book", "map", "pouch":
+			var col := Color("#6b2f2a") if prop == "book" else Color("#e0d3b0") if prop == "map" else Color("#7c5a36")
+			if prop == "book": b.box("cloth", Vector3(0.12, 0.16, 0.035), Vector3(0, -0.09, 0.03), col)
+			elif prop == "map": b.cylinder("cloth", 0.022, 0.022, 0.2, Vector3(0, -0.07, 0.03), col, 8, Vector3(0, 0, PI * 0.5))
+			else: b.sphere("cloth", 0.05, Vector3(0, -0.1, 0.03), col, Vector3(1, 1.2, 0.9), 8, 5)
+			attack_style = "cast"
+			return
+	b.push(Transform3D(Basis(Vector3.RIGHT, 1.75), Vector3(0, -0.04, 0.01)))
+	match prop:
+		"pitchfork":
+			b.rod("cloth", Vector3(0, -0.6, 0), Vector3(0, 0.9, 0), 0.016, 0.016, wood, 6)
+			b.box("dull", Vector3(0.14, 0.02, 0.02), Vector3(0, 0.9, 0), iron)
+			for i in 3: b.cone("dull", 0.01, 0.2, Vector3(-0.06 + i * 0.06, 1.0, 0), iron, 5)
+			attack_style = "thrust"
+		"hammer":
+			b.rod("cloth", Vector3(0, -0.08, 0), Vector3(0, 0.42, 0), 0.016, 0.018, wood, 6)
+			b.box("dull", Vector3(0.16, 0.08, 0.08), Vector3(0, 0.45, 0), iron.darkened(0.2))
+			attack_style = "heavy"
+		"axe":
+			b.rod("cloth", Vector3(0, -0.08, 0), Vector3(0, 0.55, 0), 0.016, 0.018, wood, 6)
+			b.extrude("metal", PackedVector2Array([Vector2(0.0, 0.5), Vector2(0.14, 0.44), Vector2(0.16, 0.6), Vector2(0.0, 0.58)]), -0.008, 0.008, iron, true, true)
+			attack_style = "heavy"
+		"pickaxe":
+			b.rod("cloth", Vector3(0, -0.08, 0), Vector3(0, 0.55, 0), 0.016, 0.018, wood, 6)
+			b.rod("dull", Vector3(-0.2, 0.5, 0), Vector3(0.2, 0.5, 0), 0.012, 0.024, iron, 6)
+			attack_style = "heavy"
+		"club":
+			b.rod("cloth", Vector3(0, -0.08, 0), Vector3(0, 0.55, 0), 0.02, 0.045, wood.darkened(0.15), 8)
+			attack_style = "melee"
+		"ladle":
+			b.rod("dull", Vector3(0, -0.06, 0), Vector3(0, 0.38, 0), 0.008, 0.008, iron, 5)
+			b.sphere("dull", 0.05, Vector3(0, 0.42, 0.02), iron, Vector3(1, 0.5, 1), 10, 6, true, Vector3(PI, 0, 0))
+			attack_style = "melee"
+		_:
+			# coltello, falcetto
+			b.cylinder("cloth", 0.014, 0.015, 0.11, Vector3(0, 0.0, 0), wood, 6)
+			b.box("metal", Vector3(0.03, 0.2 if prop == "knife" else 0.14, 0.008), Vector3(0, 0.15, 0), iron, Vector3(0, 0, 0.0 if prop == "knife" else 0.5))
+			attack_style = "melee"
 	b.pop()
 
 # =============================================================================

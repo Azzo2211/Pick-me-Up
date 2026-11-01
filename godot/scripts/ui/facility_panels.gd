@@ -8,6 +8,7 @@ const HeroPortraitScript := preload("res://scripts/hero_portrait.gd")
 const HeroCardScript := preload("res://scripts/ui/hero_card.gd")
 const SummonEventScript := preload("res://scripts/ui/summon_event.gd")
 const TowerMapScript := preload("res://scripts/ui/tower_map.gd")
+const HeroLookScript := preload("res://scripts/characters/hero_look.gd")
 const ROSTER_PAGE := 24
 ## Categorie e colori del generatore personaggi (solo aspetto: non cambiano ruolo o statistiche).
 const CATEGORY_LABELS := {"Swordsman": "spadaccino", "Lancer": "lanciere", "Archer": "arciere", "Rogue": "furfante", "Mage": "mago", "Cleric": "chierico", "Tank": "difensore", "Barbarian": "barbaro", "Ranger": "ramingo", "Alchemist": "alchimista", "Blacksmith": "fabbro", "Merchant": "mercante", "Villager": "popolano", "Noble": "nobile", "Scholar": "studioso", "Beastkin": "uomo-bestia"}
@@ -169,7 +170,7 @@ func hero_row(hero: Dictionary, actions: Array = [], extra: Control = null, show
 	name_row.add_child(UIKit.label(str(hero.name), 18, UIKit.INK, UIKit.head_font()))
 	name_row.add_child(stars_label(int(hero.current_rarity), 13))
 	info.add_child(name_row)
-	info.add_child(UIKit.label("%s · Lv.%d/%d · Potenza %s" % [GS.role_label(hero.role), int(hero.level), GS.level_cap(hero), GS.format_number(GS.hero_power(hero))], 14, UIKit.INK_SOFT))
+	info.add_child(UIKit.label("%s · Lv.%d/%d · Potenza %s" % [GS.hero_class_label(hero), int(hero.level), GS.level_cap(hero), GS.format_number(GS.hero_power(hero))], 14, UIKit.INK_SOFT))
 	if extra != null: info.add_child(extra)
 	row.add_child(info)
 	var side := VBoxContainer.new()
@@ -742,7 +743,7 @@ func _formation_board() -> Control:
 	for hero in reserve.slice(0, 18):
 		var card: HeroCard = HeroCardScript.new()
 		card.setup(hero, 70.0)
-		card.tooltip_text = "%s · %s · Lv.%d" % [hero.name, GS.role_label(hero.role), int(hero.level)]
+		card.tooltip_text = "%s · %s · Lv.%d" % [hero.name, GS.hero_class_label(hero), int(hero.level)]
 		card.set_drag_forwarding(_drag_hero.bind(str(hero.id), card), Callable(), Callable())
 		card.pressed.connect(main.open_hero)
 		flow.add_child(card)
@@ -1057,7 +1058,7 @@ func _build_roster(body: VBoxContainer) -> void:
 		cell.add_child(card)
 		var meta := HBoxContainer.new()
 		meta.add_theme_constant_override("separation", 6)
-		var lv := UIKit.label("%s · Lv.%d" % [GS.role_label(hero.role), int(hero.level)], 14, UIKit.INK_SOFT, UIKit.body_bold())
+		var lv := UIKit.label("%s · Lv.%d" % [GS.hero_class_label(hero), int(hero.level)], 14, UIKit.GOLD if GS.needs_class(hero) else UIKit.INK_SOFT, UIKit.body_bold())
 		lv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		meta.add_child(lv)
 		meta.add_child(activity_pill(hero))
@@ -1135,7 +1136,7 @@ func build_roster_screen(content: VBoxContainer) -> void:
 		card.setup(hero, 158.0)
 		card.pressed.connect(main.open_hero)
 		cell.add_child(card)
-		var lv := UIKit.label("%s · Lv.%d" % [GS.role_label(hero.role), int(hero.level)], 13, UIKit.INK_SOFT, UIKit.body_bold())
+		var lv := UIKit.label("%s · Lv.%d" % [GS.hero_class_label(hero), int(hero.level)], 13, UIKit.GOLD if GS.needs_class(hero) else UIKit.INK_SOFT, UIKit.body_bold())
 		cell.add_child(lv)
 		cell.add_child(activity_pill(hero))
 		grid.add_child(cell)
@@ -1194,20 +1195,12 @@ func build_dossier(content: VBoxContainer, hero: Dictionary, modal_ref: Array) -
 	pills.add_child(UIKit.pill(GS.RARITY_NAMES[int(hero.current_rarity)], UIKit.rarity_color(int(hero.current_rarity))))
 	pills.add_child(activity_pill(hero))
 	right.add_child(pills)
-	right.add_child(UIKit.title("%s · Livello %d / %d" % [GS.role_label(hero.role), int(hero.level), GS.level_cap(hero)], 21, UIKit.INK))
-	right.add_child(UIKit.label("%s · ex %s" % [hero.origin, str(hero.profession).to_lower()], 15, UIKit.INK_SOFT, UIKit.body_bold()))
-	if not hero.get("appearance", {}).is_empty():
-		var look: Dictionary = RiftwardState.appearance_for(hero)
-		var parts := PackedStringArray([str(CATEGORY_LABELS.get(str(hero.get("category", "")), str(hero.get("category", ""))))])
-		if look.get("elf", false): parts.append("sangue elfico")
-		if look.get("dwarf", false): parts.append("nano")
-		if look.get("greenskin", false): parts.append("pelleverde")
-		var hair_color := str(look.get("hair_color", ""))
-		if look.get("bald", false): parts.append("calvo")
-		elif not hair_color.is_empty() and str(look.get("beast", "")).is_empty(): parts.append("capelli " + str(HAIR_LABELS.get(hair_color, hair_color)))
-		var red: bool = look.get("eye_color", "") == "red"
-		if red: parts.append("occhi " + str(EYE_LABELS.red))
-		right.add_child(UIKit.label("Aspetto: " + " · ".join(parts), 14, UIKit.ROSE if red else UIKit.MUTED, UIKit.body_font()))
+	right.add_child(UIKit.title("%s · Livello %d / %d" % [GS.hero_class_label(hero), int(hero.level), GS.level_cap(hero)], 21, UIKit.INK))
+	if GS.is_commoner(hero):
+		right.add_child(UIKit.label("%s · popolano, di mestiere %s" % [hero.origin, str(hero.get("job", hero.profession)).to_lower()], 15, UIKit.INK_SOFT, UIKit.body_bold()))
+	else:
+		right.add_child(UIKit.label("%s · ex %s" % [hero.origin, str(hero.profession).to_lower()], 15, UIKit.INK_SOFT, UIKit.body_bold()))
+	right.add_child(UIKit.label("Aspetto: " + look_text(hero), 14, UIKit.ROSE if str(hero.get("appearance", {}).get("eye_color", "")) == "red" else UIKit.MUTED, UIKit.body_font()))
 	right.add_child(bars(hero, true))
 	right.add_child(UIKit.label("Potenza %s · Missioni %d · Vittorie %d · Abbattimenti %d" % [GS.format_number(GS.hero_power(hero)), int(hero.missions), int(hero.victories), int(hero.kills)], 14, UIKit.MUTED, UIKit.body_bold()))
 	var grid := GridContainer.new()
@@ -1236,6 +1229,7 @@ func build_dossier(content: VBoxContainer, hero: Dictionary, modal_ref: Array) -
 		right.add_child(actions)
 	top.add_child(right)
 	content.add_child(top)
+	if GS.needs_class(hero): content.add_child(class_choice(hero))
 	var d := GS.derived_stats(hero)
 	var derived := PanelContainer.new()
 	derived.add_theme_stylebox_override("panel", UIKit.ornate("card", 14.0))
@@ -1267,6 +1261,55 @@ func build_dossier(content: VBoxContainer, hero: Dictionary, modal_ref: Array) -
 	if bool(GS.data.dev.get("reveal_hidden", false)):
 		var p: Dictionary = hero.personality
 		content.add_child(info_card("Sviluppo · Potenziale %d/100 · Crescita %.2f · Coraggio %d · Disciplina %d · Aggressività %d · Altruismo %d · Compostezza %d · Lealtà %d" % [int(hero.potential), float(hero.growth), int(p.courage), int(p.discipline), int(p.aggression), int(p.altruism), int(p.composure), int(p.loyalty)], "warn"))
+
+## Descrizione dei pezzi del personaggio, come nel foglio: archetipo, volto, capelli, corporatura, età, occhi.
+func look_text(hero: Dictionary) -> String:
+	var look: Dictionary = RiftwardState.appearance_for(hero)
+	var archetype := str(look.get("archetype", "villager"))
+	var parts := PackedStringArray([HeroLookScript.label(archetype), "volto " + HeroLookScript.face_label(archetype, int(look.get("face", 1)))])
+	var family := str(look.get("hair_color", ""))
+	parts.append("capelli %s %s" % [str(HAIR_LABELS.get(family, family)), str(HeroLookScript.HAIR_LABELS.get(str(look.get("hair_kind", "")), ""))])
+	parts.append(str(HeroLookScript.BODY_LABELS.get(str(look.get("body", "")), "")))
+	parts.append("%d anni" % int(look.get("age", 0)))
+	var eye := str(look.get("eye_color", ""))
+	parts.append("occhi " + str(EYE_LABELS.get(eye, eye)))
+	return " · ".join(parts)
+
+## Popolano senza classe: dice quale consiglia e perché, il giocatore sceglie.
+func class_choice(hero: Dictionary) -> Control:
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", UIKit.ornate("system", 16.0))
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 8)
+	v.add_child(UIKit.label("SCEGLI LA CLASSE", 16, UIKit.GOLD, UIKit.head_font()))
+	v.add_child(UIKit.para("%s è una persona comune: può diventare quello che decidi tu. Ti consiglia:" % hero.name, 15, UIKit.INK_SOFT))
+	v.add_child(UIKit.para(str(hero.get("advice", "")), 16, UIKit.INK))
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 8)
+	var best := str(hero.get("recommended_role", ""))
+	var alt := str(hero.get("alt_role", ""))
+	for role in GS.ROLES:
+		var text := GS.role_label(role)
+		var style := "ghost"
+		if role == best:
+			text = "★ " + text + " (consigliata)"
+			style = "gold"
+		elif role == alt:
+			text += " (adatta)"
+			style = "sky"
+		var b := UIKit.button(text, _choose_class.bind(str(hero.id), role), style, 0)
+		b.tooltip_text = "%s · linea %s · abilità: %s" % [GS.role_label(role), str(GS.ROLES[role].line), GS.skill_label(str(GS.ROLES[role].skill))]
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		grid.add_child(b)
+	v.add_child(grid)
+	panel.add_child(v)
+	return panel
+
+func _choose_class(hero_id: String, role: String) -> void:
+	var result := GS.choose_class(hero_id, role)
+	main.report(result, "Nuova classe", str(result.get("message", "")))
 
 func _toggle_party(hero_id: String) -> void:
 	var index: int = GS.data.party.find(hero_id)

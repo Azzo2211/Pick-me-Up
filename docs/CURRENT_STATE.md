@@ -24,8 +24,9 @@ godot/project.godot
 | Tower map (10 floors per page, zig-zag path, boss diamonds) | `godot/scripts/ui/tower_map.gd` |
 | Mission end: Hero Lost cards, then Stage Clear / failure summary | `godot/scripts/ui/mission_result_screen.gd` |
 | Loading screen (startup and before each mission) | `godot/scripts/ui/loading_screen.gd` |
-| Hero portraits: painted pictures, procedural drawing as fallback | `godot/scripts/hero_portrait.gd` |
-| Painted portraits (300 faces from the user's 6 grids, catalogue with sex, hair, skin, beard, glasses, elf, beast…; hair and iris masks for recolouring) | `godot/scripts/portrait_library.gd`, `godot/assets/portraits/pNNN.jpg`, `pNNN_mask.png`, `portraits.json` |
+| Hero portraits: photo of the hero's 3D character, procedural drawing as fallback (headless) | `godot/scripts/hero_portrait.gd`, `godot/scripts/ui/portrait_studio.gd` |
+| Modular hero look from the user's character sheet (archetype, 3 faces, 4 hairstyles, body, age) | `godot/scripts/characters/hero_look.gd` |
+| Anime shading: two-tone toon light, outline, drawn face | `godot/scripts/hub3d/shaders/toon.gdshader(inc)`, `outline.gdshader`, `face.gdshader` |
 | 3D base: island, walls, streets, plaza, forest, navigation, labels | `godot/scripts/hub3d/hub_world.gd` |
 | Camera, picking, hover/click | `godot/scripts/hub3d/hub_view.gd` |
 | Buildings (level N = N storeys, batched meshes) | `godot/scripts/hub3d/building_model.gd`, `portal.gdshader` |
@@ -41,15 +42,15 @@ godot/project.godot
 Run from the repository root (Godot executable on PATH or full path):
 
 ```text
-godot --headless --path godot -s res://tests/test_runner.gd -- --test-mode          # 30 rule tests
+godot --headless --path godot -s res://tests/test_runner.gd -- --test-mode          # 31 rule tests
 godot --headless --path godot -s res://tests/ui_smoke_runner.gd -- --test-mode      # 29 UI checks incl. a full mission
 godot --headless --path godot -s res://tests/balance_probe_runner.gd -- --test-mode # balance table (optional --levels= --floors=)
 godot --path godot -s res://tests/visual_capture_runner.gd -- --test-mode           # UI screenshots → godot/tests/captures/
 godot --path godot -s res://tests/hub_preview_runner.gd -- --test-mode --base5      # base previews (--base2/3/5, --light=day|night)
 godot --path godot -s res://tests/battle_preview_runner.gd -- --test-mode           # battle screenshots
 godot --path godot -s res://tests/character_probe_runner.gd -- --test-mode          # character line-up
-godot --path godot -s res://tests/portrait_match_runner.gd -- --test-mode           # painted portraits above their 3D models
-godot --path godot -s res://tests/portrait_recolor_runner.gd -- --test-mode         # one face in several generator hair and eye colours
+godot --path godot -s res://tests/look_sheet_runner.gd -- --test-mode --out DIR    # character sheet tiles: 4 archetypes front/side/back, 3 faces, 4 hairstyles
+godot --path godot -s res://tests/portrait_preview_runner.gd -- --test-mode         # cards and portraits with the 3D photos
 ```
 
 `tests/captures/` contains `.gdignore`, so screenshots are not imported as game assets.
@@ -75,8 +76,10 @@ godot --path godot -s res://tests/portrait_recolor_runner.gd -- --test-mode     
 - Battle: party of 5 (2 Front / 2 Mid / 1 Rear), 20 ticks/s, decisions at 5 Hz, Utility-style target scoring, ranged kiting, ammo, healing (never on enemies, never hitting allies), fear at low courage, boss slam, objectives (Subjugation, Survival, Exploration with a hero running to free points, Defense won if the beacon survives the timer, Boss), macro orders only, permadeath.
 - Armory forging and equipping, Workshop refining, Alchemy tonics.
 - Shop with in-game currencies only: daily offers, material packs (Gold) and Gem offers (Stones, chest, Gold). Each offer has a daily limit that resets at midnight UTC; nothing in the shop revives heroes or protects from permadeath.
-- Every hero has a painted portrait (`portrait` on the hero, picked once and saved; older saves, or saves from an older pick rule (`portrait_v` below `PORTRAIT_VERSION`), get one on load). Faces and haircuts come from the user's pictures; hair and eye colours come from the character generator, as the user asked. The pick follows the name's sex, keeps beast and greenskin faces for Beastkin (greenskins also for Barbarians), avoids faces already in the roster while there are free ones, and then prefers a face whose painted hair already has the hero's colour, then one that recolours well into it. The card recolours the painting with a shader (`RECOLOR_SHADER` in `hero_portrait.gd`): `pNNN_mask.png` marks hair (red) and irises (green), and the painted brightness range in `portraits.json` (`hair_lo/mid/hi`, `eye_lo/mid/hi`) turns into the generator colour so the painted mid-tone becomes exactly that colour. Masks were checked by eye: `hair_ok` is false on 48 faces whose hair mask is patchy or spills onto fur collars, and `has_eyes` is false where the iris could not be placed reliably (closed eyes, eyepatches, 59 faces); those parts keep their painted colour. Faces with a full beard or a covered head never get their hair recoloured, and then the 3D model takes the painted hair colour so it still matches. Skin, beard, glasses, scars, elf ears, baldness, hoods and beast ears or horns in the 3D model follow the portrait. Cards show the painting inside a framed window (name and stars below, as in the visual direction boards) with a hover parallax and a light sheen; 6★ and 7★ cards drift slowly on their own. Fallen heroes turn grey.
-- In a Godot 4 canvas shader, `COLOR` in `fragment()` is already vertex colour × texture: multiplying `texture(TEXTURE, UV)` by it again squares the picture and darkens it. The portrait shaders read the vertex colour through a varying instead.
+- 1★ and 2★ heroes are commoners summoned at random with a job (`COMMONER_JOBS` in `game_state.gd`: farmer, smith, merchant, archivist, town guard…). Their stats come from the job. They recommend a class that suits their stats and job (`class_advice`, with a second choice and an in-character line) but the player chooses it in the dossier (`choose_class`): the class brings its skill and starter weapons. Until then they fight with their job tool as the recommended class. The starter squad and older saves count as having chosen. From 3★ the Nexus gives a class.
+- Hero looks follow the user's character sheet (Guard, Merchant, Scholar, Villager): `hero.look` = archetype, face (3 per archetype; the rarer the hero, the likelier the handsome face), hairstyle (4 per archetype and sex, 13 meshes), body (slim, average, athletic, muscular, chubby) and age (greying hair, wrinkles). Commoners take the archetype of their job, others of their class (Ranger dresses as a hunter). Clothes change when a commoner picks a class; face and hair stay. Colours come from the character generator, with the category chosen by job or class.
+- Cards show a photo of the same 3D character (`portrait_studio.gd`): a bust shot in its own viewport with a transparent background, cached in memory and in `user://portraits3d`, retaken only when the look, class or rarity changes. Without a display (headless tests) the old drawn portrait is used.
+- Characters use a two-tone toon shader with a pixel-width outline (inverted hull); the face is drawn by a shader on the base head (anime eyes with gradient iris and highlights, brows, mouth, blush, stubble, age lines). The Compatibility renderer lights in sRGB space, so the toon shaders use vertex colours as they are.
 - Hero looks come from the character generator (saved as `appearance` and `category` on each hero; older saves get one on load): hair, eye and skin colour, beard, scars, freckles, glasses, eye size, height and build. Red eyes are 1 in 100,000. Look never affects role, stars or stats.
 - Humans in the base and in battle play the motion clips for idle, walk, talk, cheer, death, bow shots and spells, with short blends between them. Sitting, resting, training and sword/spear swings stay procedural. If the GLB is missing or not imported yet, every pose falls back to procedural.
 - Mission end: one silent "Eroe perduto" card per fallen hero, then a Stage Clear screen with a 3-star grade (victory, nobody fell, nobody under 30% HP), rewards, survivors and the floor unlocked, or a failure summary.

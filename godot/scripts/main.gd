@@ -528,7 +528,7 @@ func open_hero(hero_id: String) -> void:
 	var modal_ref := []
 	panels.build_dossier(content, hero, modal_ref)
 	var refresh := _refresh_dossier.bind(content, hero_id, modal_ref)
-	var modal: Control = await open_modal(hero.name, "%s · %s · %s" % [GameState.stars(int(hero.current_rarity)), GameState.role_label(hero.role), GameState.RARITY_NAMES[int(hero.current_rarity)]], content, 900, [], refresh)
+	var modal: Control = await open_modal(hero.name, "%s · %s · %s" % [GameState.stars(int(hero.current_rarity)), GameState.hero_class_label(hero), GameState.RARITY_NAMES[int(hero.current_rarity)]], content, 900, [], refresh)
 	modal_ref.append(modal)
 
 ## Roster completo a schermo largo: griglia densa con filtri per ruolo, stelle e stato.

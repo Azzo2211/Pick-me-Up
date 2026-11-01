@@ -40,7 +40,8 @@ func _initialize() -> void:
 	_test("sviluppo: tutti i piani, base e eroi al massimo", _test_dev_tools)
 	_test("negozio: prezzi, limiti giornalieri e scorte", _test_shop)
 	_test("pacchetto personaggi: aspetto salvato e migrato", _test_character_pack)
-	_test("ritratti dipinti: uno per eroe, adatti e migrati", _test_painted_portraits)
+	_test("popolani 1★-2★: mestiere, consiglio e scelta della classe", _test_commoners)
+	_test("aspetto a pezzi: archetipo, volto, capelli, età", _test_modular_look)
 	_test("pacchetto animazioni: 40 clip sullo scheletro", _test_motion_pack)
 	print("\nRisultato: %d passati, %d falliti" % [passed, failed])
 	quit(0 if failed == 0 else 1)
@@ -434,10 +435,8 @@ func _test_character_pack() -> Array:
 	var valid: bool = hero.has("appearance") and generator.CATEGORIES.has(hero.category)
 	var look := RiftwardState.appearance_for(hero)
 	valid = valid and look.eyes == Color(str(hero.appearance.eye_hex))
-	# capelli dal generatore, anche con il ritratto dipinto (che si ricolora)
-	var library := load("res://scripts/portrait_library.gd")
-	if library.shows_hair(str(hero.get("portrait", "")), str(hero.appearance.hair_color)):
-		valid = valid and look.hair == Color(str(hero.appearance.hair_hex)) and look.hair_color == str(hero.appearance.hair_color)
+	# capelli dal generatore (ingrigiti solo con l'età)
+	if int(look.age) < 46: valid = valid and look.hair == Color(str(hero.appearance.hair_hex)) and look.hair_color == str(hero.appearance.hair_color)
 	# salvataggio vecchio senza aspetto: la migrazione lo aggiunge senza toccare il resto
 	var level := int(hero.level)
 	var expected: Dictionary = hero.appearance.duplicate()
@@ -450,50 +449,79 @@ func _test_character_pack() -> Array:
 	game.free()
 	return [valid, "Aspetto del generatore assente, diverso o perso nella migrazione"]
 
-func _test_painted_portraits() -> Array:
-	var library := load("res://scripts/portrait_library.gd")
-	var valid: bool = library.count() == 300
-	var game := _fresh("painted-portrait-seed")
-	var seen := {}
-	for hero in game.data.heroes:
-		var pid := str(hero.get("portrait", ""))
-		var info: Dictionary = library.entry(pid)
-		var sex := str(info.get("sex", ""))
-		valid = valid and not info.is_empty() and not seen.has(pid) and library.texture(pid) != null
-		valid = valid and (sex == "a" or (sex == "f") == RiftwardState.is_feminine(hero))
-		seen[pid] = true
-	# un salvataggio vecchio senza ritratto ne riceve uno alla migrazione
-	var first: Dictionary = game.data.heroes[0]
-	first.erase("portrait")
+func _test_commoners() -> Array:
+	var game := _fresh("commoner-seed")
+	var valid := true
+	var look_script := load("res://scripts/characters/hero_look.gd")
+	# evocati a 1★-2★: persone comuni con un mestiere, senza classe, che ne consigliano una
+	for i in 24:
+		var hero := game.generate_hero("commoner-%d" % i, 1 + i % 2)
+		var job := str(hero.get("job", ""))
+		valid = valid and bool(hero.commoner) and not bool(hero.class_chosen) and game.COMMONER_JOBS.has(job)
+		valid = valid and game.ROLES.has(str(hero.recommended_role)) and str(hero.role) == str(hero.recommended_role)
+		valid = valid and str(hero.alt_role) != str(hero.recommended_role) and str(hero.advice).contains(game.role_label(str(hero.alt_role)))
+		valid = valid and str(hero.equipment.main.name) == str(game.COMMONER_JOBS[job].tool)
+		valid = valid and str(hero.look.archetype) == str(game.COMMONER_JOBS[job].look)
+		valid = valid and RiftwardState.outfit_kind(hero) == str(game.COMMONER_JOBS[job].look)
+	# il consiglio segue le statistiche: un archivista consiglia una classe di intelletto
+	var scholar := {"str": 9, "int": 34, "sta": 14, "agi": 12}
+	valid = valid and str(game.class_advice(scholar, "Archivista").role) in ["Mage", "Support"]
+	var smith := {"str": 30, "int": 9, "sta": 24, "agi": 12}
+	valid = valid and str(game.class_advice(smith, "Fabbro").role) in ["Vanguard", "Guardian", "Lancer"]
+	# il giocatore sceglie: anche una classe diversa da quella consigliata
+	var hero := game.generate_hero("commoner-choice", 1)
+	game.data.heroes.append(hero)
+	valid = valid and game.needs_class(hero) and game.hero_class_label(hero).begins_with("Popolano")
+	var pick := str(hero.alt_role)
+	var result: Dictionary = game.choose_class(str(hero.id), pick)
+	valid = valid and bool(result.ok) and str(hero.role) == pick and bool(hero.class_chosen) and not game.needs_class(hero)
+	valid = valid and str(hero.skills[0].name) == str(game.ROLES[pick].skill)
+	valid = valid and str(hero.equipment.main.name) == str(game._starter_equipment(pick).main.name)
+	valid = valid and str(hero.equipment.armor.name) != "Abiti da lavoro"
+	valid = valid and RiftwardState.outfit_kind(hero) == str(look_script.CLASS_OUTFIT[pick])
+	valid = valid and not bool(game.choose_class(str(hero.id), "Mage").ok)
+	# dal 3★ in su: classe dal Nexus, nessuna scelta
+	var rare := game.generate_hero("rare-hero", 3)
+	valid = valid and not bool(rare.commoner) and bool(rare.class_chosen) and not game.needs_class(rare)
+	# squadra iniziale: popolani che hanno già la loro classe
+	for starter in game.data.heroes.slice(0, 5):
+		valid = valid and not game.needs_class(starter)
+	# salvataggio vecchio: i 1★-2★ diventano popolani con la classe che avevano
+	var legacy: Dictionary = game.data.heroes[0]
+	var role := str(legacy.role)
+	for key in ["commoner", "class_chosen", "job", "recommended_role", "alt_role", "advice"]: legacy.erase(key)
 	game._migrate()
-	valid = valid and library.has(str(first.get("portrait", "")))
-	# uomini-bestia: solo volti di bestia o pelleverde; gli altri mai
-	var beast_pid: String = library.pick("beast-test", false, "Beastkin", "brown", {})
-	var beast_flags := str(library.entry(beast_pid).get("flags", ""))
-	valid = valid and (beast_flags.contains("K") or beast_flags.contains("Q"))
-	var families := ["black", "brown", "blond", "auburn", "copper", "silver", "white", "blue", "violet", "pink", "green", "teal"]
-	for i in 48:
-		var family: String = families[i % families.size()]
-		var pid: String = library.pick("human-%d" % i, (i / 12) % 2 == 0, "Swordsman", family, {})
-		var flags := str(library.entry(pid).get("flags", ""))
-		valid = valid and not flags.contains("K") and not flags.contains("Q")
-		# ogni colore dei capelli trova un volto che lo mostra (dipinto così o ricolorato)
-		valid = valid and library.shows_hair(pid, family)
-		var info: Dictionary = library.recolor(pid, family)
-		valid = valid and info.mask != null and bool(info.hair_on) == (str(library.entry(pid).hair) != family and str(library.entry(pid).hair) != "bald")
-	# salvataggi della scelta vecchia: il volto si sceglie di nuovo
-	first.portrait_v = 1
-	game._migrate()
-	valid = valid and int(first.portrait_v) == game.PORTRAIT_VERSION
-	# dal ritratto: volto, pelle e dettagli; dal generatore: colore di capelli e occhi
-	var look := RiftwardState.appearance_for(first)
-	var painted: Dictionary = library.look(str(first.portrait))
-	valid = valid and look.portrait == first.portrait and look.skin == painted.skin
-	valid = valid and look.eyes == Color(str(first.appearance.eye_hex))
-	if library.shows_hair(str(first.portrait), str(first.appearance.hair_color)): valid = valid and look.hair == Color(str(first.appearance.hair_hex))
-	else: valid = valid and look.hair == painted.hair
+	valid = valid and bool(legacy.commoner) and bool(legacy.class_chosen) and str(legacy.role) == role and game.COMMONER_JOBS.has(str(legacy.job))
 	game.free()
-	return [valid, "Ritratti dipinti mancanti, doppi o non adatti all'eroe"]
+	return [valid, "Popolani senza mestiere, consiglio sbagliato o scelta della classe non applicata"]
+
+func _test_modular_look() -> Array:
+	var game := _fresh("modular-look-seed")
+	var look_script := load("res://scripts/characters/hero_look.gd")
+	var valid := true
+	var face_sum := {1: 0, 6: 0}
+	for i in 120:
+		for rarity in [1, 6]:
+			var hero := game.generate_hero("look-%d-%d" % [rarity, i], rarity)
+			var piece: Dictionary = hero.look
+			var arch: Dictionary = look_script.ARCHETYPES[piece.archetype]
+			var hairs: Array = arch.hair_f if RiftwardState.is_feminine(hero) else arch.hair_m
+			valid = valid and int(piece.face) >= 0 and int(piece.face) <= 2 and hairs.has(str(piece.hair))
+			valid = valid and (arch.bodies as Array).has(str(piece.body)) and int(piece.age) >= 16 and int(piece.age) <= 62
+			face_sum[rarity] += int(piece.face)
+			if rarity == 6: valid = valid and str(piece.archetype) == str(look_script.CLASS_ARCHETYPE[str(hero.role)])
+	# più rara, più spesso il volto bello (indice 0)
+	valid = valid and face_sum[6] < face_sum[1]
+	# stesso eroe, stesso aspetto; la migrazione lo ricrea uguale
+	var first: Dictionary = game.data.heroes[0]
+	var before: Dictionary = first.look.duplicate()
+	first.erase("look")
+	game._migrate()
+	valid = valid and first.look == before
+	var look := RiftwardState.appearance_for(first)
+	valid = valid and look.eyes == Color(str(first.appearance.eye_hex)) and str(look.hair_kind) == str(before.hair)
+	game.free()
+	return [valid, "Pezzi dell'aspetto fuori dal foglio o non deterministici"]
 
 func _test_motion_pack() -> Array:
 	var motion := load("res://scripts/hub3d/motion_library.gd")

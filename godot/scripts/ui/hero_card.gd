@@ -55,6 +55,8 @@ func _ready() -> void:
 	if dead: data["state"] = "DEAD"
 	portrait.setup(data, 100, "bust")
 	art.add_child(portrait)
+	# la foto del personaggio 3D arriva dopo qualche fotogramma: allora va nella finestra
+	portrait.photo_ready.connect(_layout)
 	overlay = Control.new()
 	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -83,11 +85,11 @@ func _process(delta: float) -> void:
 		_tilt = Vector2.ZERO
 		set_process(false)
 
-## Vero se l'eroe ha un ritratto dipinto.
+## Vero se la foto del personaggio 3D è pronta.
 func has_photo() -> bool:
 	return portrait != null and portrait.photo != null
 
-## Finestra del ritratto dipinto: un riquadro dentro la cornice, con stelle e
+## Finestra della foto: un riquadro dentro la cornice, con stelle e
 ## nome sotto, come nella guida visiva. La foto non tocca mai gli angoli tagliati.
 func _window_rect() -> Rect2:
 	return Rect2(Vector2(size.x * 0.085, size.y * 0.075), Vector2(size.x * 0.83, size.y * 0.66))
@@ -249,6 +251,16 @@ func _draw_overlay() -> void:
 		elif rarity >= 7: star_color = UIKit.prism_color(_time, i * 0.08, 1.0)
 		elif rarity == 6: star_color = UIKit.rarity_color(6).lightened(0.15)
 		UIKit.draw_star(o, c, star_r, star_color)
+	# popolano che aspetta una classe: etichetta dorata in fondo alla finestra
+	if not dead and RiftwardState.needs_class(hero):
+		var note := "SCEGLI LA CLASSE"
+		var nfs := int(clampf(w * 0.05, 8.0, 13.0))
+		var nw := font.get_string_size(note, HORIZONTAL_ALIGNMENT_LEFT, -1, nfs).x
+		var win := _window_rect()
+		var nr := Rect2(Vector2(w * 0.5 - nw * 0.5 - 6.0, win.end.y - nfs * 2.1), Vector2(nw + 12.0, nfs * 1.6))
+		o.draw_rect(nr, Color(0.03, 0.04, 0.07, 0.85))
+		o.draw_rect(nr, UIKit.GOLD, false, 1.0)
+		o.draw_string(font, Vector2(nr.position.x + 6.0, nr.position.y + nr.size.y * 0.5 + nfs * 0.36), note, HORIZONTAL_ALIGNMENT_LEFT, -1, nfs, UIKit.GOLD)
 	if dead:
 		o.draw_colored_polygon(OrnateStyle.octagon(inner, cut * 0.8), Color(0.02, 0.03, 0.05, 0.5))
 		var lines := caption.to_upper().split("\n") if not caption.is_empty() else PackedStringArray(["CADUTO"])

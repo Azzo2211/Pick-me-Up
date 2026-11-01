@@ -1,16 +1,15 @@
 extends Control
 class_name HeroPortrait
 
-## Ritratto a mezzo busto in stile manhwa, disegnato interamente in codice.
-## Proporzioni adulte, lineart scura, ombre a due toni (cel shading).
-## Capelli, pelle, occhi, abiti e dettagli (barba, cicatrici, età) derivano
-## dall'id dell'eroe, quindi lo stesso eroe ha sempre lo stesso volto.
+## Ritratto dell'eroe: la foto del suo personaggio 3D (studio delle carte), così
+## carta e gioco mostrano la stessa persona. Finché la foto non è pronta (e nei
+## test senza schermo) resta il ritratto disegnato in codice, con gli stessi colori.
 ##
 ## framed = true  → ritratto quadrato con cornice neon del colore di rarità (liste, HUD)
 ## framed = false → solo figura su fondo trasparente (dentro le carte)
 
 const LINE := Color(0.08, 0.05, 0.06, 0.92)
-const PortraitLibraryScript := preload("res://scripts/portrait_library.gd")
+const StudioScript := preload("res://scripts/ui/portrait_studio.gd")
 const VIGNETTE := Color("#0e1520")
 ## Ritratto dei caduti: grigio e spento.
 ## (In Godot 4 COLOR nel fragment è già colore dei vertici × texture.)
@@ -22,62 +21,6 @@ void fragment() {
 }
 """
 static var _grey_material: ShaderMaterial
-## Ricolora capelli e occhi del ritratto dipinto con i colori del generatore:
-## la maschera (R capelli, G iridi) dice dove, la luminosità dipinta dà ombre e riflessi
-## (mappa a gradiente: il tono medio dipinto diventa esattamente il colore del generatore),
-## i riflessi bianchi degli occhi restano.
-const RECOLOR_SHADER := """shader_type canvas_item;
-uniform sampler2D mask_tex : filter_linear_mipmap;
-uniform vec3 hair_color = vec3(0.3, 0.2, 0.15);
-uniform vec3 eye_color = vec3(0.5, 0.3, 0.2);
-uniform vec3 hair_range = vec3(0.1, 0.35, 0.6);
-uniform vec3 eye_range = vec3(0.1, 0.35, 0.6);
-uniform float hair_on = 0.0;
-uniform float eye_on = 0.0;
-uniform float grey = 0.0;
-const vec3 LUM = vec3(0.299, 0.587, 0.114);
-// colore dei vertici (sfumature, modulate): in fragment COLOR è già moltiplicato per la texture
-varying vec4 vertex_color;
-
-void vertex() {
-	vertex_color = COLOR;
-}
-
-// luminosità dipinta → 0…1, con il tono medio a 0.55
-float tmap(float l, vec3 r) {
-	float mid = clamp(r.y, r.x + 0.02, max(r.z - 0.02, r.x + 0.02));
-	if (l < mid) return 0.55 * clamp((l - r.x) / max(mid - r.x, 0.02), 0.0, 1.0);
-	return 0.55 + 0.45 * clamp((l - mid) / max(r.z - mid, 0.02), 0.0, 1.0);
-}
-
-// ombra scura → colore → riflesso chiaro; i colori chiari hanno ombre meno nere
-vec3 gmap(float t, vec3 col, float base_dark, float base_light) {
-	float y = dot(col, LUM);
-	vec3 dark = col * (base_dark + 0.25 * y);
-	vec3 light = col + (vec3(1.0) - col) * base_light * (0.55 + 0.45 * y);
-	return t < 0.55 ? mix(dark, col, t / 0.55) : mix(col, light, (t - 0.55) / 0.45);
-}
-
-void fragment() {
-	vec4 c = texture(TEXTURE, UV);
-	vec3 m = texture(mask_tex, UV).rgb;
-	float l = dot(c.rgb, LUM);
-	vec3 rgb = c.rgb;
-	if (hair_on > 0.5) {
-		rgb = mix(rgb, gmap(tmap(l, hair_range), hair_color, 0.18, 0.6), m.r);
-	}
-	if (eye_on > 0.5) {
-		float keep = clamp((l - 0.85) / 0.1, 0.0, 1.0);
-		rgb = mix(rgb, gmap(tmap(l, eye_range), eye_color, 0.22, 0.55), m.g * (1.0 - keep));
-	}
-	if (grey > 0.5) {
-		float g = dot(rgb, LUM);
-		rgb = mix(rgb, vec3(g), 0.85) * 0.75;
-	}
-	COLOR = vec4(rgb, c.a) * vertex_color;
-}
-"""
-static var _recolor_shader: Shader
 
 var hero_name := "Hero"
 var role := "Guardian"
@@ -88,9 +31,10 @@ var framed := true
 var framing := "face"
 var portrait_size := Vector2(96, 96)
 
-## Ritratto dipinto (se l'eroe ne ha uno): sostituisce il volto disegnato in codice.
+## Foto del personaggio 3D: sostituisce il ritratto disegnato appena è pronta.
 var photo: Texture2D = null
-var photo_focus := Vector2(0.5, 0.45)
+var photo_focus := Vector2(0.5, 0.42)
+var _photo_pending := false
 ## Parallasse delle carte: -1…1 sposta il volto, zoom > 1 lo avvicina.
 var tilt := Vector2.ZERO:
 	set(value):
@@ -114,12 +58,11 @@ func setup(hero: Dictionary, size_px: float = 96.0, mode: String = "") -> void:
 	rarity = clampi(int(hero.get("current_rarity", hero.get("rarity", 1))), 1, 7)
 	dead = str(hero.get("state", "ALIVE")) != "ALIVE"
 	look = RiftwardState.appearance_for(hero)
-	var pid := str(look.get("portrait", ""))
-	photo = PortraitLibraryScript.texture(pid)
-	if photo != null:
-		photo_focus = PortraitLibraryScript.focus(pid)
-		material = grey_material() if dead else null
-		_build_layers(pid)
+	photo = null
+	var studio := StudioScript.instance()
+	if studio != null: photo = studio.request(hero, _on_photo)
+	_photo_pending = photo == null and StudioScript.can_shoot()
+	if photo != null: _build_layers()
 	if mode == "bust":
 		framed = false
 		framing = "bust"
@@ -222,14 +165,10 @@ static func grey_material() -> ShaderMaterial:
 		_grey_material.shader = shader
 	return _grey_material
 
-static func recolor_shader() -> Shader:
-	if _recolor_shader == null:
-		_recolor_shader = Shader.new()
-		_recolor_shader.code = RECOLOR_SHADER
-	return _recolor_shader
+signal photo_ready
 
-## Crea i due livelli del ritratto dipinto e il materiale con i colori dell'eroe.
-func _build_layers(pid: String) -> void:
+## Crea i due livelli della foto: l'immagine e, sopra, ombre e cornice.
+func _build_layers() -> void:
 	if _photo_layer == null:
 		_photo_layer = Control.new()
 		_photo_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -242,23 +181,17 @@ func _build_layers(pid: String) -> void:
 		_front_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		_front_layer.draw.connect(_draw_front)
 		add_child(_front_layer)
-	var mat := ShaderMaterial.new()
-	mat.shader = recolor_shader()
-	var info: Dictionary = PortraitLibraryScript.recolor(pid, str(look.get("hair_color", "")))
-	mat.set_shader_parameter("mask_tex", info.get("mask"))
-	mat.set_shader_parameter("hair_on", 1.0 if info.get("hair_on", false) else 0.0)
-	mat.set_shader_parameter("eye_on", 1.0 if info.get("eye_on", false) else 0.0)
-	# Vector3, non Color: un Color verrebbe convertito in spazio lineare e i colori uscirebbero più scuri
-	var hair_c: Color = look.get("hair", Color.BLACK)
-	var eye_c: Color = look.get("eyes", Color.BLACK)
-	mat.set_shader_parameter("hair_color", Vector3(hair_c.r, hair_c.g, hair_c.b))
-	mat.set_shader_parameter("eye_color", Vector3(eye_c.r, eye_c.g, eye_c.b))
-	mat.set_shader_parameter("hair_range", info.get("hair_range", Vector3(0.1, 0.35, 0.6)))
-	mat.set_shader_parameter("eye_range", info.get("eye_range", Vector3(0.1, 0.35, 0.6)))
-	mat.set_shader_parameter("grey", 1.0 if dead else 0.0)
-	_photo_layer.material = mat
+	_photo_layer.material = grey_material() if dead else null
 	_front_layer.material = grey_material() if dead else null
 	_redraw_layers()
+
+func _on_photo(tex: Texture2D) -> void:
+	if tex == null or not is_instance_valid(self): return
+	photo = tex
+	_photo_pending = false
+	_build_layers()
+	queue_redraw()
+	photo_ready.emit()
 
 func _redraw_layers() -> void:
 	if _photo_layer != null:
@@ -270,9 +203,14 @@ func _draw() -> void:
 	var h := size.y
 	if w < 4.0 or h < 4.0: return
 	if photo != null:
-		# sotto la foto: solo lo sfondo; foto e cornice stanno nei due livelli figli
-		if framed: _draw_backdrop()
+		# sotto la foto (sfondo trasparente): fondale con l'alone del colore di rarità
+		_draw_backdrop()
 		_redraw_layers()
+		return
+	if _photo_pending:
+		# la foto 3D sta arrivando: solo il fondale, niente volto disegnato diverso
+		_draw_backdrop()
+		if framed: _draw_frame()
 		return
 	if framing == "bust":
 		_unit = minf(h * 0.38, w * 0.47)
