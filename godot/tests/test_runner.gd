@@ -40,6 +40,7 @@ func _initialize() -> void:
 	_test("sviluppo: tutti i piani, base e eroi al massimo", _test_dev_tools)
 	_test("negozio: prezzi, limiti giornalieri e scorte", _test_shop)
 	_test("pacchetto personaggi: aspetto salvato e migrato", _test_character_pack)
+	_test("ritratti dipinti: uno per eroe, adatti e migrati", _test_painted_portraits)
 	_test("pacchetto animazioni: 40 clip sullo scheletro", _test_motion_pack)
 	print("\nRisultato: %d passati, %d falliti" % [passed, failed])
 	quit(0 if failed == 0 else 1)
@@ -432,7 +433,10 @@ func _test_character_pack() -> Array:
 	var generator := load("res://scripts/characters/character_generator.gd")
 	var valid: bool = hero.has("appearance") and generator.CATEGORIES.has(hero.category)
 	var look := RiftwardState.appearance_for(hero)
-	valid = valid and look.eyes == Color(str(hero.appearance.eye_hex)) and (bool(look.veteran) or look.hair == Color(str(hero.appearance.hair_hex)))
+	valid = valid and look.eyes == Color(str(hero.appearance.eye_hex))
+	# i capelli vengono dal ritratto dipinto se c'è, altrimenti dal generatore
+	var painted: Dictionary = load("res://scripts/portrait_library.gd").look(str(hero.get("portrait", "")))
+	valid = valid and (look.hair == painted.hair if not painted.is_empty() else (bool(look.veteran) or look.hair == Color(str(hero.appearance.hair_hex))))
 	# salvataggio vecchio senza aspetto: la migrazione lo aggiunge senza toccare il resto
 	var level := int(hero.level)
 	var expected: Dictionary = hero.appearance.duplicate()
@@ -444,6 +448,38 @@ func _test_character_pack() -> Array:
 	valid = valid and generator.generate("abc:appearance") == generator.generate("abc:appearance")
 	game.free()
 	return [valid, "Aspetto del generatore assente, diverso o perso nella migrazione"]
+
+func _test_painted_portraits() -> Array:
+	var library := load("res://scripts/portrait_library.gd")
+	var valid: bool = library.count() == 300
+	var game := _fresh("painted-portrait-seed")
+	var seen := {}
+	for hero in game.data.heroes:
+		var pid := str(hero.get("portrait", ""))
+		var info: Dictionary = library.entry(pid)
+		var sex := str(info.get("sex", ""))
+		valid = valid and not info.is_empty() and not seen.has(pid) and library.texture(pid) != null
+		valid = valid and (sex == "a" or (sex == "f") == RiftwardState.is_feminine(hero))
+		seen[pid] = true
+	# un salvataggio vecchio senza ritratto ne riceve uno alla migrazione
+	var first: Dictionary = game.data.heroes[0]
+	first.erase("portrait")
+	game._migrate()
+	valid = valid and library.has(str(first.get("portrait", "")))
+	# uomini-bestia: solo volti di bestia o pelleverde; gli altri mai
+	var beast_pid: String = library.pick("beast-test", false, "Beastkin", false, {})
+	var beast_flags := str(library.entry(beast_pid).get("flags", ""))
+	valid = valid and (beast_flags.contains("K") or beast_flags.contains("Q"))
+	for i in 40:
+		var pid: String = library.pick("human-%d" % i, i % 2 == 0, "Swordsman", false, {})
+		var flags := str(library.entry(pid).get("flags", ""))
+		valid = valid and not flags.contains("K") and not flags.contains("Q") and not flags.contains("R")
+	# il ritratto decide capelli e barba del modello 3D
+	var look := RiftwardState.appearance_for(first)
+	var painted: Dictionary = library.look(str(first.portrait))
+	valid = valid and look.portrait == first.portrait and look.hair == painted.hair and look.skin == painted.skin
+	game.free()
+	return [valid, "Ritratti dipinti mancanti, doppi o non adatti all'eroe"]
 
 func _test_motion_pack() -> Array:
 	var motion := load("res://scripts/hub3d/motion_library.gd")

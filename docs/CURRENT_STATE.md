@@ -24,7 +24,8 @@ godot/project.godot
 | Tower map (10 floors per page, zig-zag path, boss diamonds) | `godot/scripts/ui/tower_map.gd` |
 | Mission end: Hero Lost cards, then Stage Clear / failure summary | `godot/scripts/ui/mission_result_screen.gd` |
 | Loading screen (startup and before each mission) | `godot/scripts/ui/loading_screen.gd` |
-| 2D manhwa-style portraits | `godot/scripts/hero_portrait.gd` |
+| Hero portraits: painted pictures, procedural drawing as fallback | `godot/scripts/hero_portrait.gd` |
+| Painted portraits (300 faces from the user's 6 grids, catalogue with sex, hair, skin, beard, glasses, elf, beast…) | `godot/scripts/portrait_library.gd`, `godot/assets/portraits/pNNN.jpg`, `portraits.json` |
 | 3D base: island, walls, streets, plaza, forest, navigation, labels | `godot/scripts/hub3d/hub_world.gd` |
 | Camera, picking, hover/click | `godot/scripts/hub3d/hub_view.gd` |
 | Buildings (level N = N storeys, batched meshes) | `godot/scripts/hub3d/building_model.gd`, `portal.gdshader` |
@@ -40,13 +41,14 @@ godot/project.godot
 Run from the repository root (Godot executable on PATH or full path):
 
 ```text
-godot --headless --path godot -s res://tests/test_runner.gd -- --test-mode          # 29 rule tests
+godot --headless --path godot -s res://tests/test_runner.gd -- --test-mode          # 30 rule tests
 godot --headless --path godot -s res://tests/ui_smoke_runner.gd -- --test-mode      # 29 UI checks incl. a full mission
 godot --headless --path godot -s res://tests/balance_probe_runner.gd -- --test-mode # balance table (optional --levels= --floors=)
 godot --path godot -s res://tests/visual_capture_runner.gd -- --test-mode           # UI screenshots → godot/tests/captures/
 godot --path godot -s res://tests/hub_preview_runner.gd -- --test-mode --base5      # base previews (--base2/3/5, --light=day|night)
 godot --path godot -s res://tests/battle_preview_runner.gd -- --test-mode           # battle screenshots
 godot --path godot -s res://tests/character_probe_runner.gd -- --test-mode          # character line-up
+godot --path godot -s res://tests/portrait_match_runner.gd -- --test-mode           # painted portraits above their 3D models
 ```
 
 `tests/captures/` contains `.gdignore`, so screenshots are not imported as game assets.
@@ -72,6 +74,7 @@ godot --path godot -s res://tests/character_probe_runner.gd -- --test-mode      
 - Battle: party of 5 (2 Front / 2 Mid / 1 Rear), 20 ticks/s, decisions at 5 Hz, Utility-style target scoring, ranged kiting, ammo, healing (never on enemies, never hitting allies), fear at low courage, boss slam, objectives (Subjugation, Survival, Exploration with a hero running to free points, Defense won if the beacon survives the timer, Boss), macro orders only, permadeath.
 - Armory forging and equipping, Workshop refining, Alchemy tonics.
 - Shop with in-game currencies only: daily offers, material packs (Gold) and Gem offers (Stones, chest, Gold). Each offer has a daily limit that resets at midnight UTC; nothing in the shop revives heroes or protects from permadeath.
+- Every hero has a painted portrait (`portrait` on the hero, picked once and saved; older saves get one on load). The pick follows the name's sex, keeps beast and greenskin faces for Beastkin (greenskins also for Barbarians), keeps the red-eyed face for red-eyed heroes, and avoids faces already in the roster while there are free ones. Hair colour, skin, beard, glasses, scars, elf ears, baldness, hoods and beast ears or horns in the 3D model follow the portrait. Cards show the face with a hover parallax and a light sheen; 6★ and 7★ cards drift slowly on their own. Fallen heroes turn grey.
 - Hero looks come from the character generator (saved as `appearance` and `category` on each hero; older saves get one on load): hair, eye and skin colour, beard, scars, freckles, glasses, eye size, height and build. Red eyes are 1 in 100,000. Look never affects role, stars or stats.
 - Humans in the base and in battle play the motion clips for idle, walk, talk, cheer, death, bow shots and spells, with short blends between them. Sitting, resting, training and sword/spear swings stay procedural. If the GLB is missing or not imported yet, every pose falls back to procedural.
 - Mission end: one silent "Eroe perduto" card per fallen hero, then a Stage Clear screen with a 3-star grade (victory, nobody fell, nobody under 30% HP), rewards, survivors and the floor unlocked, or a failure summary.

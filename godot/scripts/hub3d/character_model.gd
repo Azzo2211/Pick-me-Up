@@ -69,6 +69,9 @@ func build_hero(hero: Dictionary, appearance: Dictionary) -> void:
 		"eyes": appearance.get("eyes", Color("#3b5a7a")), "style": int(appearance.get("hair_style", 0)), "fem": fem,
 		"beard": int(appearance.get("beard", 0)) if not fem else 0, "outfit": _muted(appearance.get("outfit", Color("#4b5a7a")), 0.25),
 		"accent": _muted(appearance.get("accent", Color("#b08a4a")), 0.15), "rarity": rarity, "role": role,
+		# dettagli che vengono dal ritratto dipinto
+		"bald": bool(appearance.get("bald", false)), "elf": bool(appearance.get("elf", false)), "glasses": bool(appearance.get("glasses", false)),
+		"covered": bool(appearance.get("covered", false)), "beast": str(appearance.get("beast", "")), "long": bool(appearance.get("long_hair", false)),
 	}
 	var height := clampf(float(appearance.get("height", 1.0)), 0.9, 1.1)
 	var build := clampf(float(appearance.get("build", 1.0)), 0.9, 1.1)
@@ -265,13 +268,42 @@ func _head(look: Dictionary) -> void:
 		b.sphere("cloth", 0.022, Vector3(sx * 0.103, 0.13, 0.0), skin.darkened(0.06), Vector3(0.5, 1.0, 0.8), 6, 4)
 	b.box("cloth", Vector3(0.036, 0.008, 0.01), Vector3(0, 0.085, 0.108), skin.darkened(0.25))
 	_hair(b, look)
+	_head_details(b, look)
 	b.pop()
+
+## Orecchie da elfo, occhiali e tratti da uomo-bestia, come nel ritratto dipinto.
+func _head_details(b: MeshBuilder, look: Dictionary) -> void:
+	var skin: Color = look.skin
+	var hair: Color = look.hair
+	if look.get("elf", false):
+		for sx in [-1.0, 1.0]:
+			b.rod("cloth", Vector3(sx * 0.098, 0.13, -0.004), Vector3(sx * 0.168, 0.205, -0.034), 0.022, 0.003, skin.darkened(0.04), 6)
+	if look.get("glasses", false):
+		var frame := Color("#2b2421")
+		for sx in [-1.0, 1.0]:
+			b.torus("dull", 0.021, 0.0035, Vector3(sx * 0.037, 0.143, 0.106), frame, Vector3(PI * 0.5, 0, 0), 14, 4)
+		b.box("dull", Vector3(0.03, 0.005, 0.005), Vector3(0, 0.147, 0.11), frame)
+	match str(look.get("beast", "")):
+		"feline":
+			for sx in [-1.0, 1.0]:
+				b.rod("cloth", Vector3(sx * 0.058, 0.215, -0.012), Vector3(sx * 0.088, 0.3, -0.03), 0.036, 0.004, hair.darkened(0.1), 6)
+			b.sphere("cloth", 0.045, Vector3(0, 0.1, 0.085), skin.lightened(0.08), Vector3(1.1, 0.75, 0.9), 8, 5)
+		"lizard":
+			b.sphere("cloth", 0.06, Vector3(0, 0.1, 0.09), skin, Vector3(0.95, 0.7, 1.3), 8, 5)
+			for i in 4:
+				b.rod("cloth", Vector3(0, 0.235 - i * 0.012, 0.02 - i * 0.045), Vector3(0, 0.29 - i * 0.02, -0.01 - i * 0.05), 0.016, 0.002, skin.darkened(0.25), 5)
+		"bull":
+			for sx in [-1.0, 1.0]:
+				b.rod("cloth", Vector3(sx * 0.075, 0.215, 0.0), Vector3(sx * 0.2, 0.27, 0.03), 0.026, 0.004, Color("#d9cdb0"), 6)
+			b.sphere("cloth", 0.055, Vector3(0, 0.09, 0.09), skin.lightened(0.1), Vector3(1.1, 0.8, 0.9), 8, 5)
 
 func _hair(b: MeshBuilder, look: Dictionary) -> void:
 	var hair: Color = look.hair
 	var style := int(look.get("style", 0))
 	var fem: bool = look.get("fem", false)
-	if look.get("hood", false): return
+	if look.get("hood", false) or look.get("bald", false):
+		_beard(b, look)
+		return
 	# calotta: copre testa e nuca lasciando libera la fronte
 	b.push(Transform3D(Basis(Vector3.RIGHT, -0.38), Vector3(0, 0.155, -0.012)))
 	b.dome("cloth", 0.121, Vector3.ZERO, hair, 0.9, 12, 4)
@@ -293,8 +325,9 @@ func _hair(b: MeshBuilder, look: Dictionary) -> void:
 				var a := -1.0 + i * 0.4
 				b.cone("cloth", 0.035, 0.12, Vector3(a * 0.07, 0.24, -0.01 - absf(a) * 0.03), hair, 5, Vector3(-0.5, 0, -a * 0.6))
 		2:
-			b.box("cloth", Vector3(0.21, 0.3 if fem else 0.18, 0.05), Vector3(0, 0.0 if fem else 0.05, -0.085), hair, Vector3(0.12, 0, 0))
-			for sx in [-1.0, 1.0]: b.box("cloth", Vector3(0.04, 0.2 if fem else 0.1, 0.06), Vector3(sx * 0.098, 0.07 if fem else 0.12, 0.02), hair)
+			var long_hair: bool = fem or look.get("long", false)
+			b.box("cloth", Vector3(0.21, 0.3 if long_hair else 0.18, 0.05), Vector3(0, 0.0 if long_hair else 0.05, -0.085), hair, Vector3(0.12, 0, 0))
+			for sx in [-1.0, 1.0]: b.box("cloth", Vector3(0.04, 0.2 if long_hair else 0.1, 0.06), Vector3(sx * 0.098, 0.07 if long_hair else 0.12, 0.02), hair)
 		3:
 			b.sphere("cloth", 0.04, Vector3(0, 0.17, -0.12), hair, Vector3.ONE, 6, 4)
 			b.rod("cloth", Vector3(0, 0.15, -0.13), Vector3(0, -0.06, -0.17), 0.034, 0.018, hair, 6)
@@ -303,9 +336,12 @@ func _hair(b: MeshBuilder, look: Dictionary) -> void:
 		5:
 			b.box("cloth", Vector3(0.2, 0.1, 0.16), Vector3(0, 0.2, -0.04), hair, Vector3(-0.3, 0, 0))
 			b.box("cloth", Vector3(0.18, 0.12, 0.05), Vector3(0, 0.1, -0.11), hair, Vector3(0.25, 0, 0))
+	_beard(b, look)
+
+func _beard(b: MeshBuilder, look: Dictionary) -> void:
 	var beard := int(look.get("beard", 0))
 	if beard > 0:
-		b.sphere("cloth", 0.07, Vector3(0, 0.055, 0.06), hair.darkened(0.1), Vector3(1.05, 0.8 if beard == 1 else 1.1, 0.75), 8, 5)
+		b.sphere("cloth", 0.07, Vector3(0, 0.055, 0.06), (look.hair as Color).darkened(0.1), Vector3(1.05, 0.8 if beard == 1 else 1.1, 0.75), 8, 5)
 
 func _hood(b: MeshBuilder, color: Color) -> void:
 	b.push(Transform3D(Basis(Vector3.RIGHT, -0.25), Vector3(0, 0.13, -0.015)))
@@ -318,6 +354,9 @@ func _dress_hero(look: Dictionary) -> void:
 	var role := str(look.role)
 	var o: Color = look.outfit
 	var a: Color = look.accent
+	# testa coperta nel ritratto (cappuccio, cappello, fazzoletto): cappuccio anche in 3D
+	var covered: bool = look.get("covered", false) and role != "Ranger" and str(look.get("beast", "")).is_empty()
+	if covered: look["hood"] = true
 	var leather := Color("#4a3423")
 	var steel := Color("#9aa0a8")
 	var dark_steel := Color("#5d6168")
@@ -400,6 +439,8 @@ func _dress_hero(look: Dictionary) -> void:
 				hb.pop()
 			_b("spine").box("cloth", Vector3(0.26, 0.4, 0.02), Vector3(0, 0.05, 0.118), Color("#c9bea6"))
 			attack_style = "melee"
+	if covered:
+		_hood(_b("head"), o.darkened(0.22))
 	if rarity >= 4 and role != "Villager":
 		var cape := _muted(UIKit.rarity_color(rarity), 0.35).darkened(0.35)
 		var tb := _b("spine")

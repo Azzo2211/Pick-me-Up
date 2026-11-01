@@ -26,6 +26,10 @@ var portrait: HeroPortrait
 var art: Control
 var overlay: Control
 var _time := 0.0
+## Effetto 3D: la carta "segue" il mouse (parallasse del volto e riflesso di luce).
+var _tilt := Vector2.ZERO
+var _tilt_target := Vector2.ZERO
+var _lift := 0.0
 
 func setup(data: Dictionary, card_width: float = 180.0, death_caption: String = "") -> HeroCard:
 	hero = data
@@ -40,8 +44,8 @@ func setup(data: Dictionary, card_width: float = 180.0, death_caption: String = 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	mouse_entered.connect(func(): hovered = true; queue_redraw())
-	mouse_exited.connect(func(): hovered = false; queue_redraw())
+	mouse_entered.connect(func(): hovered = true; set_process(true); queue_redraw())
+	mouse_exited.connect(func(): hovered = false; _tilt_target = Vector2.ZERO; set_process(true); queue_redraw())
 	art = Control.new()
 	art.clip_contents = true
 	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -65,8 +69,19 @@ func _animated() -> bool:
 
 func _process(delta: float) -> void:
 	_time += delta
+	# 6★ e 7★ "respirano" anche da ferme
+	if not hovered and _animated(): _tilt_target = Vector2(sin(_time * 0.7), cos(_time * 0.53)) * 0.18
+	_tilt = _tilt.lerp(_tilt_target, 1.0 - exp(-delta * 9.0))
+	_lift = move_toward(_lift, 1.0 if hovered and not dead else 0.0, delta * 5.0)
+	if portrait != null:
+		portrait.tilt = _tilt
+		portrait.zoom = 1.0 + 0.07 * _lift
+		portrait.queue_redraw()
 	queue_redraw()
 	if overlay != null: overlay.queue_redraw()
+	if not _animated() and not hovered and _lift <= 0.0 and _tilt.length() < 0.003:
+		_tilt = Vector2.ZERO
+		set_process(false)
 
 func _layout() -> void:
 	var w := size.x
@@ -89,6 +104,10 @@ func set_face_down(value: bool) -> void:
 	if overlay != null: overlay.queue_redraw()
 
 func _gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion and size.x > 0.0 and not face_down:
+		var p: Vector2 = event.position / size - Vector2(0.5, 0.5)
+		_tilt_target = (p * 2.0).clamp(Vector2(-1, -1), Vector2(1, 1))
+		set_process(true)
 	# al rilascio: così una carta si può anche trascinare (formazione) senza aprirla
 	if event is InputEventMouseButton and not event.pressed and event.button_index == MOUSE_BUTTON_LEFT and get_global_rect().has_point(event.global_position):
 		pressed.emit(hero_id)
@@ -175,6 +194,7 @@ func _draw_overlay() -> void:
 	var fade := PackedVector2Array([Vector2(inner.position.x, h * 0.6), Vector2(inner.end.x, h * 0.6), Vector2(inner.end.x, inner.end.y), Vector2(inner.position.x, inner.end.y)])
 	o.draw_polygon(fade, PackedColorArray([Color(BG, 0), Color(BG, 0), Color(BG, 0.96), Color(BG, 0.96)]))
 	if _animated(): _draw_particles(o, inner)
+	if not dead and (_lift > 0.0 or _animated()): _draw_sheen(o, inner, cut)
 	o.draw_polyline(OrnateStyle.closed(OrnateStyle.octagon(inner, cut * 0.8)), Color(color.r, color.g, color.b, 0.45 if not dead else 0.2), 1.0, true)
 	var font := UIKit.head_font()
 	# etichetta di rarità in alto
@@ -225,6 +245,28 @@ func _draw_overlay() -> void:
 				lw = font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, big).x
 			o.draw_string_outline(font, Vector2(w * 0.5 - lw * 0.5, y0 + i * big * 1.1), line, HORIZONTAL_ALIGNMENT_LEFT, -1, big, 5, Color(0, 0, 0, 0.7))
 			o.draw_string(font, Vector2(w * 0.5 - lw * 0.5, y0 + i * big * 1.1), line, HORIZONTAL_ALIGNMENT_LEFT, -1, big, Color(1.0, 0.45, 0.5, 0.9))
+
+## Riflesso di luce che scorre sulla carta seguendo il mouse: dà profondità al ritratto.
+func _draw_sheen(o: Control, inner: Rect2, cut: float) -> void:
+	var strength := maxf(_lift, 0.35 if _animated() else 0.0)
+	if strength <= 0.01: return
+	var art_rect := Rect2(inner.position, Vector2(inner.size.x, inner.size.y * 0.8))
+	var clip := OrnateStyle.octagon(art_rect, cut * 0.8)
+	var cx := art_rect.position.x + art_rect.size.x * (0.5 + _tilt.x * 0.55)
+	var skew := art_rect.size.y * 0.45
+	var bands := [[art_rect.size.x * 0.34, 0.07], [art_rect.size.x * 0.12, 0.10]]
+	for band in bands:
+		var bw: float = band[0]
+		var quad := PackedVector2Array([
+			Vector2(cx - bw * 0.5 + skew * 0.5, art_rect.position.y), Vector2(cx + bw * 0.5 + skew * 0.5, art_rect.position.y),
+			Vector2(cx + bw * 0.5 - skew * 0.5, art_rect.end.y), Vector2(cx - bw * 0.5 - skew * 0.5, art_rect.end.y)])
+		for piece in Geometry2D.intersect_polygons(quad, clip):
+			o.draw_colored_polygon(piece, Color(1, 1, 1, float(band[1]) * strength))
+	# bordo illuminato dal lato della luce
+	var rim := _frame_color().lightened(0.4)
+	rim.a = 0.35 * strength
+	var lit_x := art_rect.position.x if _tilt.x < 0.0 else art_rect.end.x
+	o.draw_line(Vector2(lit_x, art_rect.position.y + cut), Vector2(lit_x, art_rect.end.y - cut), rim, 2.0, true)
 
 ## 6★: braci che salgono. 7★: scintille a stella che brillano e scorrono.
 func _draw_particles(o: Control, inner: Rect2) -> void:

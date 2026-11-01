@@ -12,6 +12,7 @@ signal hero_leveled(hero_id: String, level: int)
 signal time_ticked
 
 const CharacterGeneratorScript := preload("res://scripts/characters/character_generator.gd")
+const PortraitLibraryScript := preload("res://scripts/portrait_library.gd")
 const SAVE_PATH := "user://riftward_save.json"
 const SAVE_VERSION := 3
 const PARTY_SIZE := 5
@@ -248,6 +249,8 @@ func _migrate() -> void:
 	for hero in data.heroes:
 		if not hero.has("appearance"): hero["appearance"] = CharacterGeneratorScript.generate(str(hero.get("id", "legacy")) + ":appearance")
 		if not hero.has("category"): hero["category"] = str(hero.appearance.get("category", "Villager"))
+		# ritratto dipinto: gli eroi già in squadra ne ricevono uno, senza doppioni finché ce ne sono
+		if str(hero.get("portrait", "")).is_empty() or not PortraitLibraryScript.has(str(hero.portrait)): assign_portrait(hero)
 	while data.party.size() < PARTY_SIZE: data.party.append("")
 	data.version = SAVE_VERSION
 	if not data.active_mission.is_empty():
@@ -465,7 +468,23 @@ func generate_hero(seed_text: String, rarity: int, forced_role: String = "") -> 
 	# Aspetto dal generatore personaggi: dipende solo dall'id, non tocca la sequenza RNG di statistiche e ruolo.
 	hero.appearance = CharacterGeneratorScript.generate(id + ":appearance")
 	hero.category = str(hero.appearance.category)
+	assign_portrait(hero)
 	return hero
+
+## Ritratti già presi dagli eroi in squadra (id → quante volte).
+func used_portraits(except_id: String = "") -> Dictionary:
+	var used := {}
+	for other in data.get("heroes", []):
+		if str(other.get("id", "")) == except_id: continue
+		var pid := str(other.get("portrait", ""))
+		if not pid.is_empty(): used[pid] = int(used.get(pid, 0)) + 1
+	return used
+
+## Assegna all'eroe un ritratto dipinto adatto (sesso del nome, categoria, occhi rossi).
+func assign_portrait(hero: Dictionary) -> void:
+	var gen: Dictionary = hero.get("appearance", {})
+	var pid: String = PortraitLibraryScript.pick(str(hero.get("id", "x")), is_feminine(hero), str(hero.get("category", gen.get("category", ""))), str(gen.get("eye_color", "")) == "red", used_portraits(str(hero.get("id", ""))))
+	if not pid.is_empty(): hero["portrait"] = pid
 
 ## Aspetto deterministico derivato dall'id: non altera la sequenza RNG storica degli eroi.
 func hero_appearance(hero: Dictionary) -> Dictionary:
@@ -477,12 +496,14 @@ const EYE_COLORS := ["#4a2c1e", "#4a2c1e", "#6e2424", "#9c7426", "#3b6b49", "#3a
 const SKIN_TONES := ["#f1dccc", "#ecd0bb", "#e4c0a2", "#d2a581", "#b98663", "#8f5f45", "#6b4533"]
 const OUTFIT_COLORS := ["#3a2e29", "#2d3236", "#352c3f", "#2c3830", "#46322a", "#262c3c", "#472a2f", "#3d3a33"]
 
+static func is_feminine(hero: Dictionary) -> bool:
+	return FEMININE_NAMES.has(str(hero.get("name", "Hero")).split(" ")[0])
+
 ## Tratti fisici del ritratto e del modello 3D, sempre uguali per lo stesso eroe.
+## Se l'eroe ha un ritratto dipinto, capelli, pelle, barba e dettagli vengono da lì.
 static func appearance_for(hero: Dictionary) -> Dictionary:
 	var h: int = abs(str(hero.get("id", "x")).hash())
-	var name := str(hero.get("name", "Hero"))
-	var first := name.split(" ")[0]
-	var fem: bool = FEMININE_NAMES.has(first)
+	var fem: bool = is_feminine(hero)
 	var role := str(hero.get("role", "Guardian"))
 	var hue := float(hero.get("hue", 40)) / 360.0
 	var veteran := (h / 7919) % 100 < 14
@@ -500,8 +521,9 @@ static func appearance_for(hero: Dictionary) -> Dictionary:
 			"beard": beard = 2
 			"stubble", "moustache": beard = 1
 		if veteran and beard == 0: beard = 1
-	return {
+	var look := {
 		"hair": hair,
+		"hair_color": str(gen.get("hair_color", "")),
 		"skin": Color(str(gen.get("skin_hex", SKIN_TONES[(h / 11) % SKIN_TONES.size()]))),
 		"eyes": Color(str(gen.get("eye_hex", EYE_COLORS[(h / 7) % EYE_COLORS.size()]))),
 		"eye_color": str(gen.get("eye_color", "")),
@@ -520,7 +542,21 @@ static func appearance_for(hero: Dictionary) -> Dictionary:
 		"build": 1.0 + (float(gen.get("body_width", 1.0)) - 1.0) * 0.5,
 		"category": str(gen.get("category", "")),
 		"seed": h,
+		"portrait": "",
 	}
+	var painted: Dictionary = PortraitLibraryScript.look(str(hero.get("portrait", "")))
+	if not painted.is_empty():
+		for key in ["portrait", "hair", "hair_color", "skin", "glasses", "scar", "bald", "elf", "dwarf", "covered", "long_hair", "greenskin", "beast"]:
+			look[key] = painted[key]
+		look.beard = 0 if fem and str(painted.sex) != "m" else int(painted.beard)
+		look.veteran = bool(painted.old)
+		look.freckles = false
+		if bool(painted.heavy): look.build = maxf(float(look.build), 1.08)
+		if bool(painted.dwarf):
+			look.height = minf(float(look.height), 0.92)
+			look.build = maxf(float(look.build), 1.08)
+		if bool(painted.long_hair) and not fem: look.hair_style = 2
+	return look
 
 func _starter_equipment(role: String) -> Dictionary:
 	var names := {"Guardian": "Spada da presidio", "Vanguard": "Lama mercenaria", "Lancer": "Lancia d'acciaio", "Ranger": "Arco laminato", "Mage": "Verga di quarzo", "Support": "Mazza cerimoniale"}

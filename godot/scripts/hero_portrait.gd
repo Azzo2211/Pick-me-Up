@@ -10,6 +10,17 @@ class_name HeroPortrait
 ## framed = false → solo figura su fondo trasparente (dentro le carte)
 
 const LINE := Color(0.08, 0.05, 0.06, 0.92)
+const PortraitLibraryScript := preload("res://scripts/portrait_library.gd")
+const VIGNETTE := Color("#0e1520")
+## Ritratto dei caduti: grigio e spento.
+const GREY_SHADER := """shader_type canvas_item;
+void fragment() {
+	vec4 c = texture(TEXTURE, UV) * COLOR;
+	float g = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+	COLOR = vec4(mix(c.rgb, vec3(g), 0.85) * 0.75, c.a);
+}
+"""
+static var _grey_material: ShaderMaterial
 
 var hero_name := "Hero"
 var role := "Guardian"
@@ -19,6 +30,13 @@ var look: Dictionary = {}
 var framed := true
 var framing := "face"
 var portrait_size := Vector2(96, 96)
+
+## Ritratto dipinto (se l'eroe ne ha uno): sostituisce il volto disegnato in codice.
+var photo: Texture2D = null
+var photo_focus := Vector2(0.5, 0.45)
+## Parallasse delle carte: -1…1 sposta il volto, zoom > 1 lo avvicina.
+var tilt := Vector2.ZERO
+var zoom := 1.0
 
 var _origin := Vector2.ZERO
 var _unit := 1.0
@@ -30,6 +48,12 @@ func setup(hero: Dictionary, size_px: float = 96.0, mode: String = "") -> void:
 	rarity = clampi(int(hero.get("current_rarity", hero.get("rarity", 1))), 1, 7)
 	dead = str(hero.get("state", "ALIVE")) != "ALIVE"
 	look = RiftwardState.appearance_for(hero)
+	var pid := str(look.get("portrait", ""))
+	photo = PortraitLibraryScript.texture(pid)
+	if photo != null:
+		photo_focus = PortraitLibraryScript.focus(pid)
+		texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		material = grey_material() if dead else null
 	if mode == "bust":
 		framed = false
 		framing = "bust"
@@ -124,10 +148,24 @@ func uline(points, color: Color, width_scale: float = 1.0) -> void:
 # Disegno
 # =============================================================================
 
+static func grey_material() -> ShaderMaterial:
+	if _grey_material == null:
+		var shader := Shader.new()
+		shader.code = GREY_SHADER
+		_grey_material = ShaderMaterial.new()
+		_grey_material.shader = shader
+	return _grey_material
+
 func _draw() -> void:
 	var w := size.x
 	var h := size.y
 	if w < 4.0 or h < 4.0: return
+	if photo != null:
+		if framed: _draw_backdrop()
+		_draw_photo()
+		if framed: _draw_frame()
+		elif dead: draw_rect(Rect2(Vector2.ZERO, size), Color(0.05, 0.04, 0.06, 0.25))
+		return
 	if framing == "bust":
 		_unit = minf(h * 0.38, w * 0.47)
 		_origin = Vector2(w * 0.5, h * 0.39)
@@ -161,6 +199,64 @@ func _draw() -> void:
 	if framed: _draw_frame()
 	if dead:
 		draw_rect(Rect2(Vector2.ZERO, size), Color(0.05, 0.04, 0.06, 0.35))
+
+# --- Ritratto dipinto -----------------------------------------------------------
+
+## Zona dell'immagine da mostrare: proporzioni della destinazione, centrata sul
+## volto, spostata dalla parallasse e ristretta dallo zoom.
+func _photo_region(aspect: float) -> Rect2:
+	var ts := photo.get_size()
+	var rw := ts.y * aspect
+	var rh := ts.y
+	if rw > ts.x:
+		rw = ts.x
+		rh = ts.x / aspect
+	rw /= zoom
+	rh /= zoom
+	var cx := photo_focus.x * ts.x - tilt.x * rw * 0.05
+	var cy := photo_focus.y * ts.y - tilt.y * rh * 0.05
+	var x := clampf(cx - rw * 0.5, 0.0, ts.x - rw)
+	var y := clampf(cy - rh * 0.42, 0.0, ts.y - rh)
+	return Rect2(x, y, rw, rh)
+
+## Disegna la zona `src` dell'immagine dentro `dest`, con trasparenza in alto e in basso.
+func _photo_quad(dest: Rect2, src: Rect2, top_alpha: float = 1.0, bottom_alpha: float = 1.0) -> void:
+	var ts := photo.get_size()
+	var pts := PackedVector2Array([dest.position, Vector2(dest.end.x, dest.position.y), dest.end, Vector2(dest.position.x, dest.end.y)])
+	var uvs := PackedVector2Array([src.position / ts, Vector2(src.end.x, src.position.y) / ts, src.end / ts, Vector2(src.position.x, src.end.y) / ts])
+	var c0 := Color(1, 1, 1, top_alpha)
+	var c1 := Color(1, 1, 1, bottom_alpha)
+	draw_polygon(pts, PackedColorArray([c0, c0, c1, c1]), uvs, photo)
+
+func _draw_photo() -> void:
+	var w := size.x
+	var h := size.y
+	if framing == "bust":
+		# nelle carte: volto in alto a tutta larghezza, che sfuma verso nome e stelle
+		var dest_h := minf(h, w / 0.84)
+		var src := _photo_region(w / dest_h)
+		var cut := 0.68
+		_photo_quad(Rect2(0, 0, w, dest_h * cut), Rect2(src.position, Vector2(src.size.x, src.size.y * cut)))
+		_photo_quad(Rect2(0, dest_h * cut, w, dest_h * (1.0 - cut)), Rect2(src.position + Vector2(0, src.size.y * cut), Vector2(src.size.x, src.size.y * (1.0 - cut))), 1.0, 0.0)
+		_vignette(Rect2(0, 0, w, dest_h), 0.16, 0.5, cut)
+	else:
+		var src := _photo_region(w / h)
+		_photo_quad(Rect2(0, 0, w, h), src)
+		_vignette(Rect2(0, 0, w, h), 0.14, 0.35)
+
+## Bordi laterali scuriti: il ritratto si fonde con il fondo scuro dell'interfaccia.
+## Da `fade_from` (0–1 dell'altezza) in giù l'ombra svanisce insieme all'immagine.
+func _vignette(rect: Rect2, frac: float, alpha: float, fade_from: float = 1.0) -> void:
+	var edge := rect.size.x * frac
+	var dark := Color(VIGNETTE, alpha)
+	var clear := Color(VIGNETTE, 0.0)
+	var ym := rect.position.y + rect.size.y * fade_from
+	for side in [0, 1]:
+		var x0 := rect.position.x if side == 0 else rect.end.x
+		var x1 := x0 + edge if side == 0 else x0 - edge
+		draw_polygon(PackedVector2Array([Vector2(x0, rect.position.y), Vector2(x1, rect.position.y), Vector2(x1, ym), Vector2(x0, ym)]), PackedColorArray([dark, clear, clear, dark]))
+		if fade_from < 1.0:
+			draw_polygon(PackedVector2Array([Vector2(x0, ym), Vector2(x1, ym), Vector2(x1, rect.end.y), Vector2(x0, rect.end.y)]), PackedColorArray([dark, clear, clear, clear]))
 
 func _draw_backdrop() -> void:
 	var s := size
