@@ -64,10 +64,19 @@ static func entry(id: String) -> Dictionary:
 static func texture(id: String) -> Texture2D:
 	if id.is_empty() or not has(id): return null
 	if _textures.has(id): return _textures[id]
-	var path := DIR + id + ".jpg"
-	var tex: Texture2D = load(path) as Texture2D if ResourceLoader.exists(path) else null
+	var tex := load_image_texture(DIR + id + ".jpg")
 	_textures[id] = tex
 	return tex
+
+## Texture importata da Godot; se l'importazione non è ancora avvenuta (git pull senza
+## aprire l'editor, finestra di aggiornamento chiusa a metà) legge direttamente il file.
+static func load_image_texture(path: String) -> Texture2D:
+	var tex: Texture2D = load(path) as Texture2D if ResourceLoader.exists(path) else null
+	if tex != null or not FileAccess.file_exists(path): return tex
+	var img := Image.load_from_file(path)
+	if img == null or img.is_empty(): return null
+	img.generate_mipmaps()
+	return ImageTexture.create_from_image(img)
 
 ## Centro del volto nel ritratto (0–1), per i ritagli.
 static func focus(id: String) -> Vector2:
@@ -109,8 +118,8 @@ static func shows_hair(id: String, family: String) -> bool:
 static func recolor(id: String, family: String) -> Dictionary:
 	var e := entry(id)
 	if e.is_empty(): return {}
-	var path := DIR + id + "_mask.png"
-	var mask: Texture2D = load(path) as Texture2D if ResourceLoader.exists(path) else null
+	if not _textures.has(id + "_mask"): _textures[id + "_mask"] = load_image_texture(DIR + id + "_mask.png")
+	var mask: Texture2D = _textures[id + "_mask"]
 	var painted := str(e.get("hair", ""))
 	return {
 		"mask": mask,

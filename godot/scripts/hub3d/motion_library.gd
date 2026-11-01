@@ -31,10 +31,9 @@ static var _tracks: Dictionary = {}
 static func ensure() -> bool:
 	if _loaded: return not _anims.is_empty()
 	_loaded = true
-	if not ResourceLoader.exists(SOURCE): return false
-	var scene := load(SOURCE) as PackedScene
-	if scene == null: return false
-	var root := scene.instantiate()
+	var scene: PackedScene = load(SOURCE) as PackedScene if ResourceLoader.exists(SOURCE) else null
+	var root: Node = scene.instantiate() if scene != null else _read_gltf()
+	if root == null: return false
 	var players := root.find_children("*", "AnimationPlayer", true, false)
 	if not players.is_empty():
 		var player := players[0] as AnimationPlayer
@@ -50,6 +49,14 @@ static func ensure() -> bool:
 			_tracks[str(clip)] = tracks
 	root.free()
 	return not _anims.is_empty()
+
+## GLB non ancora importato da Godot (git pull senza aprire l'editor): lo si legge direttamente.
+static func _read_gltf() -> Node:
+	if not FileAccess.file_exists(SOURCE): return null
+	var doc := GLTFDocument.new()
+	var state := GLTFState.new()
+	if doc.append_from_file(SOURCE, state) != OK: return null
+	return doc.generate_scene(state)
 
 static func has(clip: String) -> bool:
 	return _anims.has(clip)
