@@ -82,7 +82,7 @@ func _run() -> void:
 		var body := _model(_hero(archetype, 1, str(arch.hair_m[0]), false, "body"))
 		for view in [["front", 0.0], ["side", PI * 0.5], ["back", PI]]:
 			body.rotation.y = view[1]
-			await _shot("%s_body_%s.png" % [archetype, view[0]], Vector2i(300, 440), Vector3(0, 0.5, 3.3), Vector3(0, 0.47, 0), 22)
+			await _shot("%s_body_%s.png" % [archetype, view[0]], Vector2i(360, 560), Vector3(0, 0.5, 3.3), Vector3(0, 0.48, 0), 18)
 		body.queue_free()
 		# tre volti con la stessa capigliatura
 		for face in 3:
