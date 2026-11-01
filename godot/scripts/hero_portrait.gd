@@ -365,11 +365,25 @@ func _draw_face(skin: Color, eyes: Color, hair: Color, fem: bool) -> void:
 	if look.get("scar", false):
 		uline([Vector2(0.11, -0.13), Vector2(0.16, 0.0), Vector2(0.21, 0.16)], Color("#c98b86"), 1.6)
 		uline([Vector2(0.115, -0.12), Vector2(0.165, 0.0), Vector2(0.215, 0.15)], Color(0.35, 0.15, 0.15, 0.5), 0.6)
+	if look.get("freckles", false):
+		var r := RandomNumberGenerator.new()
+		r.seed = int(look.get("seed", 0))
+		for i in 14:
+			var side := -1.0 if i % 2 == 0 else 1.0
+			ufill(ellipse(Vector2(side * r.randf_range(0.10, 0.25), r.randf_range(0.10, 0.22)), 0.007, 0.006, 6), Color(skin.darkened(0.38), 0.55), false)
+	if look.get("glasses", false) and not dead:
+		var frame := Color("#2a2226")
+		for side in [-1.0, 1.0]:
+			var c := Vector2(0.137 * side, 0.016)
+			draw_arc(T(c), _unit * 0.098, 0, TAU, 28, frame, _line_w * 1.1, true)
+			ufill(ellipse(c + Vector2(-0.03 * side, -0.03), 0.035, 0.018, 10), Color(1, 1, 1, 0.12), false)
+			uline([c + Vector2(0.098 * side, -0.01), Vector2(0.33 * side, -0.03)], frame, 0.9)
+		uline([Vector2(-0.04, 0.0), Vector2(0, -0.012), Vector2(0.04, 0.0)], frame, 0.9)
 
 func _eye_points(side: float, fem: bool) -> Dictionary:
 	# occhi un po' più grandi e aperti, come nei manhwa
 	var c := Vector2(0.137 * side, 0.012)
-	var k := 1.14 if fem else 1.08
+	var k := (1.14 if fem else 1.08) * float(look.get("eye_size", 1.0))
 	var pts := {
 		"inner": Vector2(0.05 * side, 0.035),
 		"outer": Vector2((0.228 if fem else 0.222) * side, 0.0 if fem else 0.006),

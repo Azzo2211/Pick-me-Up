@@ -9,6 +9,10 @@ const HeroCardScript := preload("res://scripts/ui/hero_card.gd")
 const SummonEventScript := preload("res://scripts/ui/summon_event.gd")
 const TowerMapScript := preload("res://scripts/ui/tower_map.gd")
 const ROSTER_PAGE := 24
+## Categorie e colori del generatore personaggi (solo aspetto: non cambiano ruolo o statistiche).
+const CATEGORY_LABELS := {"Swordsman": "spadaccino", "Lancer": "lanciere", "Archer": "arciere", "Rogue": "furfante", "Mage": "mago", "Cleric": "chierico", "Tank": "difensore", "Barbarian": "barbaro", "Ranger": "ramingo", "Alchemist": "alchimista", "Blacksmith": "fabbro", "Merchant": "mercante", "Villager": "popolano", "Noble": "nobile", "Scholar": "studioso", "Beastkin": "uomo-bestia"}
+const HAIR_LABELS := {"black": "neri", "brown": "castani", "blond": "biondi", "auburn": "ramati", "copper": "rossi", "silver": "argento", "white": "bianchi", "blue": "blu", "violet": "viola", "pink": "rosa", "green": "verdi", "teal": "verde acqua"}
+const EYE_LABELS := {"brown": "castani", "amber": "ambra", "blue": "azzurri", "green": "verdi", "gray": "grigi", "hazel": "nocciola", "violet": "viola", "gold": "dorati", "pink": "rosa", "teal": "verde acqua", "red": "rossi (1 su 100.000)"}
 
 var main
 var merge_selected: Array[String] = []
@@ -1192,6 +1196,12 @@ func build_dossier(content: VBoxContainer, hero: Dictionary, modal_ref: Array) -
 	right.add_child(pills)
 	right.add_child(UIKit.title("%s · Livello %d / %d" % [GS.role_label(hero.role), int(hero.level), GS.level_cap(hero)], 21, UIKit.INK))
 	right.add_child(UIKit.label("%s · ex %s" % [hero.origin, str(hero.profession).to_lower()], 15, UIKit.INK_SOFT, UIKit.body_bold()))
+	var look: Dictionary = hero.get("appearance", {})
+	if not look.is_empty():
+		var category: String = CATEGORY_LABELS.get(str(hero.get("category", "")), str(hero.get("category", "")))
+		var eyes: String = EYE_LABELS.get(str(look.get("eye_color", "")), str(look.get("eye_color", "")))
+		var hair: String = HAIR_LABELS.get(str(look.get("hair_color", "")), str(look.get("hair_color", "")))
+		right.add_child(UIKit.label("Aspetto: %s · capelli %s · occhi %s" % [category, hair, eyes], 14, UIKit.ROSE if look.get("eye_color", "") == "red" else UIKit.MUTED, UIKit.body_font()))
 	right.add_child(bars(hero, true))
 	right.add_child(UIKit.label("Potenza %s · Missioni %d · Vittorie %d · Abbattimenti %d" % [GS.format_number(GS.hero_power(hero)), int(hero.missions), int(hero.victories), int(hero.kills)], 14, UIKit.MUTED, UIKit.body_bold()))
 	var grid := GridContainer.new()

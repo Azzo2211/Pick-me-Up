@@ -11,6 +11,7 @@ signal hero_leveled(hero_id: String, level: int)
 ## Emesso quando passa il tempo della base (addestramento, riposo) senza azioni del giocatore.
 signal time_ticked
 
+const CharacterGeneratorScript := preload("res://scripts/characters/character_generator.gd")
 const SAVE_PATH := "user://riftward_save.json"
 const SAVE_VERSION := 3
 const PARTY_SIZE := 5
@@ -243,6 +244,10 @@ func _migrate() -> void:
 		stage_record.get_or_add("attempts", 0)
 		stage_record.get_or_add("cleared", false)
 		stage_record.get_or_add("best_time", 0.0)
+	# Eroi dei salvataggi precedenti: ricevono un aspetto senza perdere livello, stats o equipaggiamento.
+	for hero in data.heroes:
+		if not hero.has("appearance"): hero["appearance"] = CharacterGeneratorScript.generate(str(hero.get("id", "legacy")) + ":appearance")
+		if not hero.has("category"): hero["category"] = str(hero.appearance.get("category", "Villager"))
 	while data.party.size() < PARTY_SIZE: data.party.append("")
 	data.version = SAVE_VERSION
 	if not data.active_mission.is_empty():
@@ -457,6 +462,9 @@ func generate_hero(seed_text: String, rarity: int, forced_role: String = "") -> 
 		"equipment": _starter_equipment(role), "memories": ["Ha attraversato il Rift e ha visto il Nexus per la prima volta."],
 	}
 	hero.assessment = _assessment(hero)
+	# Aspetto dal generatore personaggi: dipende solo dall'id, non tocca la sequenza RNG di statistiche e ruolo.
+	hero.appearance = CharacterGeneratorScript.generate(id + ":appearance")
+	hero.category = str(hero.appearance.category)
 	return hero
 
 ## Aspetto deterministico derivato dall'id: non altera la sequenza RNG storica degli eroi.
@@ -478,28 +486,39 @@ static func appearance_for(hero: Dictionary) -> Dictionary:
 	var role := str(hero.get("role", "Guardian"))
 	var hue := float(hero.get("hue", 40)) / 360.0
 	var veteran := (h / 7919) % 100 < 14
-	var hair := Color(HAIR_COLORS[(h / 3) % HAIR_COLORS.size()])
-	if veteran: hair = hair.lerp(Color("#b9b4b4"), 0.62)
+	# colori, barba, cicatrici e corporatura dal generatore personaggi (occhi rossi 1 su 100.000)
+	var gen: Dictionary = hero.get("appearance", {})
+	if gen.is_empty(): gen = CharacterGeneratorScript.generate(str(hero.get("id", "x")) + ":appearance")
+	var hair := Color(str(gen.get("hair_hex", HAIR_COLORS[(h / 3) % HAIR_COLORS.size()])))
+	if veteran and not str(gen.get("hair_color", "")) in ["white", "silver"]: hair = hair.lerp(Color("#b9b4b4"), 0.62)
 	var styles: Array = [1, 5, 3, 1, 5] if fem else [0, 2, 0, 3, 2]
 	var style: int = styles[(h / 53) % styles.size()]
 	if role in ["Mage", "Ranger"] and (h / 211) % 4 == 0: style = 4
 	var beard := 0
 	if not fem:
-		var roll := (h / 401) % 100
-		if veteran: beard = 2 if roll < 55 else 1
-		elif roll < 18: beard = 1
-		elif roll < 30: beard = 2
+		match str(gen.get("facial_hair", "none")):
+			"beard": beard = 2
+			"stubble", "moustache": beard = 1
+		if veteran and beard == 0: beard = 1
 	return {
 		"hair": hair,
-		"skin": Color(SKIN_TONES[(h / 11) % SKIN_TONES.size()]),
-		"eyes": Color(EYE_COLORS[(h / 7) % EYE_COLORS.size()]),
+		"skin": Color(str(gen.get("skin_hex", SKIN_TONES[(h / 11) % SKIN_TONES.size()]))),
+		"eyes": Color(str(gen.get("eye_hex", EYE_COLORS[(h / 7) % EYE_COLORS.size()]))),
+		"eye_color": str(gen.get("eye_color", "")),
 		"hair_style": style,
 		"outfit": Color(OUTFIT_COLORS[(h / 13) % OUTFIT_COLORS.size()]),
 		"accent": Color.from_hsv(hue, 0.52, 0.58),
 		"fem": fem,
 		"veteran": veteran,
 		"beard": beard,
-		"scar": (h / 977) % 100 < 11,
+		"scar": bool(gen.get("scar", false)) or str(gen.get("face_detail", "")) == "scar",
+		"freckles": str(gen.get("face_detail", "")) == "freckles",
+		"glasses": bool(gen.get("glasses", false)),
+		"eye_size": 1.0 + (float(gen.get("eye_size", 1.0)) - 1.0) * 0.35,
+		# altezza e corporatura attenuate: restano leggibili accanto a edifici e armi
+		"height": 1.0 + (float(gen.get("height_scale", 1.0)) - 1.0) * 0.4,
+		"build": 1.0 + (float(gen.get("body_width", 1.0)) - 1.0) * 0.5,
+		"category": str(gen.get("category", "")),
 		"seed": h,
 	}
 

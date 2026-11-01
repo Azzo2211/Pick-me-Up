@@ -30,6 +30,9 @@ godot/project.godot
 | Buildings (level N = N storeys, batched meshes) | `godot/scripts/hub3d/building_model.gd`, `portal.gdshader` |
 | People living in the base (heroes and villagers) | `godot/scripts/hub3d/hub_agent.gd` |
 | Human characters and monsters (shared with battle) | `godot/scripts/hub3d/character_model.gd` |
+| 3D motion clips (40 original clips, 19-bone rig) mapped onto the character joints | `godot/scripts/hub3d/motion_library.gd`, `godot/assets/animations/riftward_original_motions.glb` |
+| Character generator (16 look categories, hair/eye colours, red eyes 1 in 100,000) | `godot/scripts/characters/character_generator.gd` |
+| Preview scenes (F6 in the editor, not part of the game) | `godot/CharacterPreview.tscn`, `godot/RiftwardMotionPreview.tscn` |
 | Mesh batching, materials, light presets, trees and rocks | `mesh_builder.gd`, `world_materials.gd`, `world_look.gd`, `nature_kit.gd`, `shaders/*.gdshader` |
 | Mission / battle (biome arenas, HUD) | `godot/scripts/battle/battle_scene.gd` |
 
@@ -37,7 +40,7 @@ godot/project.godot
 Run from the repository root (Godot executable on PATH or full path):
 
 ```text
-godot --headless --path godot -s res://tests/test_runner.gd -- --test-mode          # 27 rule tests
+godot --headless --path godot -s res://tests/test_runner.gd -- --test-mode          # 29 rule tests
 godot --headless --path godot -s res://tests/ui_smoke_runner.gd -- --test-mode      # 29 UI checks incl. a full mission
 godot --headless --path godot -s res://tests/balance_probe_runner.gd -- --test-mode # balance table (optional --levels= --floors=)
 godot --path godot -s res://tests/visual_capture_runner.gd -- --test-mode           # UI screenshots → godot/tests/captures/
@@ -69,6 +72,8 @@ godot --path godot -s res://tests/character_probe_runner.gd -- --test-mode      
 - Battle: party of 5 (2 Front / 2 Mid / 1 Rear), 20 ticks/s, decisions at 5 Hz, Utility-style target scoring, ranged kiting, ammo, healing (never on enemies, never hitting allies), fear at low courage, boss slam, objectives (Subjugation, Survival, Exploration with a hero running to free points, Defense won if the beacon survives the timer, Boss), macro orders only, permadeath.
 - Armory forging and equipping, Workshop refining, Alchemy tonics.
 - Shop with in-game currencies only: daily offers, material packs (Gold) and Gem offers (Stones, chest, Gold). Each offer has a daily limit that resets at midnight UTC; nothing in the shop revives heroes or protects from permadeath.
+- Hero looks come from the character generator (saved as `appearance` and `category` on each hero; older saves get one on load): hair, eye and skin colour, beard, scars, freckles, glasses, eye size, height and build. Red eyes are 1 in 100,000. Look never affects role, stars or stats.
+- Humans in the base and in battle play the motion clips for idle, walk, talk, cheer, death, bow shots and spells, with short blends between them. Sitting, resting, training and sword/spear swings stay procedural. If the GLB is missing or not imported yet, every pose falls back to procedural.
 - Mission end: one silent "Eroe perduto" card per fallen hero, then a Stage Clear screen with a 3-star grade (victory, nobody fell, nobody under 30% HP), rewards, survivors and the floor unlocked, or a failure summary.
 - Emergency recruit: a free 1★ every 30 minutes when fewer than five heroes are alive.
 

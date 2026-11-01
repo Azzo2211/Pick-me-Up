@@ -39,6 +39,8 @@ func _initialize() -> void:
 	_test("tratti diversi e abilità in italiano", _test_traits_skills)
 	_test("sviluppo: tutti i piani, base e eroi al massimo", _test_dev_tools)
 	_test("negozio: prezzi, limiti giornalieri e scorte", _test_shop)
+	_test("pacchetto personaggi: aspetto salvato e migrato", _test_character_pack)
+	_test("pacchetto animazioni: 40 clip sullo scheletro", _test_motion_pack)
 	print("\nRisultato: %d passati, %d falliti" % [passed, failed])
 	quit(0 if failed == 0 else 1)
 
@@ -423,3 +425,30 @@ func _test_shop() -> Array:
 	valid = valid and not game.shop_buy("mat_wood").ok and game.resource_amount("gold") == before
 	game.free()
 	return [valid, "Il negozio non rispetta prezzi o limiti"]
+
+func _test_character_pack() -> Array:
+	var game := _fresh("character-pack-seed")
+	var hero: Dictionary = game.data.heroes[0]
+	var generator := load("res://scripts/characters/character_generator.gd")
+	var valid: bool = hero.has("appearance") and generator.CATEGORIES.has(hero.category)
+	var look := RiftwardState.appearance_for(hero)
+	valid = valid and look.eyes == Color(str(hero.appearance.eye_hex)) and (bool(look.veteran) or look.hair == Color(str(hero.appearance.hair_hex)))
+	# salvataggio vecchio senza aspetto: la migrazione lo aggiunge senza toccare il resto
+	var level := int(hero.level)
+	var expected: Dictionary = hero.appearance.duplicate()
+	hero.erase("appearance")
+	hero.erase("category")
+	game._migrate()
+	valid = valid and hero.appearance == expected and int(hero.level) == level
+	# stesso id, stesso aspetto
+	valid = valid and generator.generate("abc:appearance") == generator.generate("abc:appearance")
+	game.free()
+	return [valid, "Aspetto del generatore assente, diverso o perso nella migrazione"]
+
+func _test_motion_pack() -> Array:
+	var motion := load("res://scripts/hub3d/motion_library.gd")
+	var valid: bool = motion.ensure() and motion.clip_names().size() == 40
+	for clip in ["Idle", "Walk_F", "Interact", "Cheer", "Death", "Bow_Shot", "Cast_Spell"]:
+		var pose: Dictionary = motion.sample(clip, 0.4)
+		valid = valid and pose.size() == motion.JOINTS.size() + 1
+	return [valid, "Clip mancanti o scheletro non compatibile"]

@@ -6,6 +6,14 @@ class_name CharacterModel
 ## (1 unità = 2 m). Il modello guarda verso +Z; animazioni procedurali.
 
 const METER := 0.5
+const Motion := preload("res://scripts/hub3d/motion_library.gd")
+## Animazione base → clip del pacchetto di animazioni. Quello che manca qui resta
+## procedurale: "sit" e "rest" (pose tarate su panche e letti), "train" e i colpi di
+## spada e lancia, che nei clip si leggono meno bene da lontano.
+const BASE_CLIPS := {"idle": "Idle", "walk": "Walk_F", "talk": "Interact", "cheer": "Cheer", "dead": "Death"}
+const ATTACK_CLIPS := {"bow": "Bow_Shot", "cast": "Cast_Spell"}
+const JOINT_NAMES := ["hips", "spine", "head", "arm_l", "arm_r", "fore_l", "fore_r", "hand_l", "hand_r", "leg_l", "leg_r", "shin_l", "shin_r"]
+const BLEND_TIME := 0.18
 
 var rig: Node3D
 var hips: Node3D
@@ -39,6 +47,14 @@ var _dead_t := 0.0
 var _sit_t := 0.0
 var upright_r := false
 var upright_l := false
+## Clip di animazione (falso: solo pose procedurali, per esempio se manca il GLB).
+var use_clips := true
+var _clip := ""
+var _clip_t := 0.0
+var _action := ""
+var _pose: Dictionary = {}
+var _fade_from: Dictionary = {}
+var _fade_t := 1.0
 
 # =============================================================================
 # Costruzione: eroi
@@ -54,7 +70,9 @@ func build_hero(hero: Dictionary, appearance: Dictionary) -> void:
 		"beard": int(appearance.get("beard", 0)) if not fem else 0, "outfit": _muted(appearance.get("outfit", Color("#4b5a7a")), 0.25),
 		"accent": _muted(appearance.get("accent", Color("#b08a4a")), 0.15), "rarity": rarity, "role": role,
 	}
-	_build_rig({"scale": 0.95 if fem else 1.0, "shoulder": 0.18 if fem else 0.205, "hip": 0.095 if fem else 0.1})
+	var height := clampf(float(appearance.get("height", 1.0)), 0.9, 1.1)
+	var build := clampf(float(appearance.get("build", 1.0)), 0.9, 1.1)
+	_build_rig({"scale": (0.95 if fem else 1.0) * height, "shoulder": (0.18 if fem else 0.205) * build, "hip": (0.095 if fem else 0.1) * build})
 	_dress_hero(look)
 	_finish()
 
@@ -602,7 +620,73 @@ func update_animation(delta: float, speed_scale: float = 1.0) -> void:
 	_dead_t = move_toward(_dead_t, 1.0 if anim == "dead" else 0.0, delta * speed_scale * 2.5)
 	_sit_t = move_toward(_sit_t, 1.0 if anim in ["sit", "rest"] else 0.0, delta * speed_scale * 3.0)
 	if body_type == "beast": _animate_beast()
-	else: _animate_human()
+	elif use_clips and _sit_t <= 0.0 and Motion.ensure(): _animate_clips(delta * speed_scale)
+	else:
+		if not _clip.is_empty():
+			# dai clip alle pose procedurali: si riparte da articolazioni dritte
+			for joint in _joints(): joint.quaternion = Quaternion.IDENTITY
+			_clip = ""
+			_pose = {}
+		_animate_human()
+
+## Pose dai clip: animazione base su tutto il corpo, arco e magia sulla parte alta
+## (sulle gambe solo da fermi). Le animazioni senza clip usano le pose procedurali,
+## lette come quaternioni così che anche quei passaggi siano morbidi.
+func _animate_clips(dt: float) -> void:
+	if rig == null: return
+	var heavy := monster_kind in ["brute", "boss"]
+	var base: String = BASE_CLIPS.get(anim, "")
+	var action: String = ATTACK_CLIPS.get(attack_style, "") if attack_timer > 0.0 else ""
+	var procedural := base.is_empty() or (attack_timer > 0.0 and action.is_empty())
+	var key := ("proc:" + anim + (":atk" if attack_timer > 0.0 else "")) if procedural else base
+	if key != _clip or action != _action:
+		if _clip.is_empty() and _pose.is_empty():
+			# primo clip: fase casuale, così una folla non si muove all'unisono
+			_clip_t = fmod(float(get_instance_id() % 997) * 0.37, Motion.length(base)) if not base.is_empty() else 0.0
+		elif key != _clip:
+			_clip_t = 0.0
+		_fade_from = _pose
+		_fade_t = 0.0 if not _pose.is_empty() else 1.0
+		_clip = key
+		_action = action
+	_clip_t += dt * (0.75 if heavy and base == "Walk_F" else 1.0)
+	_fade_t = minf(1.0, _fade_t + dt / BLEND_TIME)
+	var pose: Dictionary
+	if procedural:
+		for joint in _joints(): joint.quaternion = Quaternion.IDENTITY
+		_animate_human()
+		pose = _read_pose()
+	else:
+		pose = Motion.sample(base, _clip_t, base != "Death")
+		if not action.is_empty():
+			var k := 1.0 - attack_timer / attack_length
+			var strike := Motion.sample(action, k * Motion.length(action), false)
+			for joint in (Motion.UPPER if base == "Walk_F" else Motion.UPPER + Motion.LOWER): pose[joint] = strike[joint]
+			if base != "Walk_F": pose["@hips"] = strike["@hips"]
+	pose = Motion.blend(_fade_from, pose, _fade_t)
+	_pose = pose
+	_apply_pose(pose)
+	if not procedural:
+		# chi impugna bastoni o archi li tiene dritti rispetto al busto
+		if upright_r: hand_r.quaternion = (arm_r.quaternion * fore_r.quaternion).inverse()
+		if upright_l: hand_l.quaternion = (arm_l.quaternion * fore_l.quaternion).inverse()
+		rig.rotation.x = 0.0
+		rig.position.y = 0.0
+
+func _joints() -> Array:
+	return [hips, spine, head, arm_l, arm_r, fore_l, fore_r, hand_l, hand_r, leg_l, leg_r, shin_l, shin_r]
+
+func _read_pose() -> Dictionary:
+	var pose := {}
+	var nodes := _joints()
+	for i in JOINT_NAMES.size(): pose[JOINT_NAMES[i]] = (nodes[i] as Node3D).quaternion
+	pose["@hips"] = (hips.position - Vector3(0, hip_height, 0)) / (hip_height / Motion.SOURCE_HIP_HEIGHT)
+	return pose
+
+func _apply_pose(pose: Dictionary) -> void:
+	var nodes := _joints()
+	for i in JOINT_NAMES.size(): (nodes[i] as Node3D).quaternion = pose[JOINT_NAMES[i]]
+	hips.position = Vector3(0, hip_height, 0) + (pose["@hips"] as Vector3) * (hip_height / Motion.SOURCE_HIP_HEIGHT)
 
 func _animate_human() -> void:
 	if rig == null: return

@@ -1,0 +1,210 @@
+{
+  "format": "glTF 2.0 / GLB",
+  "authoring": "100% original procedural keyframes",
+  "rig": "Riftward Humanoid (19 joints + skinned mesh)",
+  "animation_count": 40,
+  "fps": 24,
+  "root_motion": "in-place except jumps/dodges/death body translations; game movement controlled by code",
+  "animations": [
+    {
+      "name": "Idle",
+      "duration": 2.0,
+      "loop": true
+    },
+    {
+      "name": "Idle_Breathe",
+      "duration": 3.0,
+      "loop": true
+    },
+    {
+      "name": "Walk_F",
+      "duration": 1.1,
+      "loop": true
+    },
+    {
+      "name": "Walk_B",
+      "duration": 1.1,
+      "loop": true
+    },
+    {
+      "name": "Walk_L",
+      "duration": 1.1,
+      "loop": true
+    },
+    {
+      "name": "Walk_R",
+      "duration": 1.1,
+      "loop": true
+    },
+    {
+      "name": "Walk_FL",
+      "duration": 1.1,
+      "loop": true
+    },
+    {
+      "name": "Walk_FR",
+      "duration": 1.1,
+      "loop": true
+    },
+    {
+      "name": "Walk_BL",
+      "duration": 1.1,
+      "loop": true
+    },
+    {
+      "name": "Walk_BR",
+      "duration": 1.1,
+      "loop": true
+    },
+    {
+      "name": "Jog_F",
+      "duration": 0.9,
+      "loop": true
+    },
+    {
+      "name": "Sprint_F",
+      "duration": 0.7,
+      "loop": true
+    },
+    {
+      "name": "Crouch_Idle",
+      "duration": 1.8,
+      "loop": true
+    },
+    {
+      "name": "Crouch_Walk",
+      "duration": 1.4,
+      "loop": true
+    },
+    {
+      "name": "Turn_L",
+      "duration": 0.85,
+      "loop": false
+    },
+    {
+      "name": "Turn_R",
+      "duration": 0.85,
+      "loop": false
+    },
+    {
+      "name": "Jump",
+      "duration": 1.0,
+      "loop": false
+    },
+    {
+      "name": "Land",
+      "duration": 0.58,
+      "loop": false
+    },
+    {
+      "name": "Dodge_L",
+      "duration": 0.72,
+      "loop": false
+    },
+    {
+      "name": "Dodge_R",
+      "duration": 0.72,
+      "loop": false
+    },
+    {
+      "name": "Sword_Slash",
+      "duration": 0.85,
+      "loop": false
+    },
+    {
+      "name": "Sword_Heavy",
+      "duration": 1.25,
+      "loop": false
+    },
+    {
+      "name": "Spear_Thrust",
+      "duration": 0.9,
+      "loop": false
+    },
+    {
+      "name": "Bow_Shot",
+      "duration": 1.25,
+      "loop": false
+    },
+    {
+      "name": "Cast_Spell",
+      "duration": 1.65,
+      "loop": false
+    },
+    {
+      "name": "Block",
+      "duration": 1.5,
+      "loop": false
+    },
+    {
+      "name": "Hit",
+      "duration": 0.62,
+      "loop": false
+    },
+    {
+      "name": "Death",
+      "duration": 1.5,
+      "loop": false
+    },
+    {
+      "name": "Interact",
+      "duration": 1.0,
+      "loop": false
+    },
+    {
+      "name": "Sit_Down",
+      "duration": 1.1,
+      "loop": false
+    },
+    {
+      "name": "Sit_Idle",
+      "duration": 2.0,
+      "loop": true
+    },
+    {
+      "name": "Stand_Up",
+      "duration": 1.1,
+      "loop": false
+    },
+    {
+      "name": "Wave",
+      "duration": 1.9,
+      "loop": true
+    },
+    {
+      "name": "Cheer",
+      "duration": 1.8,
+      "loop": false
+    },
+    {
+      "name": "Carry",
+      "duration": 2.0,
+      "loop": true
+    },
+    {
+      "name": "Push",
+      "duration": 1.4,
+      "loop": true
+    },
+    {
+      "name": "Hammer_Work",
+      "duration": 1.4,
+      "loop": true
+    },
+    {
+      "name": "Point",
+      "duration": 1.1,
+      "loop": false
+    },
+    {
+      "name": "Salute",
+      "duration": 1.35,
+      "loop": false
+    },
+    {
+      "name": "Panic",
+      "duration": 1.2,
+      "loop": true
+    }
+  ]
+}
