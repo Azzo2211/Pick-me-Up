@@ -15,6 +15,8 @@ const CharacterGeneratorScript := preload("res://scripts/characters/character_ge
 const PortraitLibraryScript := preload("res://scripts/portrait_library.gd")
 const SAVE_PATH := "user://riftward_save.json"
 const SAVE_VERSION := 3
+## Versione della scelta dei ritratti: se cambia, gli eroi salvati ricevono un nuovo volto.
+const PORTRAIT_VERSION := 2
 const PARTY_SIZE := 5
 const MAX_FLOOR := 100
 const OFFLINE_CAP_HOURS := 8.0
@@ -250,7 +252,8 @@ func _migrate() -> void:
 		if not hero.has("appearance"): hero["appearance"] = CharacterGeneratorScript.generate(str(hero.get("id", "legacy")) + ":appearance")
 		if not hero.has("category"): hero["category"] = str(hero.appearance.get("category", "Villager"))
 		# ritratto dipinto: gli eroi già in squadra ne ricevono uno, senza doppioni finché ce ne sono
-		if str(hero.get("portrait", "")).is_empty() or not PortraitLibraryScript.has(str(hero.portrait)): assign_portrait(hero)
+		# (versione 2: il volto si sceglie anche in base al colore dei capelli del generatore)
+		if int(hero.get("portrait_v", 0)) < PORTRAIT_VERSION or not PortraitLibraryScript.has(str(hero.get("portrait", ""))): assign_portrait(hero)
 	while data.party.size() < PARTY_SIZE: data.party.append("")
 	data.version = SAVE_VERSION
 	if not data.active_mission.is_empty():
@@ -480,11 +483,13 @@ func used_portraits(except_id: String = "") -> Dictionary:
 		if not pid.is_empty(): used[pid] = int(used.get(pid, 0)) + 1
 	return used
 
-## Assegna all'eroe un ritratto dipinto adatto (sesso del nome, categoria, occhi rossi).
+## Assegna all'eroe un ritratto dipinto adatto (sesso del nome, categoria, colore dei capelli).
 func assign_portrait(hero: Dictionary) -> void:
 	var gen: Dictionary = hero.get("appearance", {})
-	var pid: String = PortraitLibraryScript.pick(str(hero.get("id", "x")), is_feminine(hero), str(hero.get("category", gen.get("category", ""))), str(gen.get("eye_color", "")) == "red", used_portraits(str(hero.get("id", ""))))
-	if not pid.is_empty(): hero["portrait"] = pid
+	var pid: String = PortraitLibraryScript.pick(str(hero.get("id", "x")), is_feminine(hero), str(hero.get("category", gen.get("category", ""))), str(gen.get("hair_color", "")), used_portraits(str(hero.get("id", ""))), str(gen.get("eye_color", "")) == "red")
+	if not pid.is_empty():
+		hero["portrait"] = pid
+		hero["portrait_v"] = PORTRAIT_VERSION
 
 ## Aspetto deterministico derivato dall'id: non altera la sequenza RNG storica degli eroi.
 func hero_appearance(hero: Dictionary) -> Dictionary:
@@ -500,7 +505,8 @@ static func is_feminine(hero: Dictionary) -> bool:
 	return FEMININE_NAMES.has(str(hero.get("name", "Hero")).split(" ")[0])
 
 ## Tratti fisici del ritratto e del modello 3D, sempre uguali per lo stesso eroe.
-## Se l'eroe ha un ritratto dipinto, capelli, pelle, barba e dettagli vengono da lì.
+## Se l'eroe ha un ritratto dipinto, volto, taglio, pelle, barba e dettagli vengono da lì;
+## i colori di capelli e occhi restano quelli del generatore (il ritratto si ricolora).
 static func appearance_for(hero: Dictionary) -> Dictionary:
 	var h: int = abs(str(hero.get("id", "x")).hash())
 	var fem: bool = is_feminine(hero)
@@ -546,8 +552,15 @@ static func appearance_for(hero: Dictionary) -> Dictionary:
 	}
 	var painted: Dictionary = PortraitLibraryScript.look(str(hero.get("portrait", "")))
 	if not painted.is_empty():
-		for key in ["portrait", "hair", "hair_color", "skin", "glasses", "scar", "bald", "elf", "dwarf", "covered", "long_hair", "greenskin", "beast"]:
+		for key in ["portrait", "skin", "glasses", "scar", "bald", "elf", "dwarf", "covered", "long_hair", "greenskin", "beast"]:
 			look[key] = painted[key]
+		var family := str(gen.get("hair_color", ""))
+		look.hair = Color(str(gen.get("hair_hex", painted.hair.to_html(false))))
+		look.hair_color = family
+		# volto che non si può ricolorare (barba piena, cappuccio): il modello 3D segue il dipinto
+		if not PortraitLibraryScript.shows_hair(str(painted.portrait), family):
+			look.hair = painted.hair
+			look.hair_color = painted.hair_color
 		look.beard = 0 if fem and str(painted.sex) != "m" else int(painted.beard)
 		look.veteran = bool(painted.old)
 		look.freckles = false

@@ -434,9 +434,10 @@ func _test_character_pack() -> Array:
 	var valid: bool = hero.has("appearance") and generator.CATEGORIES.has(hero.category)
 	var look := RiftwardState.appearance_for(hero)
 	valid = valid and look.eyes == Color(str(hero.appearance.eye_hex))
-	# i capelli vengono dal ritratto dipinto se c'è, altrimenti dal generatore
-	var painted: Dictionary = load("res://scripts/portrait_library.gd").look(str(hero.get("portrait", "")))
-	valid = valid and (look.hair == painted.hair if not painted.is_empty() else (bool(look.veteran) or look.hair == Color(str(hero.appearance.hair_hex))))
+	# capelli dal generatore, anche con il ritratto dipinto (che si ricolora)
+	var library := load("res://scripts/portrait_library.gd")
+	if library.shows_hair(str(hero.get("portrait", "")), str(hero.appearance.hair_color)):
+		valid = valid and look.hair == Color(str(hero.appearance.hair_hex)) and look.hair_color == str(hero.appearance.hair_color)
 	# salvataggio vecchio senza aspetto: la migrazione lo aggiunge senza toccare il resto
 	var level := int(hero.level)
 	var expected: Dictionary = hero.appearance.duplicate()
@@ -467,17 +468,30 @@ func _test_painted_portraits() -> Array:
 	game._migrate()
 	valid = valid and library.has(str(first.get("portrait", "")))
 	# uomini-bestia: solo volti di bestia o pelleverde; gli altri mai
-	var beast_pid: String = library.pick("beast-test", false, "Beastkin", false, {})
+	var beast_pid: String = library.pick("beast-test", false, "Beastkin", "brown", {})
 	var beast_flags := str(library.entry(beast_pid).get("flags", ""))
 	valid = valid and (beast_flags.contains("K") or beast_flags.contains("Q"))
-	for i in 40:
-		var pid: String = library.pick("human-%d" % i, i % 2 == 0, "Swordsman", false, {})
+	var families := ["black", "brown", "blond", "auburn", "copper", "silver", "white", "blue", "violet", "pink", "green", "teal"]
+	for i in 48:
+		var family: String = families[i % families.size()]
+		var pid: String = library.pick("human-%d" % i, (i / 12) % 2 == 0, "Swordsman", family, {})
 		var flags := str(library.entry(pid).get("flags", ""))
-		valid = valid and not flags.contains("K") and not flags.contains("Q") and not flags.contains("R")
-	# il ritratto decide capelli e barba del modello 3D
+		valid = valid and not flags.contains("K") and not flags.contains("Q")
+		# ogni colore dei capelli trova un volto che lo mostra (dipinto così o ricolorato)
+		valid = valid and library.shows_hair(pid, family)
+		var info: Dictionary = library.recolor(pid, family)
+		valid = valid and info.mask != null and bool(info.hair_on) == (str(library.entry(pid).hair) != family and str(library.entry(pid).hair) != "bald")
+	# salvataggi della scelta vecchia: il volto si sceglie di nuovo
+	first.portrait_v = 1
+	game._migrate()
+	valid = valid and int(first.portrait_v) == game.PORTRAIT_VERSION
+	# dal ritratto: volto, pelle e dettagli; dal generatore: colore di capelli e occhi
 	var look := RiftwardState.appearance_for(first)
 	var painted: Dictionary = library.look(str(first.portrait))
-	valid = valid and look.portrait == first.portrait and look.hair == painted.hair and look.skin == painted.skin
+	valid = valid and look.portrait == first.portrait and look.skin == painted.skin
+	valid = valid and look.eyes == Color(str(first.appearance.eye_hex))
+	if library.shows_hair(str(first.portrait), str(first.appearance.hair_color)): valid = valid and look.hair == Color(str(first.appearance.hair_hex))
+	else: valid = valid and look.hair == painted.hair
 	game.free()
 	return [valid, "Ritratti dipinti mancanti, doppi o non adatti all'eroe"]
 

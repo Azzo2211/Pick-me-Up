@@ -13,14 +13,71 @@ const LINE := Color(0.08, 0.05, 0.06, 0.92)
 const PortraitLibraryScript := preload("res://scripts/portrait_library.gd")
 const VIGNETTE := Color("#0e1520")
 ## Ritratto dei caduti: grigio e spento.
+## (In Godot 4 COLOR nel fragment è già colore dei vertici × texture.)
 const GREY_SHADER := """shader_type canvas_item;
 void fragment() {
-	vec4 c = texture(TEXTURE, UV) * COLOR;
+	vec4 c = COLOR;
 	float g = dot(c.rgb, vec3(0.299, 0.587, 0.114));
 	COLOR = vec4(mix(c.rgb, vec3(g), 0.85) * 0.75, c.a);
 }
 """
 static var _grey_material: ShaderMaterial
+## Ricolora capelli e occhi del ritratto dipinto con i colori del generatore:
+## la maschera (R capelli, G iridi) dice dove, la luminosità dipinta dà ombre e riflessi
+## (mappa a gradiente: il tono medio dipinto diventa esattamente il colore del generatore),
+## i riflessi bianchi degli occhi restano.
+const RECOLOR_SHADER := """shader_type canvas_item;
+uniform sampler2D mask_tex : filter_linear_mipmap;
+uniform vec3 hair_color = vec3(0.3, 0.2, 0.15);
+uniform vec3 eye_color = vec3(0.5, 0.3, 0.2);
+uniform vec3 hair_range = vec3(0.1, 0.35, 0.6);
+uniform vec3 eye_range = vec3(0.1, 0.35, 0.6);
+uniform float hair_on = 0.0;
+uniform float eye_on = 0.0;
+uniform float grey = 0.0;
+const vec3 LUM = vec3(0.299, 0.587, 0.114);
+// colore dei vertici (sfumature, modulate): in fragment COLOR è già moltiplicato per la texture
+varying vec4 vertex_color;
+
+void vertex() {
+	vertex_color = COLOR;
+}
+
+// luminosità dipinta → 0…1, con il tono medio a 0.55
+float tmap(float l, vec3 r) {
+	float mid = clamp(r.y, r.x + 0.02, max(r.z - 0.02, r.x + 0.02));
+	if (l < mid) return 0.55 * clamp((l - r.x) / max(mid - r.x, 0.02), 0.0, 1.0);
+	return 0.55 + 0.45 * clamp((l - mid) / max(r.z - mid, 0.02), 0.0, 1.0);
+}
+
+// ombra scura → colore → riflesso chiaro; i colori chiari hanno ombre meno nere
+vec3 gmap(float t, vec3 col, float base_dark, float base_light) {
+	float y = dot(col, LUM);
+	vec3 dark = col * (base_dark + 0.25 * y);
+	vec3 light = col + (vec3(1.0) - col) * base_light * (0.55 + 0.45 * y);
+	return t < 0.55 ? mix(dark, col, t / 0.55) : mix(col, light, (t - 0.55) / 0.45);
+}
+
+void fragment() {
+	vec4 c = texture(TEXTURE, UV);
+	vec3 m = texture(mask_tex, UV).rgb;
+	float l = dot(c.rgb, LUM);
+	vec3 rgb = c.rgb;
+	if (hair_on > 0.5) {
+		rgb = mix(rgb, gmap(tmap(l, hair_range), hair_color, 0.18, 0.6), m.r);
+	}
+	if (eye_on > 0.5) {
+		float keep = clamp((l - 0.85) / 0.1, 0.0, 1.0);
+		rgb = mix(rgb, gmap(tmap(l, eye_range), eye_color, 0.22, 0.55), m.g * (1.0 - keep));
+	}
+	if (grey > 0.5) {
+		float g = dot(rgb, LUM);
+		rgb = mix(rgb, vec3(g), 0.85) * 0.75;
+	}
+	COLOR = vec4(rgb, c.a) * vertex_color;
+}
+"""
+static var _recolor_shader: Shader
 
 var hero_name := "Hero"
 var role := "Guardian"
@@ -35,8 +92,17 @@ var portrait_size := Vector2(96, 96)
 var photo: Texture2D = null
 var photo_focus := Vector2(0.5, 0.45)
 ## Parallasse delle carte: -1…1 sposta il volto, zoom > 1 lo avvicina.
-var tilt := Vector2.ZERO
-var zoom := 1.0
+var tilt := Vector2.ZERO:
+	set(value):
+		tilt = value
+		_redraw_layers()
+var zoom := 1.0:
+	set(value):
+		zoom = value
+		_redraw_layers()
+## Livelli del ritratto dipinto: la foto (con lo shader dei colori) e, sopra, ombre e cornice.
+var _photo_layer: Control = null
+var _front_layer: Control = null
 
 var _origin := Vector2.ZERO
 var _unit := 1.0
@@ -52,8 +118,8 @@ func setup(hero: Dictionary, size_px: float = 96.0, mode: String = "") -> void:
 	photo = PortraitLibraryScript.texture(pid)
 	if photo != null:
 		photo_focus = PortraitLibraryScript.focus(pid)
-		texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 		material = grey_material() if dead else null
+		_build_layers(pid)
 	if mode == "bust":
 		framed = false
 		framing = "bust"
@@ -156,15 +222,57 @@ static func grey_material() -> ShaderMaterial:
 		_grey_material.shader = shader
 	return _grey_material
 
+static func recolor_shader() -> Shader:
+	if _recolor_shader == null:
+		_recolor_shader = Shader.new()
+		_recolor_shader.code = RECOLOR_SHADER
+	return _recolor_shader
+
+## Crea i due livelli del ritratto dipinto e il materiale con i colori dell'eroe.
+func _build_layers(pid: String) -> void:
+	if _photo_layer == null:
+		_photo_layer = Control.new()
+		_photo_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_photo_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		_photo_layer.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		_photo_layer.draw.connect(_draw_photo)
+		add_child(_photo_layer)
+		_front_layer = Control.new()
+		_front_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_front_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		_front_layer.draw.connect(_draw_front)
+		add_child(_front_layer)
+	var mat := ShaderMaterial.new()
+	mat.shader = recolor_shader()
+	var info: Dictionary = PortraitLibraryScript.recolor(pid, str(look.get("hair_color", "")))
+	mat.set_shader_parameter("mask_tex", info.get("mask"))
+	mat.set_shader_parameter("hair_on", 1.0 if info.get("hair_on", false) else 0.0)
+	mat.set_shader_parameter("eye_on", 1.0 if info.get("eye_on", false) else 0.0)
+	# Vector3, non Color: un Color verrebbe convertito in spazio lineare e i colori uscirebbero più scuri
+	var hair_c: Color = look.get("hair", Color.BLACK)
+	var eye_c: Color = look.get("eyes", Color.BLACK)
+	mat.set_shader_parameter("hair_color", Vector3(hair_c.r, hair_c.g, hair_c.b))
+	mat.set_shader_parameter("eye_color", Vector3(eye_c.r, eye_c.g, eye_c.b))
+	mat.set_shader_parameter("hair_range", info.get("hair_range", Vector3(0.1, 0.35, 0.6)))
+	mat.set_shader_parameter("eye_range", info.get("eye_range", Vector3(0.1, 0.35, 0.6)))
+	mat.set_shader_parameter("grey", 1.0 if dead else 0.0)
+	_photo_layer.material = mat
+	_front_layer.material = grey_material() if dead else null
+	_redraw_layers()
+
+func _redraw_layers() -> void:
+	if _photo_layer != null:
+		_photo_layer.queue_redraw()
+		_front_layer.queue_redraw()
+
 func _draw() -> void:
 	var w := size.x
 	var h := size.y
 	if w < 4.0 or h < 4.0: return
 	if photo != null:
+		# sotto la foto: solo lo sfondo; foto e cornice stanno nei due livelli figli
 		if framed: _draw_backdrop()
-		_draw_photo()
-		if framed: _draw_frame()
-		elif dead: draw_rect(Rect2(Vector2.ZERO, size), Color(0.05, 0.04, 0.06, 0.25))
+		_redraw_layers()
 		return
 	if framing == "bust":
 		_unit = minf(h * 0.38, w * 0.47)
@@ -220,38 +328,49 @@ func _photo_region(aspect: float) -> Rect2:
 	return Rect2(x, y, rw, rh)
 
 ## Disegna la zona `src` dell'immagine dentro `dest`, con trasparenza in alto e in basso.
-func _photo_quad(dest: Rect2, src: Rect2, top_alpha: float = 1.0, bottom_alpha: float = 1.0) -> void:
+func _photo_quad(ci: CanvasItem, dest: Rect2, src: Rect2, top_alpha: float = 1.0, bottom_alpha: float = 1.0) -> void:
 	var ts := photo.get_size()
 	var pts := PackedVector2Array([dest.position, Vector2(dest.end.x, dest.position.y), dest.end, Vector2(dest.position.x, dest.end.y)])
 	var uvs := PackedVector2Array([src.position / ts, Vector2(src.end.x, src.position.y) / ts, src.end / ts, Vector2(src.position.x, src.end.y) / ts])
 	var c0 := Color(1, 1, 1, top_alpha)
 	var c1 := Color(1, 1, 1, bottom_alpha)
-	draw_polygon(pts, PackedColorArray([c0, c0, c1, c1]), uvs, photo)
+	ci.draw_polygon(pts, PackedColorArray([c0, c0, c1, c1]), uvs, photo)
 
+## Livello della foto: solo l'immagine, perché lo shader dei colori vale per tutto ciò che vi si disegna.
 func _draw_photo() -> void:
+	var ci := _photo_layer
 	var w := size.x
 	var h := size.y
-	if framing == "window":
-		# nelle carte: tutta la finestra, il volto intero senza dissolvenze
-		_photo_quad(Rect2(0, 0, w, h), _photo_region(w / h))
-		_vignette(Rect2(0, 0, w, h), 0.1, 0.22)
-		draw_polygon(PackedVector2Array([Vector2(0, h * 0.8), Vector2(w, h * 0.8), Vector2(w, h), Vector2(0, h)]), PackedColorArray([Color(VIGNETTE, 0.0), Color(VIGNETTE, 0.0), Color(VIGNETTE, 0.45), Color(VIGNETTE, 0.45)]))
-	elif framing == "bust":
-		# nelle carte: volto in alto a tutta larghezza, che sfuma verso nome e stelle
+	if w < 4.0 or h < 4.0: return
+	if framing == "bust":
+		# volto in alto a tutta larghezza, che sfuma verso nome e stelle
 		var dest_h := minf(h, w / 0.84)
 		var src := _photo_region(w / dest_h)
 		var cut := 0.68
-		_photo_quad(Rect2(0, 0, w, dest_h * cut), Rect2(src.position, Vector2(src.size.x, src.size.y * cut)))
-		_photo_quad(Rect2(0, dest_h * cut, w, dest_h * (1.0 - cut)), Rect2(src.position + Vector2(0, src.size.y * cut), Vector2(src.size.x, src.size.y * (1.0 - cut))), 1.0, 0.0)
-		_vignette(Rect2(0, 0, w, dest_h), 0.16, 0.5, cut)
+		_photo_quad(ci, Rect2(0, 0, w, dest_h * cut), Rect2(src.position, Vector2(src.size.x, src.size.y * cut)))
+		_photo_quad(ci, Rect2(0, dest_h * cut, w, dest_h * (1.0 - cut)), Rect2(src.position + Vector2(0, src.size.y * cut), Vector2(src.size.x, src.size.y * (1.0 - cut))), 1.0, 0.0)
 	else:
-		var src := _photo_region(w / h)
-		_photo_quad(Rect2(0, 0, w, h), src)
-		_vignette(Rect2(0, 0, w, h), 0.14, 0.35)
+		_photo_quad(ci, Rect2(0, 0, w, h), _photo_region(w / h))
+
+## Livello davanti alla foto: ombre ai bordi, cornice, velo dei caduti.
+func _draw_front() -> void:
+	var ci := _front_layer
+	var w := size.x
+	var h := size.y
+	if w < 4.0 or h < 4.0: return
+	if framing == "window":
+		_vignette(ci, Rect2(0, 0, w, h), 0.1, 0.22)
+		ci.draw_polygon(PackedVector2Array([Vector2(0, h * 0.8), Vector2(w, h * 0.8), Vector2(w, h), Vector2(0, h)]), PackedColorArray([Color(VIGNETTE, 0.0), Color(VIGNETTE, 0.0), Color(VIGNETTE, 0.45), Color(VIGNETTE, 0.45)]))
+	elif framing == "bust":
+		_vignette(ci, Rect2(0, 0, w, minf(h, w / 0.84)), 0.16, 0.5, 0.68)
+	else:
+		_vignette(ci, Rect2(0, 0, w, h), 0.14, 0.35)
+	if framed: _draw_frame(ci)
+	elif dead: ci.draw_rect(Rect2(Vector2.ZERO, size), Color(0.05, 0.04, 0.06, 0.25))
 
 ## Bordi laterali scuriti: il ritratto si fonde con il fondo scuro dell'interfaccia.
 ## Da `fade_from` (0–1 dell'altezza) in giù l'ombra svanisce insieme all'immagine.
-func _vignette(rect: Rect2, frac: float, alpha: float, fade_from: float = 1.0) -> void:
+func _vignette(ci: CanvasItem, rect: Rect2, frac: float, alpha: float, fade_from: float = 1.0) -> void:
 	var edge := rect.size.x * frac
 	var dark := Color(VIGNETTE, alpha)
 	var clear := Color(VIGNETTE, 0.0)
@@ -259,9 +378,9 @@ func _vignette(rect: Rect2, frac: float, alpha: float, fade_from: float = 1.0) -
 	for side in [0, 1]:
 		var x0 := rect.position.x if side == 0 else rect.end.x
 		var x1 := x0 + edge if side == 0 else x0 - edge
-		draw_polygon(PackedVector2Array([Vector2(x0, rect.position.y), Vector2(x1, rect.position.y), Vector2(x1, ym), Vector2(x0, ym)]), PackedColorArray([dark, clear, clear, dark]))
+		ci.draw_polygon(PackedVector2Array([Vector2(x0, rect.position.y), Vector2(x1, rect.position.y), Vector2(x1, ym), Vector2(x0, ym)]), PackedColorArray([dark, clear, clear, dark]))
 		if fade_from < 1.0:
-			draw_polygon(PackedVector2Array([Vector2(x0, ym), Vector2(x1, ym), Vector2(x1, rect.end.y), Vector2(x0, rect.end.y)]), PackedColorArray([dark, clear, clear, clear]))
+			ci.draw_polygon(PackedVector2Array([Vector2(x0, ym), Vector2(x1, ym), Vector2(x1, rect.end.y), Vector2(x0, rect.end.y)]), PackedColorArray([dark, clear, clear, clear]))
 
 func _draw_backdrop() -> void:
 	var s := size
@@ -274,21 +393,21 @@ func _draw_backdrop() -> void:
 		draw_circle(Vector2(s.x * 0.5, s.y * 0.42), r, c)
 	draw_arc(Vector2(s.x * 0.5, s.y * 0.42), s.x * 0.44, 0, TAU, 40, Color(frame.r, frame.g, frame.b, 0.18), 1.0, true)
 
-func _draw_frame() -> void:
+func _draw_frame(ci: CanvasItem = self) -> void:
 	var s := size
 	var frame := UIKit.rarity_color(rarity)
 	var cut := s.x * 0.12
 	var pts := OrnateStyle.octagon(Rect2(Vector2(1, 1), s - Vector2(2, 2)), cut)
-	draw_polyline(OrnateStyle.closed(pts), Color("#1c2a3e"), maxf(2.0, s.x * 0.035), true)
+	ci.draw_polyline(OrnateStyle.closed(pts), Color("#1c2a3e"), maxf(2.0, s.x * 0.035), true)
 	var inner := OrnateStyle.octagon(Rect2(Vector2(1, 1), s - Vector2(2, 2)).grow(-s.x * 0.05), cut * 0.7)
-	draw_polyline(OrnateStyle.closed(inner), Color(frame.r, frame.g, frame.b, 0.75), maxf(1.0, s.x * 0.014), true)
+	ci.draw_polyline(OrnateStyle.closed(inner), Color(frame.r, frame.g, frame.b, 0.75), maxf(1.0, s.x * 0.014), true)
 	# angoli tagliati: copre il ritratto oltre la cornice
 	for corner in [[Vector2(0, 0), Vector2(cut + 1, 0), Vector2(0, cut + 1)], [Vector2(s.x, 0), Vector2(s.x, cut + 1), Vector2(s.x - cut - 1, 0)], [Vector2(s.x, s.y), Vector2(s.x - cut - 1, s.y), Vector2(s.x, s.y - cut - 1)], [Vector2(0, s.y), Vector2(0, s.y - cut - 1), Vector2(cut + 1, s.y)]]:
-		draw_colored_polygon(PackedVector2Array(corner), Color("#070b11"))
+		ci.draw_colored_polygon(PackedVector2Array(corner), Color("#070b11"))
 	var gem := Vector2(s.x * 0.5, s.y - s.x * 0.035)
 	var g := s.x * 0.06
-	draw_colored_polygon(PackedVector2Array([gem + Vector2(0, -g), gem + Vector2(g, 0), gem + Vector2(0, g), gem + Vector2(-g, 0)]), frame)
-	draw_polyline(PackedVector2Array([gem + Vector2(0, -g), gem + Vector2(g, 0), gem + Vector2(0, g), gem + Vector2(-g, 0), gem + Vector2(0, -g)]), Color("#070b11"), 1.0, true)
+	ci.draw_colored_polygon(PackedVector2Array([gem + Vector2(0, -g), gem + Vector2(g, 0), gem + Vector2(0, g), gem + Vector2(-g, 0)]), frame)
+	ci.draw_polyline(PackedVector2Array([gem + Vector2(0, -g), gem + Vector2(g, 0), gem + Vector2(0, g), gem + Vector2(-g, 0), gem + Vector2(0, -g)]), Color("#070b11"), 1.0, true)
 
 # --- Capelli dietro --------------------------------------------------------
 
