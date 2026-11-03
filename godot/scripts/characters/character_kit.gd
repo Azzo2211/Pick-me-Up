@@ -25,7 +25,7 @@ const OUTFIT_COLORS := {
 	},
 	"guard": {
 		MAIN: ["#3b3d46"], SECOND: ["#2f2c2e", "#33302c"], LIGHT: ["#e7dfcd"], LEATHER: ["#5a3c27", "#4e3626"],
-		METAL: ["#6a717c"], METAL_DARK: ["#434850"], BOOT: ["#33251b"], DARK: ["#1f1a17"], ACCENT: ["#6e2228"],
+		METAL: ["#7d8590"], METAL_DARK: ["#4a4f58"], BOOT: ["#33251b"], DARK: ["#1f1a17"], ACCENT: ["#532428"],
 	},
 	"merchant": {
 		LIGHT: ["#e2d8c3", "#ddd3bf"], MAIN: ["#2f3446", "#3a3040", "#2e3a3a"], SECOND: ["#6d6052", "#5f5a55", "#6a5847"],
@@ -45,7 +45,7 @@ const OUTFIT_COLORS := {
 ## Colore principale per classe quando la classe è scelta: stessa logica del foglio
 ## (guardie col mantello rosso scuro, maghi in viola, chierici in blu e bianco...).
 const CLASS_TINT := {
-	"Guardian": {ACCENT: "#6e2228"}, "Vanguard": {ACCENT: "#4f1c22", MAIN: "#2e2a2c"}, "Lancer": {ACCENT: "#26324f"},
+	"Guardian": {ACCENT: "#532428"}, "Vanguard": {ACCENT: "#4f1c22", MAIN: "#2e2a2c"}, "Lancer": {ACCENT: "#26324f"},
 	"Ranger": {}, "Mage": {MAIN: "#3a2d5a"}, "Support": {MAIN: "#2b3352"},
 }
 

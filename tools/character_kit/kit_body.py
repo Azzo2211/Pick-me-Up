@@ -343,6 +343,22 @@ def legs(c, P, slot_fn, extra_fn=None, y_end=0.08, n=12, ys=None):
         c.loft(rings, SECOND, w_leg, slot_fn=lambda k, i, m: slot_fn(m))
 
 
+def baggy(top, amount=0.022):
+    """Calzoni larghi infilati negli stivali (popolano e mercante del foglio): gonfi tra
+    coscia e polpaccio e con il risvolto che ricade sopra lo stivale."""
+    def fn(y):
+        inside = 0.004 + 0.004 * smooth((y - top + 0.02) / 0.04)
+        body = amount * smooth((y - top) / 0.14) * smooth((1.0 - y) / 0.28)
+        blouse = 0.013 * math.exp(-((y - (top + 0.03)) / 0.028) ** 2) * smooth((y - top + 0.005) / 0.02)
+        return inside + body + blouse
+    return fn
+
+
+def baggy_ys(top):
+    return [1.0, 0.95, 0.9, 0.82, 0.72, 0.62, 0.55, 0.49, 0.43, top + 0.09, top + 0.055, top + 0.03, top + 0.012,
+            top - 0.004, 0.22]
+
+
 def boots(c, P, slot, top=0.3, cuff=0.0, sole_slot=None, toe=1.0, shaft_add=0.006, heel_slot=None):
     fs = P["foot"]
     for side in (-1.0, 1.0):
@@ -476,15 +492,24 @@ def outfit_villager(P):
                                        1.06, 1.0, 0.95, 0.915, 0.895])
     hands(c, P, SKIN)
 
-    def leg_extra(y):
-        return 0.014 * smooth((y - 0.28) / 0.15) * smooth((1.0 - y) / 0.2) + 0.006
-
-    legs(c, P, lambda m: SECOND, leg_extra, y_end=0.22)
-    boots(c, P, BOOT, top=0.31, cuff=0.012, sole_slot=DARK)
+    legs(c, P, lambda m: SECOND, baggy(0.31, 0.022), y_end=0.22, ys=baggy_ys(0.31))
+    boots(c, P, BOOT, top=0.31, cuff=0.01, sole_slot=DARK)
     # cintura e borsa
     band(c, P, 1.0, 0.03, LEATHER, inflate=0.012)
     box(c, (0.135, 0.985, 0.04), (0.035, 0.05, 0.05), LEATHER, w_hips, rot_y=0.5)
     box(c, (0.07, 1.0, torso_front_z(P, 0.07, 1.0) + 0.018), (0.028, 0.022, 0.006), GOLD, w_hips)
+    box(c, (-0.14, 0.975, 0.03), (0.032, 0.045, 0.045), LEATHER, w_hips, rot_y=-0.5)
+    # straccio infilato nella cintura sul fianco
+    grid = []
+    for k in range(6):
+        y = lerp(1.0, 0.8, k / 5)
+        row = []
+        for i in range(4):
+            a = lerp(1.15, 1.75, i / 3)
+            p = hang_point(P, y, a, 0.03, 0.97, 0.25, 0.0)
+            row.append(p + Vector((0.0, 0.0, 0.004 * math.sin(i * 2.1 + k))))
+        grid.append(row)
+    c.sheet(grid, LIGHT, lambda p: w_skirt(p, 0.7), 0.004, normal_fn=out_from_axis)
     # grembiule
     def apron_hw(y):
         if y > 1.18:
@@ -598,7 +623,12 @@ def lathe(c, center, profile, slot, weights, n=12, thick=0.006, squash=(1.0, 1.0
         rr = max(r - thick, 0.002)
         inner.append([Vector((center[0] + math.sin(2 * math.pi * i / n) * rr * sx, center[1] + dy + thick * 0.5,
                               center[2] + math.cos(2 * math.pi * i / n) * rr * sz)) for i in range(n)])
-    idx = c.loft(rings + inner, slot, weights, cap_start=True, cap_end=True)
+    last = len(profile) - 1
+    trim = None
+    if slot_inner is not None:
+        # orlo colorato: l'ultimo tratto esterno e il bordo
+        trim = lambda kk, i, m: slot_inner if kk in (last - 1, last) else slot
+    idx = c.loft(rings + inner, slot, weights, cap_start=True, cap_end=True, slot_fn=trim)
     k = len(profile) - 1
     for i in range(n):
         c.crease.append((idx[k][i], idx[k][(i + 1) % n], crease))
@@ -683,9 +713,10 @@ def outfit_guard(P):
     torso(c, P, lambda m: MAIN if m.y > 1.0 else SECOND)
     neck(c, P)
     arms(c, P, lambda m: MAIN, lambda y: (0.006, 0.0))
-    hands(c, P, LEATHER, glove_cuff=0.012)
-    legs(c, P, lambda m: SECOND, lambda y: 0.008, y_end=0.22)
-    boots(c, P, BOOT, top=0.3, sole_slot=DARK)
+    # guanti d'arme e gambe in acciaio scuro, come nel foglio
+    hands(c, P, METAL_DARK, glove_cuff=0.014)
+    legs(c, P, lambda m: METAL_DARK, lambda y: 0.008, y_end=0.22)
+    boots(c, P, METAL, top=0.3, sole_slot=DARK, cuff=0.006)
     # corazza: dal punto vita al collo, con la costola in mezzo e il fondo un po' svasato
     prof = torso_profile(P)
     n = 24
@@ -709,8 +740,11 @@ def outfit_guard(P):
     # falda a lamelle sotto la corazza
     for k, (y, h) in enumerate(((1.0, 0.04), (0.965, 0.04))):
         band(c, P, y, h, METAL, inflate=0.032 + 0.006 * k, crease=0.8)
-    band(c, P, 1.04, 0.026, LEATHER, inflate=0.036)
-    box(c, (0.0, 1.04, torso_front_z(P, 0.0, 1.04) + 0.045), (0.034, 0.03, 0.008), GOLD, w_hips)
+    band(c, P, 1.04, 0.034, LEATHER, inflate=0.036)
+    box(c, (0.0, 1.04, torso_front_z(P, 0.0, 1.04) + 0.047), (0.036, 0.032, 0.008), GOLD, w_hips)
+    for x, h in ((-0.13, 0.05), (0.14, 0.042)):
+        box(c, (x, 1.02, torso_front_z(P, x, 1.02) + 0.045), (0.036, h, 0.026), LEATHER, w_hips,
+            rot_y=math.atan2(x, 0.14))
     # cosciali che scendono dai fianchi
     for side in (-1.0, 1.0):
         grid = []
@@ -723,9 +757,20 @@ def outfit_guard(P):
             grid.append(row)
         c.sheet(grid, METAL, lambda p: w_skirt(p, 0.85), 0.006, normal_fn=out_from_axis, crease=0.7)
     # tabarro davanti e dietro
-    rows, cols = 12, 9
-    front_sheet(c, P, 1.02, 0.56, lambda y: 0.085 + (1.02 - y) * 0.05, LIGHT, offset=0.05, thick=0.006, rows=rows,
-                cols=cols, flare=0.05, slot_fn=tabard_slots(rows, cols), hang_from=1.0,
+    rows, cols = 18, 13
+
+    def tabard_hw(y):
+        return 0.08 + (1.02 - y) * 0.05
+
+    def tabard_slot(k, i, m):
+        hw = tabard_hw(m.y)
+        if k >= rows - 2 or abs(m.x) > hw * 0.8:
+            return GOLD
+        if (abs(m.x) < 0.011 and 0.64 < m.y < 0.95) or (abs(m.x) < 0.045 and 0.855 < m.y < 0.885):
+            return GOLD
+        return LIGHT
+    front_sheet(c, P, 1.02, 0.54, tabard_hw, LIGHT, offset=0.05, thick=0.006, rows=rows,
+                cols=cols, flare=0.05, slot_fn=tabard_slot, hang_from=1.0,
                 z_min_fn=lambda x, y: 0.1)
     grid = []
     for k in range(8):
@@ -740,8 +785,10 @@ def outfit_guard(P):
             slot_fn=tabard_slots(8, 7, cross=False))
     # spallacci, bracciali, gomiti, ginocchiere, schinieri
     for side in (-1.0, 1.0):
-        pauldron(c, P, side, METAL, lames=3, trim=METAL_DARK)
+        pauldron(c, P, side, METAL, lames=3, trim=GOLD)
         x = side * P["sh"]
+        lathe(c, (x, 1.36, 0.0), [(0.0, P["arm"] + 0.013), (-0.1, P["arm"] * 0.96 + 0.012), (-0.13, P["elbow"] + 0.014),
+                                  (-0.14, P["elbow"] + 0.012)], METAL, w_arm, n=12, thick=0.005)
         lathe(c, (x, 1.08, 0.0), [(0.05, P["elbow"] + 0.012), (0.0, P["fore"] + 0.014), (-0.08, P["fore"] * 0.88 + 0.012),
                                   (-0.15, P["wrist"] + 0.013), (-0.16, P["wrist"] + 0.016)],
               METAL, w_arm, n=12, thick=0.005)
@@ -750,7 +797,12 @@ def outfit_guard(P):
               squash=(0.9, 1.1))
         lx = side * P["leg_x"]
         lathe(c, (lx, 0.5, 0.01), [(0.035, 0.012), (0.02, P["knee"] * 0.85), (-0.01, P["knee"] + 0.02),
-                                   (-0.035, P["knee"] + 0.016)], METAL_DARK, w_leg, n=12, thick=0.005, squash=(1.0, 1.15))
+                                   (-0.035, P["knee"] + 0.016)], METAL, w_leg, n=12, thick=0.005, squash=(1.0, 1.15),
+              slot_inner=GOLD)
+        # cosciale davanti alla coscia
+        lathe(c, (lx, 0.82, 0.004), [(0.0, P["thigh"] * 0.95 + 0.012), (-0.14, P["thigh"] * 0.86 + 0.012),
+                                     (-0.26, P["knee"] + 0.016), (-0.27, P["knee"] + 0.012)], METAL, w_leg, n=12,
+              thick=0.005, squash=(1.0, 1.05))
         lathe(c, (lx, 0.45, 0.0), [(0.0, P["calf"] + 0.014), (-0.08, P["calf"] + 0.018), (-0.18, P["ankle"] + 0.022),
                                    (-0.22, P["ankle"] + 0.024)], METAL, w_leg, n=12, thick=0.005)
     # mantello: dalle spalle fino ai polpacci, con il colletto alto dietro il collo
@@ -788,8 +840,7 @@ def outfit_merchant(P):
     arms(c, P, lambda m: LIGHT2 if m.y < 0.985 else LIGHT, sleeve,
          ys=[1.482, 1.47, 1.45, 1.42, 1.38, 1.32, 1.26, 1.2, 1.155, 1.11, 1.06, 1.02, 0.995, 0.985, 0.95, 0.915, 0.895])
     hands(c, P, SKIN)
-    legs(c, P, lambda m: SECOND, lambda y: 0.02 * smooth((y - 0.3) / 0.2) * smooth((1.0 - y) / 0.25) + 0.008,
-         y_end=0.22)
+    legs(c, P, lambda m: SECOND, baggy(0.32, 0.028), y_end=0.22, ys=baggy_ys(0.32))
     boots(c, P, BOOT, top=0.32, cuff=0.01, sole_slot=DARK)
     # gilet lungo, aperto davanti, con il bordo d'oro
     cols = 18

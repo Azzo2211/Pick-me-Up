@@ -226,6 +226,7 @@ def cage_to_object(cage, name, levels=2, groups=True):
     bm = bmesh.new()
     bm.from_mesh(me)
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    fix_inside_out(bm)
     bm.to_mesh(me)
     bm.free()
     if groups:
@@ -244,6 +245,45 @@ def cage_to_object(cage, name, levels=2, groups=True):
         mod.use_creases = True
         apply_modifiers(obj)
     return obj
+
+
+def _islands(bm):
+    seen = set()
+    for f in bm.faces:
+        if f.index in seen:
+            continue
+        stack, island = [f], []
+        seen.add(f.index)
+        while stack:
+            g = stack.pop()
+            island.append(g)
+            for e in g.edges:
+                for h in e.link_faces:
+                    if h.index not in seen:
+                        seen.add(h.index)
+                        stack.append(h)
+        yield island
+
+
+def fix_inside_out(bm):
+    """recalc_face_normals sbaglia sui gusci sottili (spallacci, ginocchiere): li gira
+    tutti verso l'interno, e il contorno nero li copre. Per ogni pezzo chiuso il volume
+    con segno dice da che parte guardano davvero le facce: se è negativo si girano."""
+    bm.faces.ensure_lookup_table()
+    bm.faces.index_update()
+    flipped = 0
+    for island in _islands(bm):
+        if any(e.is_boundary for f in island for e in f.edges):
+            continue
+        vol = 0.0
+        for f in island:
+            vs = [v.co for v in f.verts]
+            for i in range(1, len(vs) - 1):
+                vol += vs[0].dot(vs[i].cross(vs[i + 1]))
+        if vol < 0.0:
+            bmesh.ops.reverse_faces(bm, faces=island)
+            flipped += 1
+    return flipped
 
 
 def apply_modifiers(obj):

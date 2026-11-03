@@ -72,7 +72,7 @@ def build_parts(out_dir):
     K.add_shape_keys(head, variants)
     objs.append(head)
     for style in kit_hair.STYLES:
-        o = K.cage_to_object(kit_hair.build_hair(style), "hair_" + style, levels=0, groups=False)
+        o = K.cage_to_object(kit_hair.build_hair(style), "hair_" + style, levels=1, groups=False)
         K.finish_attributes(o)
         objs.append(o)
     for name, cage, lv in (("glasses", kit_head.build_glasses(), 0), ("headband", kit_head.build_headband(), 1),

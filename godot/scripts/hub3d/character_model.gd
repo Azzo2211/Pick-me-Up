@@ -67,6 +67,8 @@ var _fade_t := 1.0
 ## Spessore del contorno anime in pixel (i ritratti delle carte lo alzano).
 var outline_px := 1.3
 var _face_mat: ShaderMaterial
+var _head_kit: Node3D
+const KIT_HEAD_SCALE := 0.9
 ## Corpo del kit (tools/character_kit): scheletro mosso dalle articolazioni del rig.
 var _skel: Skeleton3D
 var _bone_ids := PackedInt32Array()
@@ -139,6 +141,7 @@ func _pivot(parent: Node3D, pos: Vector3) -> Node3D:
 
 func _build_rig(p: Dictionary) -> void:
 	body_type = "human"
+	_head_kit = null
 	rig = Node3D.new()
 	rig.scale = Vector3.ONE * METER * float(p.get("scale", 1.0))
 	add_child(rig)
@@ -635,7 +638,14 @@ func _kit_piece(name: String, material: Material) -> MeshInstance3D:
 	mi.mesh = mesh
 	mi.material_override = material
 	mi.material_overlay = _flash()
-	head.add_child(mi)
+	if _head_kit == null:
+		# la testa del kit è un po' più piccola del perno: corpo adulto di circa otto
+		# teste come nel foglio (il mento resta sul collo)
+		_head_kit = Node3D.new()
+		_head_kit.name = "KitHead"
+		_head_kit.scale = Vector3.ONE * KIT_HEAD_SCALE
+		head.add_child(_head_kit)
+	_head_kit.add_child(mi)
 	_meshes.append(mi)
 	return mi
 
@@ -687,40 +697,53 @@ func _make_face_material(look: Dictionary) -> ShaderMaterial:
 	var archetype := str(look.get("archetype", "villager"))
 	var age := int(look.get("age", 28))
 	var hair: Color = look.get("hair", Color("#3a2a20"))
-	var size := float(look.get("eye_size", 1.0)) * (1.05 if age < 20 else 1.0)
+	var size := lerpf(1.0, float(look.get("eye_size", 1.0)), 0.5) * (1.06 if age < 20 else 1.0)
+	# volto adulto come nel foglio: occhi stretti e taglienti con l'iride tagliata dalla
+	# palpebra, sopracciglia dritte e vicine agli occhi, naso e bocca a tratto
 	var p := {
-		"eye_x": 0.39, "eye_y": 0.0, "mouth_y": -0.56,
-		"eye_w": 0.15, "eye_h": 0.15, "lash": 1.0, "lash_flick": 0.0, "crease": 0.35, "brow_thick": 0.02,
-		"brow_gap": 0.085, "brow_tilt": 0.0, "brow_arch": 0.03, "mouth_w": 0.085, "mouth_curve": 0.008, "blush": 0.0, "lips": 0.0,
+		"eye_x": 0.38, "eye_y": 0.0, "mouth_y": -0.6,
+		"eye_w": 0.19, "eye_h": 0.1, "iris_r": 0.1, "eye_tilt": 0.15, "lid_th": 0.034,
+		"lash": 1.0, "lash_flick": 0.0, "lower_lash": 0.6, "crease": 0.45, "brow_thick": 0.032,
+		"brow_gap": 0.05, "brow_tilt": 0.5, "brow_arch": 0.012, "mouth_w": 0.14, "mouth_curve": 0.0, "blush": 0.0, "lips": 0.0,
 	}
 	match face:
 		0:
-			p.merge({"eye_w": 0.158, "eye_h": 0.185, "lash": 1.15, "crease": 0.3, "brow_thick": 0.016, "brow_arch": 0.035, "mouth_w": 0.07, "mouth_curve": 0.014, "blush": 0.25}, true)
+			# bello: occhi un po' più aperti e allungati, sguardo morbido
+			p.merge({"eye_h": 0.11, "iris_r": 0.108, "eye_tilt": 0.2, "lash": 1.1, "brow_thick": 0.027, "brow_tilt": 0.6,
+				"brow_arch": 0.018, "mouth_w": 0.12, "blush": 0.1}, true)
 		2:
-			p.merge({"eye_w": 0.145, "eye_h": 0.105, "lash": 0.95, "crease": 0.6, "brow_thick": 0.03, "brow_gap": 0.06, "brow_tilt": 0.7, "brow_arch": 0.012, "mouth_w": 0.1, "mouth_curve": -0.004}, true)
+			# rude: occhi piccoli e incassati, sopracciglia pesanti e basse, bocca larga
+			p.merge({"eye_w": 0.18, "eye_h": 0.08, "iris_r": 0.085, "eye_tilt": 0.05, "lid_th": 0.036, "crease": 0.8,
+				"brow_thick": 0.042, "brow_gap": 0.032, "brow_tilt": -0.2, "brow_arch": 0.005, "mouth_w": 0.16,
+				"mouth_curve": -0.01}, true)
 	# sfumature per archetipo, come nel foglio
-	if archetype == "merchant" and face == 1: p.mouth_curve = 0.03
-	if archetype == "villager" and face == 0: p.mouth_curve = 0.032
+	if archetype == "merchant" and face != 2: p.mouth_curve = 0.026
+	if archetype == "villager" and face == 0: p.mouth_curve = 0.03
 	if archetype == "scholar" and face == 1:
-		p.eye_h = 0.125
-		p.crease = 0.55
+		p.eye_h = 0.085
+		p.crease = 0.6
 	if fem:
-		p.lash = float(p.lash) * 1.25
+		p.eye_h = float(p.eye_h) * 1.6
+		p.iris_r = float(p.iris_r) * 1.36
+		p.eye_tilt = float(p.eye_tilt) * 0.6
+		p.lash = float(p.lash) * 1.3
 		p.lash_flick = 1.0 if face == 0 else 0.6
-		p.brow_thick = float(p.brow_thick) * 0.75
-		p.brow_tilt = float(p.brow_tilt) * 0.4
+		p.brow_thick = float(p.brow_thick) * 0.7
+		p.brow_gap = float(p.brow_gap) + 0.035
+		p.brow_tilt = float(p.brow_tilt) * 0.3
+		p.brow_arch = float(p.brow_arch) + 0.018
 		p.blush = float(p.blush) + 0.45
 		p.lips = 0.6
-		p.mouth_w = float(p.mouth_w) * 0.88
-	# sulla testa del kit gli occhi sono più larghi, come nel foglio
-	p.eye_w = float(p.eye_w) * size * 1.24
-	p.eye_h = float(p.eye_h) * size * 1.06
+		p.mouth_w = float(p.mouth_w) * 0.85
+	p.eye_w = float(p.eye_w) * size
+	p.eye_h = float(p.eye_h) * size
+	p.iris_r = float(p.iris_r) * size
 	for key in p: m.set_shader_parameter(key, p[key])
 	# sul viso l'ombra è più morbida: occhi e bocca restano leggibili
 	m.set_shader_parameter("toon_shade", 0.8)
 	m.set_shader_parameter("toon_shadow_tint", Color(1.0, 0.86, 0.86))
 	m.set_shader_parameter("iris_color", look.get("eyes", Color("#3b5a7a")))
-	m.set_shader_parameter("brow_color", hair.darkened(0.3).lerp(Color("#2a1d16"), 0.25))
+	m.set_shader_parameter("brow_color", hair.darkened(0.42).lerp(Color("#2a1d16"), 0.3))
 	m.set_shader_parameter("age_lines", clampf((age - 38) / 18.0, 0.0, 1.0) + (0.25 if face == 2 else 0.0))
 	m.set_shader_parameter("stubble", 0.35 if int(look.get("beard", 0)) >= 1 else 0.0)
 	m.set_shader_parameter("stubble_color", hair.darkened(0.2))

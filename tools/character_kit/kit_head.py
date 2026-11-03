@@ -36,8 +36,8 @@ HEAD_TABLE = [
 
 # Viso degli anime: la parte sotto gli occhi è più corta del vero, la mascella più
 # piena. Le altezze sotto gli occhi della tabella si accorciano di questo fattore.
-LOWER_FACE = 0.86
-JAW_FILL = 1.07
+LOWER_FACE = 0.94
+JAW_FILL = 1.02
 
 
 def squash(y):
@@ -220,40 +220,54 @@ def build_headband():
     return c
 
 
+MOUTH_Y = EYE_Y - 0.06   # altezza della bocca disegnata (mouth_y = -0.6 nello shader)
+
+
 def build_beard(kind="short"):
-    """Barba corta dal foglio (mercante, studioso anziano): un guscio lungo la mascella,
-    con i baffi sopra la bocca e il mento coperto; la bocca resta libera."""
+    """Barba del foglio (mercante, studioso anziano): un guscio morbido sulla mascella che
+    nasce sottile sulle guance e diventa più folto sul mento, con i baffi sopra la bocca;
+    la bocca resta libera. Il pizzetto copre solo il mento."""
     c = Cage()
     w = lambda p: {"head": 1.0}
-    cols = 17
-    rows_y = [0.112, 0.098, 0.084, 0.07, 0.058, 0.046, 0.036, 0.03]
-    span = 1.75 if kind != "goatee" else 0.55
+    chin = squash(0.012) + 0.004
+    span = 1.62 if kind != "goatee" else 0.5
+    cols = 23 if kind != "goatee" else 9
+    rows = 9
+
+    def top(a):
+        x = abs(a)
+        if kind == "goatee":
+            return MOUTH_Y - 0.012
+        # basetta davanti all'orecchio, guancia, poi sotto la bocca
+        if x > 1.2:
+            return lerp(0.104, 0.128, smooth((x - 1.2) / 0.4))
+        if x > 0.52:
+            return lerp(MOUTH_Y - 0.004, 0.104, smooth((x - 0.52) / 0.68))
+        return MOUTH_Y - 0.013
+
     grid = []
-    for k, y in enumerate(rows_y):
+    for k in range(rows):
+        t = k / (rows - 1)
         row = []
         for i in range(cols):
             a = lerp(-span, span, i / (cols - 1))
-            lift = 0.007 + 0.006 * smooth((0.09 - y) / 0.05)
-            if y < 0.04:
-                lift += 0.006
+            y = lerp(top(a), chin, t ** 0.9)
+            lift = 0.0015 + 0.009 * smooth(t * 1.2) * (1.0 - 0.45 * smooth((abs(a) - 0.9) / 0.6))
             row.append(head_point(y, a, lift=lift))
         grid.append(row)
-    # tolgo la zona della bocca: due strisce separate (sopra = baffi, sotto = mento)
-    for part, ys in (("lower", range(3, 8)), ("side", range(0, 4))):
-        pass
-    c.sheet([grid[k] for k in range(3, 8)], DARK, w, 0.005, normal_fn=lambda p: head_normal(p))
+    # sotto il mento il guscio rientra verso il collo
+    last = grid[-1]
+    grid.append([Vector((p.x * 0.82, p.y - 0.01, CENTER.z + (p.z - CENTER.z) * 0.78)) for p in last])
+    c.sheet(grid, DARK, w, 0.003, normal_fn=lambda p: head_normal(p), crease=0.0)
     if kind != "goatee":
-        for side in (-1, 1):
-            cols_side = [i for i in range(cols) if side * (i - cols // 2) >= 4]
-            sub = [[grid[k][i] for i in (cols_side if side > 0 else list(reversed(cols_side)))] for k in range(0, 4)]
-            c.sheet(sub, DARK, w, 0.005, normal_fn=lambda p: head_normal(p))
-    # baffi
-    for side in (-1.0, 1.0):
-        pts = [head_point(0.083, side * 0.05, lift=0.005), head_point(0.08, side * 0.3, lift=0.006),
-               head_point(0.07, side * 0.55, lift=0.006)]
-        rows = []
-        for k, p in enumerate(pts):
-            hh = [0.006, 0.0055, 0.002][k]
-            rows.append([p + Vector((0, hh, 0)), p - Vector((0, hh, 0))])
-        c.sheet(rows, DARK, w, 0.004, normal_fn=lambda p: head_normal(p))
+        # baffi: una striscia sopra la bocca che scende ai lati fino alla barba
+        pts = []
+        for i in range(11):
+            a = lerp(-0.62, 0.62, i / 10)
+            y = MOUTH_Y + 0.013 - 0.016 * smooth((abs(a) - 0.2) / 0.42)
+            pts.append((y, a))
+        rows_m = []
+        for dy, lift in ((0.006, 0.0015), (0.0, 0.0055), (-0.007, 0.002)):
+            rows_m.append([head_point(y + dy * (1.0 - 0.4 * smooth((abs(a) - 0.3) / 0.3)), a, lift=lift) for y, a in pts])
+        c.sheet(rows_m, DARK, w, 0.0025, normal_fn=lambda p: head_normal(p))
     return c

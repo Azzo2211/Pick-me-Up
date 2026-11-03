@@ -527,7 +527,7 @@ func _test_character_kit() -> Array:
 	var hero: Dictionary = game.data.heroes[0]
 	var model := CharacterModel.new()
 	model.build_hero(hero, RiftwardState.appearance_for(hero))
-	valid = valid and model._skel != null and model._face_mat != null and model.head.get_child_count() >= 2
+	valid = valid and model._skel != null and model._face_mat != null and model._head_kit != null and model._head_kit.get_child_count() >= 2
 	model.free()
 	game.free()
 	valid = valid and missing.is_empty()
