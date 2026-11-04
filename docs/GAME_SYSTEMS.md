@@ -63,7 +63,7 @@ Locked reference values:
 - Training: slots = 2 + level; XP accrues over real time (offline capped at 8 h); fatigue grows; stops at level cap or fatigue 90.
 - Dormitory: beds = 5 + 2 × (level − 1); restores fatigue and morale, heals injuries over time; heroes leave when fully recovered.
 - XP curve: `30 + 14 × level^1.45`; level-ups add stats from the hidden growth value.
-- Fusion: three same-rarity heroes (≤4★) → core gains one star. 6★/7★ only through Transcendent summon or promotion.
+- Fusion: three heroes of the same rarity, 1★–4★ → the core gains one star (so fusion reaches 5★ at most). 6★/7★ only through Transcendent summon or promotion.
 - Promotion at level cap with Stones: 1★→2★ 1, 2★→3★ 2, 3★→4★ 3, 4★→5★ 5, 5★→6★ 12 (Floor 30), 6★→7★ 30 (Floor 60).
 
 ## Facilities
