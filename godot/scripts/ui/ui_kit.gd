@@ -83,7 +83,7 @@ static func rarity_color(rarity: int) -> Color:
 
 ## Nome della rarità come lo mostra il Sistema (cornici e carte).
 static func rarity_tag(rarity: int) -> String:
-	return ["COMMON", "TRAINED", "RARE", "ELITE", "EPIC", "LEGEND", "TRANSCEND"][clampi(rarity, 1, 7) - 1]
+	return ["COMUNE", "ADDESTRATO", "RARO", "ELITE", "EPICO", "LEGGENDA", "TRASCENDENTE"][clampi(rarity, 1, 7) - 1]
 
 ## Colore iridescente per il 7★: scorre lungo lo spettro con il tempo.
 static func prism_color(t: float, offset: float = 0.0, value: float = 1.0) -> Color:

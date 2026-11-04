@@ -220,6 +220,10 @@ func _draw_overlay() -> void:
 	var tag := UIKit.rarity_tag(rarity)
 	var tfs := int(clampf(w * 0.058, 8.0, 15.0))
 	var tw := font.get_string_size(tag, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs).x
+	# i nomi italiani sono più lunghi (TRASCENDENTE): rimpicciolisci finché l'etichetta sta nella carta
+	while tw + tfs * 1.6 > w * 0.84 and tfs > 7:
+		tfs -= 1
+		tw = font.get_string_size(tag, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs).x
 	var tag_rect := Rect2(Vector2(w * 0.5 - tw * 0.5 - tfs * 0.8, 0.0), Vector2(tw + tfs * 1.6, tfs * 1.7))
 	var tn := tag_rect.size.y * 0.45
 	var tag_pts := PackedVector2Array([tag_rect.position, Vector2(tag_rect.end.x, tag_rect.position.y), Vector2(tag_rect.end.x - tn, tag_rect.end.y), Vector2(tag_rect.position.x + tn, tag_rect.end.y)])
