@@ -17,7 +17,7 @@ Più account e abbonamenti (Claude, Codex, Agent A) committano sullo stesso repo
 |---|---|---|---|---|
 | 1 | **Programming + Technical Operations** | Codice di gioco, IA degli eroi, sistemi di combattimento, fisica, ottimizzazione, salvataggi, build, strumenti interni, test automatici, CI | `godot/scripts/game_state.gd`, `godot/scripts/battle/`, `godot/scripts/main.gd` (condiviso), `godot/project.godot`, `godot/export_presets.cfg`, `godot/tests/` (runner), `scripts/`, `.github/`, `Avvia_Riftward_Godot.cmd`, `Apri_Progetto_Godot.cmd`, `godot/README.md` | da definire |
 | 2 | **Game Design + Narrative** | Meccaniche, regole, progressione, difficoltà, bilanciamento; storia, dialoghi, personaggi, missioni, mondo | `docs/GAME_VISION.md`, `docs/GAME_SYSTEMS.md`, `docs/NARRATIVE.md` (da creare), `godot/data/` (da creare: tabelle di bilanciamento, testi, missioni) | da definire |
-| 3 | **Art & Animation** | Personaggi, ambientazioni, modelli 2D/3D, animazioni, effetti visivi, ritratti | `docs/ART_DIRECTION.md`, `godot/scripts/hub3d/` (base 3D, modelli, shader, animazioni), `godot/scripts/hero_portrait.gd`, `godot/assets/` tranne `fonts/` e `audio/` | da definire |
+| 3 | **Art & Animation** | Personaggi, ambientazioni, modelli 2D/3D, animazioni, effetti visivi, ritratti | `docs/ART_DIRECTION.md`, `godot/scripts/hub3d/` (base 3D, modelli, shader, animazioni), `godot/scripts/hero_portrait.gd`, `godot/scripts/characters/` (kit dei personaggi, generatore, aspetto degli eroi), `tools/character_kit/` (sorgenti Blender del kit), `godot/assets/` tranne `fonts/` e `audio/` | da definire |
 | 4 | **UI/UX Design** | Menu, HUD, inventario, pannelli, carte eroe, facilità d'uso | `godot/scripts/ui/`, `godot/assets/fonts/`, `godot/Main.tscn` (condiviso con Programming) | da definire |
 | 5 | **Audio** | Musiche, effetti sonori, doppiaggio, implementazione audio | `godot/assets/audio/` (da creare), `godot/scripts/audio/` (da creare) | da definire |
 | 6 | **Quality Assurance (QA)** | Test manuali, ricerca bug, verifica funzionalità, screenshot di controllo | `godot/tests/captures/`, `docs/QA.md` (da creare: bug aperti e checklist). I bug si segnalano al reparto proprietario, QA non corregge il codice degli altri | da definire |
@@ -28,6 +28,7 @@ Più account e abbonamenti (Claude, Codex, Agent A) committano sullo stesso repo
 
 - **`godot/scripts/game_state.gd`**: il codice è di Programming. I numeri di bilanciamento (costi, probabilità, curve) li decide Game Design; quando saranno spostati in `godot/data/` Game Design potrà cambiarli senza toccare il codice.
 - **`godot/scripts/main.gd`** e **`godot/Main.tscn`**: collegano base 3D, interfaccia e battaglia. Programming ne è responsabile; UI/UX può aggiungere i propri pannelli con modifiche piccole.
+- **`godot/scripts/ui/portrait_studio.gd`** (foto del personaggio 3D per le carte): condiviso tra Art & Animation e UI/UX. Lo guida Art; prima di modificarlo, avvisare UI/UX.
 - **`godot/scripts/battle/battle_scene.gd`**: logica e IA di Programming; l'aspetto (effetti, animazioni) va chiesto ad Art & Animation, l'HUD a UI/UX.
 
 ## Fuori da tutti i reparti (non modificare)
