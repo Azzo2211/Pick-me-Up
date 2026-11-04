@@ -26,7 +26,8 @@ func _run() -> void:
 	var heroes: Array = []
 	for i in 16:
 		var rarity: int = [1, 1, 2, 3, 4, 5, 6, 7][i % 8]
-		heroes.append(state.generate_hero("portrait-%d" % i, rarity, ["Guardian", "Vanguard", "Lancer", "Ranger", "Mage", "Support"][i % 6]))
+		# 1★-2★ popolani senza classe (attrezzo del mestiere), dal 3★ una classe
+		heroes.append(state.generate_hero("portrait-%d" % i, rarity, "" if rarity <= 2 else ["Guardian", "Vanguard", "Lancer", "Ranger", "Mage", "Support"][i % 6]))
 	heroes[3]["state"] = "DEAD"
 	for i in 8:
 		var card: HeroCard = HeroCard.new()
@@ -41,7 +42,8 @@ func _run() -> void:
 		small.setup(heroes[i], 64)
 		box.add_child(small)
 		grid.add_child(box)
-	await create_timer(0.6).timeout
+	# le foto 3D arrivano una alla volta dallo studio
+	await create_timer(4.0).timeout
 	root.get_texture().get_image().save_png("res://tests/captures/portraits.png")
 	print("CAPTURE portraits")
 	quit(0)

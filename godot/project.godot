@@ -66,5 +66,6 @@ macro_extract={
 [rendering]
 
 renderer/rendering_method="gl_compatibility"
+anti_aliasing/quality/msaa_2d=2
 renderer/rendering_method.mobile="gl_compatibility"
 environment/defaults/default_clear_color=Color(0.027, 0.039, 0.055, 1)

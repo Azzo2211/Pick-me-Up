@@ -1,41 +1,44 @@
 extends RefCounted
 class_name UIKit
 
-## Tema e widget condivisi. Direzione: fantasy scuro e adulto.
-## Fondi nero-prugna, cornici in bronzo, testi avorio, caratteri con grazie
-## (Alegreya / Alegreya SC / Cinzel, licenza SIL OFL).
+## Tema e widget condivisi. Direzione "mista": il mondo 3D resta fantasy,
+## l'interfaccia è il Sistema che ha evocato il Master. Pannelli quasi neri,
+## cornici sottili con accenti neon (azzurro per la base, magenta per
+## l'evocazione, ambra per risorse e azioni importanti), caratteri tecnici
+## (Oxanium / Exo 2, licenza SIL OFL).
 
-const FONT_TITLE_FILE := preload("res://assets/fonts/Cinzel.ttf")
-const FONT_HEAD_FILE := preload("res://assets/fonts/AlegreyaSC-Bold.ttf")
-const FONT_HEAD_MEDIUM_FILE := preload("res://assets/fonts/AlegreyaSC-Medium.ttf")
-const FONT_BODY_FILE := preload("res://assets/fonts/Alegreya.ttf")
+const FONT_TITLE_FILE := preload("res://assets/fonts/Oxanium.ttf")
+const FONT_BODY_FILE := preload("res://assets/fonts/Exo2.ttf")
 
 # Testi
-const INK := Color("#ece3d0")
-const INK_SOFT := Color("#c2b7a6")
-const MUTED := Color("#8f8494")
+const INK := Color("#e6eef8")
+const INK_SOFT := Color("#a9b7cb")
+const MUTED := Color("#6f7d94")
 # Fondi e linee
-const PAPER := Color("#141019")
-const PAPER_DEEP := Color("#1b1621")
-const PAPER_LINE := Color("#45372c")
-const NAVY := Color("#1f1829")
-const NAVY_DEEP := Color("#0b080e")
-# Accenti
-const GOLD := Color("#d9ae62")
-const GOLD_DEEP := Color("#b08250")
-const BRONZE := Color("#9c7448")
-const BRONZE_LIGHT := Color("#e2c08a")
-const TEAL := Color("#57b38f")
-const SKY := Color("#6f9fd8")
-const ROSE := Color("#cf4d60")
-const VIOLET := Color("#a07fe6")
-const LILAC := Color("#d8cbf3")
-const LEAF := Color("#6b9a52")
+const PAPER := Color("#0c1119")
+const PAPER_DEEP := Color("#111824")
+const PAPER_LINE := Color("#25324a")
+const NAVY := Color("#131c2b")
+const NAVY_DEEP := Color("#070a10")
+# Accenti neon. I nomi storici (GOLD, BRONZE…) restano per compatibilità:
+# GOLD è l'ambra di risorse e azioni, BRONZE è la linea azzurra delle cornici.
+const CYAN := Color("#46dcf2")
+const MAGENTA := Color("#f052c8")
+const GOLD := Color("#ffbb4d")
+const GOLD_DEEP := Color("#c98a2e")
+const BRONZE := Color("#2fb4cf")
+const BRONZE_LIGHT := Color("#a3eefa")
+const TEAL := Color("#4fe3a3")
+const SKY := Color("#4fb9ff")
+const ROSE := Color("#ff4f74")
+const VIOLET := Color("#b57cff")
+const LILAC := Color("#bfe9ff")
+const LEAF := Color("#7fd16a")
 const WHITE := Color("#ffffff")
 
 static var _title: FontVariation
-static var _head: Font
-static var _head_medium: Font
+static var _head: FontVariation
+static var _head_medium: FontVariation
 static var _body: FontVariation
 static var _body_bold: FontVariation
 
@@ -51,32 +54,40 @@ static func title_font() -> FontVariation:
 	if _title == null: _title = _weighted(FONT_TITLE_FILE, 700, 1)
 	return _title
 
-static func head_font() -> Font:
-	if _head == null: _head = FONT_HEAD_FILE
+static func head_font() -> FontVariation:
+	if _head == null: _head = _weighted(FONT_TITLE_FILE, 600, 1)
 	return _head
 
-static func head_medium() -> Font:
-	if _head_medium == null: _head_medium = FONT_HEAD_MEDIUM_FILE
+static func head_medium() -> FontVariation:
+	if _head_medium == null: _head_medium = _weighted(FONT_TITLE_FILE, 500, 1)
 	return _head_medium
 
 static func body_font() -> FontVariation:
-	if _body == null: _body = _weighted(FONT_BODY_FILE, 500)
+	if _body == null: _body = _weighted(FONT_BODY_FILE, 450)
 	return _body
 
 static func body_bold() -> FontVariation:
-	if _body_bold == null: _body_bold = _weighted(FONT_BODY_FILE, 700)
+	if _body_bold == null: _body_bold = _weighted(FONT_BODY_FILE, 650)
 	return _body_bold
 
 static func rarity_color(rarity: int) -> Color:
 	match rarity:
-		1: return Color("#a9a39a")
-		2: return Color("#6fbf86")
-		3: return Color("#62a2e3")
-		4: return Color("#a97de8")
-		5: return Color("#e6b24c")
-		6: return Color("#e65872")
-		7: return Color("#86ecf2")
-		_: return Color("#a9a39a")
+		1: return Color("#9aa6b6")
+		2: return Color("#4fe3a3")
+		3: return Color("#4fb9ff")
+		4: return Color("#b57cff")
+		5: return Color("#ffbb4d")
+		6: return Color("#ff4f74")
+		7: return Color("#d9fbff")
+		_: return Color("#9aa6b6")
+
+## Nome della rarità come lo mostra il Sistema (cornici e carte).
+static func rarity_tag(rarity: int) -> String:
+	return ["COMMON", "TRAINED", "RARE", "ELITE", "EPIC", "LEGEND", "TRANSCEND"][clampi(rarity, 1, 7) - 1]
+
+## Colore iridescente per il 7★: scorre lungo lo spettro con il tempo.
+static func prism_color(t: float, offset: float = 0.0, value: float = 1.0) -> Color:
+	return Color.from_hsv(fposmod(t * 0.12 + offset, 1.0), 0.55, value)
 
 static func tone_color(tone: String) -> Color:
 	match tone:
@@ -112,35 +123,48 @@ static func ornate(kind: String, padding: float = 14.0) -> OrnateStyle:
 	var s: OrnateStyle
 	match kind:
 		"panel":
-			s = OrnateStyle.make(Color("#1a1420"), Color("#0e0a12"), BRONZE, 10.0, padding)
+			s = OrnateStyle.make(Color(0.06, 0.085, 0.13, 0.96), Color(0.035, 0.05, 0.08, 0.96), Color(BRONZE.r, BRONZE.g, BRONZE.b, 0.8), 12.0, padding)
+			s.border_width = 1.2
 			s.ornament = OrnateStyle.Ornament.BRONZE
+			s.ornament_color = CYAN
+			s.inner = Color(CYAN.r, CYAN.g, CYAN.b, 0.10)
 			s.inner_inset = 5.0
+			s.glow = Color(CYAN.r, CYAN.g, CYAN.b, 0.22)
+			s.glow_size = 6.0
 			s.shadow = 14.0
 		"header":
-			s = OrnateStyle.make(Color("#2a1f36"), Color("#160f1d"), BRONZE, 8.0, padding)
+			s = OrnateStyle.make(Color("#122036"), Color("#0b1320"), Color(CYAN.r, CYAN.g, CYAN.b, 0.45), 8.0, padding)
+			s.border_width = 1.0
 			s.inner = Color(0, 0, 0, 0)
+			s.ornament = OrnateStyle.Ornament.PLATE
+			s.ornament_color = CYAN
 		"system":
-			s = OrnateStyle.make(Color("#2b2140"), Color("#140f1e"), LILAC, 4.0, padding)
-			s.border_width = 1.4
-			s.inner = Color(LILAC.r, LILAC.g, LILAC.b, 0.25)
+			s = OrnateStyle.make(Color(0.05, 0.09, 0.15, 0.97), Color(0.03, 0.05, 0.09, 0.97), Color("#7fe9fb"), 4.0, padding)
+			s.border_width = 1.2
+			s.inner = Color(CYAN.r, CYAN.g, CYAN.b, 0.16)
 			s.ornament = OrnateStyle.Ornament.SYSTEM
-			s.ornament_color = Color("#efe7ff")
-			s.glow = Color("#b79cff")
+			s.ornament_color = Color("#d6fbff")
+			s.glow = Color(CYAN.r, CYAN.g, CYAN.b, 0.45)
 			s.glow_size = 9.0
 			s.shadow = 10.0
 		"card":
-			s = OrnateStyle.make(Color("#1d1724"), Color("#141019"), Color("#4d3c2e"), 5.0, padding)
+			s = OrnateStyle.make(Color("#121a27"), Color("#0d131d"), Color("#26344b"), 5.0, padding)
+			s.border_width = 1.0
 			s.inner = Color(0, 0, 0, 0)
 		"inset":
-			s = OrnateStyle.make(Color("#100c13"), Color("#0c090f"), Color("#3a2e26"), 4.0, padding)
+			s = OrnateStyle.make(Color("#0a0f17"), Color("#080c13"), Color("#1e293b"), 4.0, padding)
+			s.border_width = 1.0
 			s.inner = Color(0, 0, 0, 0)
 		"hud":
-			s = OrnateStyle.make(Color(0.09, 0.07, 0.11, 0.9), Color(0.05, 0.04, 0.06, 0.9), BRONZE, 8.0, padding)
-			s.inner = Color(0.69, 0.51, 0.31, 0.22)
+			s = OrnateStyle.make(Color(0.05, 0.08, 0.12, 0.88), Color(0.03, 0.05, 0.08, 0.88), Color(CYAN.r, CYAN.g, CYAN.b, 0.55), 8.0, padding)
+			s.border_width = 1.0
+			s.inner = Color(CYAN.r, CYAN.g, CYAN.b, 0.08)
 			s.inner_inset = 3.0
 		"plate":
-			s = OrnateStyle.make(Color("#120e15"), Color("#0b080d"), BRONZE, 10.0, padding)
+			s = OrnateStyle.make(Color("#0b111b"), Color("#070b12"), Color(CYAN.r, CYAN.g, CYAN.b, 0.7), 10.0, padding)
+			s.border_width = 1.0
 			s.ornament = OrnateStyle.Ornament.PLATE
+			s.ornament_color = CYAN
 			s.inner = Color(0, 0, 0, 0)
 		_:
 			s = OrnateStyle.make(PAPER_DEEP, PAPER, BRONZE, 6.0, padding)
@@ -148,29 +172,32 @@ static func ornate(kind: String, padding: float = 14.0) -> OrnateStyle:
 
 ## Riquadro tinto per avvisi e stati (bordo colorato su fondo scuro).
 static func tinted(color: Color, padding: float = 12.0) -> OrnateStyle:
-	var s := OrnateStyle.make(color.darkened(0.78).lerp(Color("#15111a"), 0.35), color.darkened(0.86).lerp(Color("#0e0b11"), 0.4), color.darkened(0.25), 5.0, padding)
-	s.inner = Color(0, 0, 0, 0)
-	s.border_width = 1.2
+	var s := OrnateStyle.make(color.darkened(0.82).lerp(Color("#0e1520"), 0.4), color.darkened(0.9).lerp(Color("#090d14"), 0.4), Color(color.r, color.g, color.b, 0.75), 5.0, padding)
+	s.inner = Color(color.r, color.g, color.b, 0.10)
+	s.inner_inset = 3.0
+	s.border_width = 1.0
 	return s
 
+## [fondo alto, fondo basso, bordo neon]
 const BUTTON_KINDS := {
-	"primary": [Color("#3b2a58"), Color("#211836"), Color("#c9a25f")],
-	"gold": [Color("#6c4a24"), Color("#3a2712"), Color("#e8c47e")],
-	"navy": [Color("#262030"), Color("#16121c"), Color("#8a6a45")],
-	"ghost": [Color("#1a151f"), Color("#110d15"), Color("#5c4836")],
-	"danger": [Color("#5c1f2a"), Color("#331018"), Color("#d4806e")],
-	"violet": [Color("#3d2b68"), Color("#1f1638"), Color("#c6b2f2")],
-	"sky": [Color("#21354d"), Color("#121e2c"), Color("#8fb6e6")],
+	"primary": [Color("#0f3340"), Color("#0a1f29"), Color("#46dcf2")],
+	"gold": [Color("#47300f"), Color("#2a1b08"), Color("#ffbb4d")],
+	"navy": [Color("#152132"), Color("#0d1522"), Color("#3f6a8c")],
+	"ghost": [Color("#0f1520"), Color("#0a0f17"), Color("#2c3a52")],
+	"danger": [Color("#45111f"), Color("#280a12"), Color("#ff4f74")],
+	"violet": [Color("#3d1238"), Color("#230a21"), Color("#f052c8")],
+	"sky": [Color("#0f2a45"), Color("#0a1a2c"), Color("#4fb9ff")],
 }
 
 static func _button_style(top: Color, bottom: Color, edge: Color, state: String) -> OrnateStyle:
-	var s := OrnateStyle.make(top, bottom, edge, 7.0, 0.0)
+	var s := OrnateStyle.make(top, bottom, edge, 6.0, 0.0)
 	s.content_margin_left = 18
 	s.content_margin_right = 18
 	s.content_margin_top = 7
 	s.content_margin_bottom = 9
+	s.border_width = 1.2
 	s.inner_inset = 3.0
-	s.inner = Color(edge.r, edge.g, edge.b, 0.28)
+	s.inner = Color(edge.r, edge.g, edge.b, 0.14)
 	match state:
 		"hover":
 			s.fill_top = top.lightened(0.12)
@@ -182,9 +209,9 @@ static func _button_style(top: Color, bottom: Color, edge: Color, state: String)
 			s.fill_top = bottom
 			s.fill_bottom = top.darkened(0.1)
 		"disabled":
-			s.fill_top = Color("#1a171c")
-			s.fill_bottom = Color("#121014")
-			s.border = Color("#3a3236")
+			s.fill_top = Color("#0e131b")
+			s.fill_bottom = Color("#0a0e14")
+			s.border = Color("#253041")
 			s.inner = Color(0, 0, 0, 0)
 	return s
 
@@ -203,20 +230,20 @@ static func build_theme() -> Theme:
 	theme.set_color("font_hover_color", "Button", WHITE)
 	theme.set_color("font_pressed_color", "Button", INK)
 	theme.set_color("font_focus_color", "Button", INK)
-	theme.set_color("font_disabled_color", "Button", Color("#6d6470"))
+	theme.set_color("font_disabled_color", "Button", Color("#56627a"))
 	var colors: Array = BUTTON_KINDS["navy"]
 	for state in ["normal", "hover", "pressed", "disabled"]:
 		theme.set_stylebox(state, "Button", _button_style(colors[0], colors[1], colors[2], state))
 	theme.set_stylebox("focus", "Button", StyleBoxEmpty.new())
 	theme.set_stylebox("panel", "PanelContainer", ornate("card"))
-	theme.set_stylebox("background", "ProgressBar", box(Color("#0b080d"), Color("#3a2e26"), 1, 2, 0))
+	theme.set_stylebox("background", "ProgressBar", box(Color("#070b11"), Color("#22304a"), 1, 2, 0))
 	theme.set_stylebox("fill", "ProgressBar", box(TEAL, Color.TRANSPARENT, 0, 2, 0))
 	theme.set_stylebox("panel", "TooltipPanel", ornate("system", 8.0))
 	theme.set_color("font_color", "TooltipLabel", INK)
 	theme.set_font("font", "TooltipLabel", body_font())
-	theme.set_stylebox("grabber", "VScrollBar", box(Color(0.69, 0.51, 0.31, 0.45), Color.TRANSPARENT, 0, 3, 0))
-	theme.set_stylebox("grabber_highlight", "VScrollBar", box(Color(0.69, 0.51, 0.31, 0.7), Color.TRANSPARENT, 0, 3, 0))
-	theme.set_stylebox("grabber_pressed", "VScrollBar", box(Color(0.85, 0.68, 0.38, 0.85), Color.TRANSPARENT, 0, 3, 0))
+	theme.set_stylebox("grabber", "VScrollBar", box(Color(CYAN.r, CYAN.g, CYAN.b, 0.35), Color.TRANSPARENT, 0, 3, 0))
+	theme.set_stylebox("grabber_highlight", "VScrollBar", box(Color(CYAN.r, CYAN.g, CYAN.b, 0.6), Color.TRANSPARENT, 0, 3, 0))
+	theme.set_stylebox("grabber_pressed", "VScrollBar", box(Color(CYAN.r, CYAN.g, CYAN.b, 0.8), Color.TRANSPARENT, 0, 3, 0))
 	theme.set_stylebox("scroll", "VScrollBar", box(Color(1, 1, 1, 0.03), Color.TRANSPARENT, 0, 3, 0))
 	return theme
 
@@ -225,8 +252,10 @@ static func style_button(button: Button, kind: String = "primary") -> Button:
 	for state in ["normal", "hover", "pressed", "disabled"]:
 		button.add_theme_stylebox_override(state, _button_style(colors[0], colors[1], colors[2], state))
 	var text_color := INK
-	if kind == "gold": text_color = Color("#fff1d6")
+	if kind == "gold": text_color = Color("#ffe7bf")
 	elif kind == "ghost": text_color = INK_SOFT
+	elif kind in ["primary", "sky"]: text_color = Color("#dff8ff")
+	elif kind == "violet": text_color = Color("#ffe0f6")
 	for state in ["font_color", "font_pressed_color", "font_focus_color"]: button.add_theme_color_override(state, text_color)
 	button.add_theme_color_override("font_hover_color", WHITE)
 	return button
@@ -266,7 +295,7 @@ static func para(text: String, size: int = 16, color: Color = INK_SOFT) -> Label
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	return l
 
-static func eyebrow(text: String, color: Color = GOLD) -> Label:
+static func eyebrow(text: String, color: Color = CYAN) -> Label:
 	return label(text.to_upper(), 12, color, head_medium())
 
 static func card(color: Color = PAPER_DEEP, border: Color = PAPER_LINE, radius: int = 6, padding: int = 12) -> PanelContainer:
@@ -278,7 +307,7 @@ static func card(color: Color = PAPER_DEEP, border: Color = PAPER_LINE, radius: 
 
 static func pill(text: String, color: Color, text_color: Color = Color(-1, 0, 0), size: int = 12) -> PanelContainer:
 	var p := PanelContainer.new()
-	var s := OrnateStyle.make(color.darkened(0.62), color.darkened(0.75), color.darkened(0.1), 6.0, 3.0)
+	var s := OrnateStyle.make(color.darkened(0.8), color.darkened(0.86), Color(color.r, color.g, color.b, 0.8), 4.0, 3.0)
 	s.content_margin_left = 9
 	s.content_margin_right = 9
 	s.inner = Color(0, 0, 0, 0)
@@ -353,17 +382,17 @@ static func draw_emblem(canvas: CanvasItem, c: Vector2, r: float, color: Color) 
 	canvas.draw_line(c + Vector2(-r * 0.25, r * 0.55), c + Vector2(r * 0.25, -r * 0.55), Color(1, 0.97, 0.9, 0.9), maxf(1.0, r * 0.14), true)
 	canvas.draw_circle(c, r * 0.16, Color(1, 0.97, 0.9))
 
-## Medaglione circolare in bronzo con l'emblema (logo del Master, intestazioni).
-static func medal(size: float, color: Color = GOLD) -> Control:
+## Medaglione circolare neon con l'emblema (logo del Master, intestazioni).
+static func medal(size: float, color: Color = CYAN) -> Control:
 	var m := Control.new()
 	m.custom_minimum_size = Vector2(size, size)
 	m.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	m.draw.connect(func():
 		var c := m.size * 0.5
 		var r := minf(m.size.x, m.size.y) * 0.5 - 1.0
-		m.draw_circle(c, r, Color("#4f3a26"))
-		m.draw_circle(c, r - 2.0, Color("#140f17"))
-		m.draw_arc(c, r - 2.0, 0, TAU, 32, Color("#b08250"), 1.6, true)
-		m.draw_arc(c, r - 5.0, 0, TAU, 32, Color(0.69, 0.51, 0.31, 0.35), 1.0, true)
+		m.draw_circle(c, r, Color("#0a1019"))
+		m.draw_arc(c, r - 1.0, 0, TAU, 40, Color(CYAN.r, CYAN.g, CYAN.b, 0.9), 1.4, true)
+		m.draw_arc(c, r - 5.0, -0.4, PI - 0.4, 24, Color(CYAN.r, CYAN.g, CYAN.b, 0.35), 1.0, true)
+		m.draw_arc(c, r - 5.0, PI + 0.2, TAU - 0.6, 18, Color(MAGENTA.r, MAGENTA.g, MAGENTA.b, 0.35), 1.0, true)
 		draw_emblem(m, c, r * 0.55, color))
 	return m

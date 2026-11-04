@@ -40,4 +40,4 @@ godot --path . -s res://tests/character_probe_runner.gd -- --test-mode       # f
 
 ## Grafica
 
-Tutta la grafica 3D è generata dal codice (geometria e shader procedurali, nessun asset esterno). I font Cinzel e Alegreya sono sotto licenza SIL Open Font License (`assets/fonts`).
+Tutta la grafica 3D è generata dal codice (geometria e shader procedurali, nessun asset esterno). L'interfaccia usa i font Oxanium ed Exo 2 (licenza SIL Open Font License, in `assets/fonts`).

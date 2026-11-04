@@ -11,6 +11,8 @@ signal hero_leveled(hero_id: String, level: int)
 ## Emesso quando passa il tempo della base (addestramento, riposo) senza azioni del giocatore.
 signal time_ticked
 
+const CharacterGeneratorScript := preload("res://scripts/characters/character_generator.gd")
+const HeroLookScript := preload("res://scripts/characters/hero_look.gd")
 const SAVE_PATH := "user://riftward_save.json"
 const SAVE_VERSION := 3
 const PARTY_SIZE := 5
@@ -52,6 +54,39 @@ const FIRST_NAMES := ["Aella", "Bren", "Cael", "Doria", "Edrin", "Fara", "Galen"
 const LAST_NAMES := ["Ashfall", "Blackmere", "Cinder", "Dawnward", "Emberlain", "Frost", "Greywake", "Hollow", "Ironwood", "Jade", "Kestrel", "Lightfoot", "Mourn", "Nightglass", "Oakshield", "Pyre", "Rook", "Stoneveil", "Thorn", "Vale", "Yarrow", "Zephyr"]
 const ORIGINS := ["Marche di Veyra", "Città sommersa di Oros", "Cintura mineraria di Khel", "Nomadi di Sable", "Isole di vetro", "Bosco di Talren", "Fortezza di Ardent", "Archivio di Myr"]
 const PROFESSIONS := ["Fabbro", "Conciatore", "Cartografo", "Erborista", "Carpentiere", "Archivista", "Cuoco", "Minatore"]
+
+# --- Popolani (1★ e 2★) --------------------------------------------------------
+## Fino a 2★ il Nexus richiama persone comuni con un mestiere: il giocatore sceglie
+## la classe, e loro consigliano quella che si adatta meglio a ciò che sanno fare.
+const COMMONER_MAX_RARITY := 2
+## mestiere → aspetto del foglio (guard, merchant, scholar, villager), categoria del
+## generatore personaggi (colori), pesi [for, int, sta, agi], classe a cui pende, frase.
+const COMMONER_JOBS := {
+	"Contadino": {"look": "villager", "prop": "pitchfork", "category": "Villager", "weights": [0.34, 0.06, 0.40, 0.20], "lean": "Lancer", "tool": "Forcone", "line": "Ho zappato la terra da quando ero bambino."},
+	"Fabbro": {"look": "villager", "prop": "hammer", "category": "Blacksmith", "weights": [0.47, 0.06, 0.35, 0.12], "lean": "Vanguard", "tool": "Martello da forgia", "line": "Ho passato anni all'incudine."},
+	"Carpentiere": {"look": "villager", "prop": "axe", "category": "Villager", "weights": [0.38, 0.12, 0.28, 0.22], "lean": "Lancer", "tool": "Ascia da carpentiere", "line": "So alzare un tetto e tenere ferma una trave."},
+	"Minatore": {"look": "villager", "prop": "pickaxe", "category": "Villager", "weights": [0.40, 0.04, 0.44, 0.12], "lean": "Guardian", "tool": "Piccone", "line": "Sotto terra ho imparato a resistere a tutto."},
+	"Conciatore": {"look": "villager", "prop": "knife", "category": "Villager", "weights": [0.28, 0.12, 0.30, 0.30], "lean": "Ranger", "tool": "Coltello da concia", "line": "Lavoro le pelli che portano i cacciatori."},
+	"Cuoco": {"look": "villager", "prop": "ladle", "category": "Villager", "weights": [0.22, 0.26, 0.32, 0.20], "lean": "Support", "tool": "Mestolo di ferro", "line": "Ho sfamato una locanda intera ogni sera."},
+	"Cacciatore": {"look": "villager", "prop": "bow", "category": "Ranger", "weights": [0.20, 0.08, 0.18, 0.54], "lean": "Ranger", "tool": "Arco da caccia", "line": "Seguivo le tracce nei boschi per giorni."},
+	"Mercante": {"look": "merchant", "prop": "staff", "category": "Merchant", "weights": [0.12, 0.42, 0.20, 0.26], "lean": "Mage", "tool": "Bastone da viaggio", "line": "Ho contato monete e letto contratti in dieci città."},
+	"Bottegaio": {"look": "merchant", "prop": "pouch", "category": "Merchant", "weights": [0.16, 0.34, 0.30, 0.20], "lean": "Support", "tool": "Bilancia di ottone", "line": "Tenevo una bottega e conoscevo tutti nel quartiere."},
+	"Locandiere": {"look": "merchant", "prop": "club", "category": "Merchant", "weights": [0.30, 0.16, 0.38, 0.16], "lean": "Guardian", "tool": "Randello da oste", "line": "Nella mia locanda le risse finivano in fretta."},
+	"Archivista": {"look": "scholar", "prop": "book", "category": "Scholar", "weights": [0.06, 0.58, 0.18, 0.18], "lean": "Mage", "tool": "Tomo rilegato", "line": "Ho copiato a mano più libri di quanti ne ricordi."},
+	"Cartografo": {"look": "scholar", "prop": "map", "category": "Scholar", "weights": [0.10, 0.42, 0.16, 0.32], "lean": "Ranger", "tool": "Compasso d'ottone", "line": "Ho disegnato mappe di posti che nessuno visitava."},
+	"Erborista": {"look": "scholar", "prop": "sickle", "category": "Cleric", "weights": [0.08, 0.48, 0.26, 0.18], "lean": "Support", "tool": "Falcetto d'argento", "line": "Conosco ogni erba che cura e ogni erba che uccide."},
+	"Accolito": {"look": "scholar", "prop": "staff", "category": "Cleric", "weights": [0.08, 0.46, 0.32, 0.14], "lean": "Support", "tool": "Bastone del tempio", "line": "Servivo al tempio e assistevo i malati."},
+	"Guardia cittadina": {"look": "guard", "prop": "club", "category": "Tank", "weights": [0.38, 0.04, 0.38, 0.20], "lean": "Guardian", "tool": "Mazza da ronda", "line": "Facevo la ronda sulle mura della mia città."},
+}
+## Come ogni popolano motiva la classe che consiglia.
+const ROLE_PITCH := {
+	"Guardian": "Reggo i colpi meglio di chiunque: fammi Guardiano e starò davanti agli altri.",
+	"Vanguard": "Ho braccia forti: mettimi in prima linea come Avanguardia.",
+	"Lancer": "Ho forza e gambe buone: con una lancia in mano farei il Lanciere.",
+	"Ranger": "Ho occhio e passo leggero: dammi un arco e farò il Ranger.",
+	"Mage": "Imparo in fretta e ho la testa per i libri: potrei studiare da Mago.",
+	"Support": "So prendermi cura degli altri: lasciami fare il Supporto.",
+}
 const TRAITS := ["Nervi saldi", "Istinto protettivo", "Passo leggero", "Tenace", "Occhio clinico", "Testardo", "Frugale", "Socievole", "Solitario", "Mano ferma", "Memoria lunga"]
 
 # --- Base e strutture ---------------------------------------------------------
@@ -243,6 +278,32 @@ func _migrate() -> void:
 		stage_record.get_or_add("attempts", 0)
 		stage_record.get_or_add("cleared", false)
 		stage_record.get_or_add("best_time", 0.0)
+	# Eroi dei salvataggi precedenti: ricevono un aspetto senza perdere livello, stats o equipaggiamento.
+	for hero in data.heroes:
+		# 1★-2★ già in squadra: diventano popolani che hanno già scelto la loro classe
+		if not hero.has("commoner"):
+			var commoner := int(hero.get("native_rarity", hero.get("current_rarity", 1))) <= COMMONER_MAX_RARITY
+			hero["commoner"] = commoner
+			hero["class_chosen"] = true
+			if commoner:
+				var job := str(hero.get("profession", ""))
+				if not COMMONER_JOBS.has(job): job = _job_for_role(str(hero.get("role", "Guardian")), str(COMMONER_JOBS.keys()[0]))
+				var advice := class_advice(hero.stats, job)
+				hero["job"] = job
+				hero["profession"] = job
+				hero["recommended_role"] = str(advice.role)
+				hero["alt_role"] = str(advice.alt)
+				hero["advice"] = str(advice.text)
+		hero.get_or_add("class_chosen", true)
+		# aspetto a pezzi (foglio dei personaggi): colori dalla categoria del mestiere o della
+		# classe, poi archetipo, volto, capigliatura, corporatura ed età
+		var outdated := int(hero.get("look", {}).get("v", 0)) < HeroLookScript.VERSION
+		if outdated or not hero.has("appearance"):
+			var category := str(COMMONER_JOBS[hero.job].category) if is_commoner(hero) and COMMONER_JOBS.has(str(hero.get("job", ""))) else HeroLookScript.category_for_role(str(hero.get("role", "Guardian")), str(hero.get("id", "legacy")))
+			hero["appearance"] = CharacterGeneratorScript.generate(str(hero.get("id", "legacy")) + ":appearance", category)
+		hero["category"] = str(hero.appearance.get("category", "Villager"))
+		if outdated: hero["look"] = HeroLookScript.generate(str(hero.get("id", "legacy")), base_archetype(hero), is_feminine(hero), int(hero.get("native_rarity", 1)), hero.appearance)
+		for key in ["portrait", "portrait_v"]: hero.erase(key)
 	while data.party.size() < PARTY_SIZE: data.party.append("")
 	data.version = SAVE_VERSION
 	if not data.active_mission.is_empty():
@@ -369,7 +430,7 @@ static func skill_label(name: String) -> String:
 func stars(rarity: int) -> String:
 	return "★".repeat(rarity)
 
-func role_label(role: String) -> String:
+static func role_label(role: String) -> String:
 	return str(ROLES.get(role, {}).get("label", role))
 
 func format_number(value: float) -> String:
@@ -440,24 +501,119 @@ func cost_text(costs: Dictionary) -> String:
 
 func generate_hero(seed_text: String, rarity: int, forced_role: String = "") -> Dictionary:
 	var rng := rng_for(seed_text)
-	var role: String = forced_role if not forced_role.is_empty() else _pick(rng, ROLES.keys())
+	# 1★-2★: persona comune con un mestiere. Le statistiche vengono dal mestiere,
+	# la classe la sceglie il giocatore (la squadra iniziale l'ha già scelta).
+	var commoner := rarity <= COMMONER_MAX_RARITY
+	var job := ""
+	var role: String
+	var weights: Array
+	if commoner:
+		job = _pick(rng, COMMONER_JOBS.keys())
+		if not forced_role.is_empty(): job = _job_for_role(forced_role, job)
+		weights = COMMONER_JOBS[job].weights
+	else:
+		role = forced_role if not forced_role.is_empty() else _pick(rng, ROLES.keys())
+		weights = ROLES[role].weights
 	var name := "%s %s" % [_pick(rng, FIRST_NAMES), _pick(rng, LAST_NAMES)]
-	var weights: Array = ROLES[role].weights
 	var budget := 39 + rarity * 3 + rng.randi_range(0, 7)
 	var stats := {"str": 7 + roundi(budget * weights[0]) + rng.randi_range(0, 2), "int": 7 + roundi(budget * weights[1]) + rng.randi_range(0, 2), "sta": 7 + roundi(budget * weights[2]) + rng.randi_range(0, 2), "agi": 7 + roundi(budget * weights[3]) + rng.randi_range(0, 2)}
+	var advice := {}
+	if commoner:
+		advice = class_advice(stats, job)
+		role = forced_role if not forced_role.is_empty() else str(advice.role)
 	var potential_min := 20 + (rarity - 1) * 10
 	var potential := clampi(rng.randi_range(potential_min, 88 + rarity * 2), 20, 100)
 	var id := "H-%08X" % abs((seed_text + name).hash())
 	var hero := {
 		"id": id, "seed": "%08X" % abs(seed_text.hash()), "name": name, "native_rarity": rarity, "current_rarity": rarity, "level": 1, "xp": 0,
-		"role": role, "class_name": role, "origin": _pick(rng, ORIGINS), "profession": _pick(rng, PROFESSIONS), "stats": stats, "potential": potential, "growth": 3.35 + rarity * 0.62 + potential * 0.004,
+		"role": role, "class_name": role, "origin": _pick(rng, ORIGINS), "profession": job if commoner else _pick(rng, PROFESSIONS), "stats": stats, "potential": potential, "growth": 3.35 + rarity * 0.62 + potential * 0.004,
 		"personality": {"courage": rng.randi_range(25, 95), "discipline": rng.randi_range(20, 96), "aggression": rng.randi_range(15, 95), "altruism": rng.randi_range(15, 95), "composure": rng.randi_range(20, 95), "loyalty": rng.randi_range(25, 90)},
 		"traits": _pick_two(rng, TRAITS), "skills": [{"name": ROLES[role].skill, "level": 1, "xp": 0}, {"name": "Disciplina da Campo", "level": 1, "xp": 0}],
 		"morale": rng.randi_range(60, 84), "fatigue": rng.randi_range(0, 8), "injuries": [], "missions": 0, "victories": 0, "kills": 0, "state": "ALIVE", "hue": rng.randi_range(0, 359),
 		"equipment": _starter_equipment(role), "memories": ["Ha attraversato il Rift e ha visto il Nexus per la prima volta."],
+		"commoner": commoner, "class_chosen": not commoner or not forced_role.is_empty(),
 	}
+	if commoner:
+		hero.job = job
+		hero.recommended_role = str(advice.role)
+		hero.alt_role = str(advice.alt)
+		hero.advice = str(advice.text)
+		if not bool(hero.class_chosen):
+			# finché non ha una classe combatte con l'attrezzo del suo mestiere
+			hero.equipment.main.name = str(COMMONER_JOBS[job].tool)
+			hero.equipment.main.power = 11
+			hero.equipment.armor.name = "Abiti da lavoro"
+			hero.equipment.armor.defense = 4
+			hero.skills[0] = {"name": "Mestiere: " + job, "level": 1, "xp": 0}
 	hero.assessment = _assessment(hero)
+	# Aspetto: colori dal generatore personaggi (categoria scelta da mestiere o classe),
+	# pezzi del foglio (archetipo, volto, capigliatura, corporatura, età) dall'id.
+	var category := str(COMMONER_JOBS[job].category) if commoner else HeroLookScript.category_for_role(role, id)
+	hero.appearance = CharacterGeneratorScript.generate(id + ":appearance", category)
+	hero.category = str(hero.appearance.category)
+	hero.look = HeroLookScript.generate(id, base_archetype(hero), is_feminine(hero), rarity, hero.appearance)
 	return hero
+
+## Mestiere adatto a una classe già decisa (squadra iniziale): uno di quelli che pendono verso di lei.
+func _job_for_role(role: String, fallback: String) -> String:
+	var options := []
+	for key in COMMONER_JOBS:
+		if str(COMMONER_JOBS[key].lean) == role: options.append(key)
+	if options.is_empty(): return fallback
+	return options[abs(fallback.hash()) % options.size()]
+
+## Classe che un popolano consiglia per sé: quella che sfrutta meglio le sue statistiche,
+## con una spinta verso quella a cui pende il mestiere. Restituisce anche la seconda scelta.
+func class_advice(stats: Dictionary, job: String) -> Dictionary:
+	var total := float(stats.str + stats.int + stats.sta + stats.agi)
+	var lean := str(COMMONER_JOBS.get(job, {}).get("lean", ""))
+	var ranked := []
+	for key in ROLES:
+		var w: Array = ROLES[key].weights
+		var score: float = (stats.str * w[0] + stats.int * w[1] + stats.sta * w[2] + stats.agi * w[3]) / maxf(1.0, total)
+		if key == lean: score += 0.025
+		ranked.append([score, key])
+	ranked.sort_custom(func(a, b): return a[0] > b[0])
+	var best := str(ranked[0][1])
+	var alt := str(ranked[1][1])
+	var line := str(COMMONER_JOBS.get(job, {}).get("line", ""))
+	var text := "«%s %s Se preferisci, me la caverei anche come %s.»" % [line, ROLE_PITCH[best], role_label(alt)]
+	return {"role": best, "alt": alt, "text": text}
+
+static func is_commoner(hero: Dictionary) -> bool:
+	return bool(hero.get("commoner", false))
+
+## Popolano che aspetta ancora che il giocatore gli dia una classe.
+static func needs_class(hero: Dictionary) -> bool:
+	return is_commoner(hero) and not bool(hero.get("class_chosen", true)) and str(hero.get("state", "ALIVE")) == "ALIVE"
+
+## Nome della classe da mostrare: i popolani senza classe mostrano il mestiere.
+static func hero_class_label(hero: Dictionary) -> String:
+	if needs_class(hero): return "Popolano · " + str(hero.get("job", hero.get("profession", "")))
+	return role_label(str(hero.get("role", "")))
+
+## Il giocatore dà una classe a un popolano: abilità e armi da classe, il resto resta suo.
+func choose_class(hero_id: String, role: String) -> Dictionary:
+	var hero := hero_by_id(hero_id)
+	if hero.is_empty() or hero.state != "ALIVE": return {"ok": false, "message": "Eroe non disponibile"}
+	if not needs_class(hero): return {"ok": false, "message": "Ha già una classe"}
+	if not ROLES.has(role): return {"ok": false, "message": "Classe sconosciuta"}
+	hero.role = role
+	hero.class_name = role
+	hero.class_chosen = true
+	hero.skills[0] = {"name": ROLES[role].skill, "level": 1, "xp": 0}
+	var kit := _starter_equipment(role)
+	var equipment: Dictionary = hero.equipment
+	equipment.main = kit.main
+	equipment.sub = kit.sub
+	if str(equipment.armor.get("name", "")) == "Abiti da lavoro": equipment.armor = kit.armor
+	var followed := role == str(hero.get("recommended_role", ""))
+	hero.memories.push_front("Ha lasciato il mestiere di %s per diventare %s%s." % [str(hero.get("job", "")).to_lower(), role_label(role), " come aveva chiesto" if followed else ""])
+	hero.morale = clampi(int(hero.morale) + (8 if followed else 2), 0, 100)
+	add_event("HERO", "Nuova classe", "%s, ex %s, ora è %s." % [hero.name, str(hero.get("job", "")).to_lower(), role_label(role)], "good")
+	state_changed.emit()
+	save_game()
+	return {"ok": true, "message": "%s ora è %s." % [hero.name, role_label(role)]}
 
 ## Aspetto deterministico derivato dall'id: non altera la sequenza RNG storica degli eroi.
 func hero_appearance(hero: Dictionary) -> Dictionary:
@@ -469,38 +625,80 @@ const EYE_COLORS := ["#4a2c1e", "#4a2c1e", "#6e2424", "#9c7426", "#3b6b49", "#3a
 const SKIN_TONES := ["#f1dccc", "#ecd0bb", "#e4c0a2", "#d2a581", "#b98663", "#8f5f45", "#6b4533"]
 const OUTFIT_COLORS := ["#3a2e29", "#2d3236", "#352c3f", "#2c3830", "#46322a", "#262c3c", "#472a2f", "#3d3a33"]
 
-## Tratti fisici del ritratto e del modello 3D, sempre uguali per lo stesso eroe.
+static func is_feminine(hero: Dictionary) -> bool:
+	return FEMININE_NAMES.has(str(hero.get("name", "Hero")).split(" ")[0])
+
+## Archetipo del foglio da cui vengono volto, capelli, corporatura ed età:
+## il mestiere per i popolani, la classe per gli altri.
+static func base_archetype(hero: Dictionary) -> String:
+	var job := str(hero.get("job", ""))
+	if bool(hero.get("commoner", false)) and COMMONER_JOBS.has(job): return str(COMMONER_JOBS[job].look)
+	return str(HeroLookScript.CLASS_ARCHETYPE.get(str(hero.get("role", "Guardian")), "villager"))
+
+## Vestiti di adesso: abiti da mestiere finché il popolano non ha una classe.
+static func outfit_kind(hero: Dictionary) -> String:
+	var job := str(hero.get("job", ""))
+	if bool(hero.get("commoner", false)) and not bool(hero.get("class_chosen", true)) and COMMONER_JOBS.has(job): return str(COMMONER_JOBS[job].look)
+	return str(HeroLookScript.CLASS_OUTFIT.get(str(hero.get("role", "Guardian")), "villager"))
+
+## Tratti fisici del modello 3D (e quindi della carta), sempre uguali per lo stesso eroe.
+## Pezzi dal foglio dei personaggi (archetipo, volto, capigliatura, corporatura, età),
+## colori di pelle, capelli e occhi dal generatore personaggi.
 static func appearance_for(hero: Dictionary) -> Dictionary:
-	var h: int = abs(str(hero.get("id", "x")).hash())
-	var name := str(hero.get("name", "Hero"))
-	var first := name.split(" ")[0]
-	var fem: bool = FEMININE_NAMES.has(first)
-	var role := str(hero.get("role", "Guardian"))
+	var id := str(hero.get("id", "x"))
+	var h: int = abs(id.hash())
+	var fem: bool = is_feminine(hero)
 	var hue := float(hero.get("hue", 40)) / 360.0
-	var veteran := (h / 7919) % 100 < 14
-	var hair := Color(HAIR_COLORS[(h / 3) % HAIR_COLORS.size()])
-	if veteran: hair = hair.lerp(Color("#b9b4b4"), 0.62)
-	var styles: Array = [1, 5, 3, 1, 5] if fem else [0, 2, 0, 3, 2]
-	var style: int = styles[(h / 53) % styles.size()]
-	if role in ["Mage", "Ranger"] and (h / 211) % 4 == 0: style = 4
+	var gen: Dictionary = hero.get("appearance", {})
+	if gen.is_empty(): gen = CharacterGeneratorScript.generate(id + ":appearance")
+	var piece: Dictionary = hero.get("look", {})
+	if piece.is_empty() or int(piece.get("v", 0)) < HeroLookScript.VERSION:
+		piece = HeroLookScript.generate(id, base_archetype(hero), fem, int(hero.get("native_rarity", hero.get("current_rarity", 1))), gen)
+	var age := int(piece.get("age", 28))
+	var face := int(piece.get("face", 1))
+	var archetype := str(piece.get("archetype", "villager"))
+	var family := str(gen.get("hair_color", ""))
+	var hair := Color(str(gen.get("hair_hex", HAIR_COLORS[(h / 3) % HAIR_COLORS.size()])))
+	# capelli che ingrigiscono con l'età
+	if age >= 46 and not family in ["white", "silver"]: hair = hair.lerp(Color("#cfc9c4"), clampf((age - 44) / 26.0, 0.0, 0.75))
 	var beard := 0
-	if not fem:
-		var roll := (h / 401) % 100
-		if veteran: beard = 2 if roll < 55 else 1
-		elif roll < 18: beard = 1
-		elif roll < 30: beard = 2
+	if not fem and age >= 20:
+		match str(gen.get("facial_hair", "none")):
+			"beard": beard = 2 if age >= 30 else 1
+			"stubble", "moustache": beard = 1
+		if face == 2 and age >= 26 and beard == 0 and (h / 17) % 2 == 0: beard = 1
+	var body := str(piece.get("body", "average"))
+	var job := str(hero.get("job", ""))
 	return {
 		"hair": hair,
-		"skin": Color(SKIN_TONES[(h / 11) % SKIN_TONES.size()]),
-		"eyes": Color(EYE_COLORS[(h / 7) % EYE_COLORS.size()]),
-		"hair_style": style,
-		"outfit": Color(OUTFIT_COLORS[(h / 13) % OUTFIT_COLORS.size()]),
-		"accent": Color.from_hsv(hue, 0.52, 0.58),
+		"hair_color": family,
+		"skin": Color(str(gen.get("skin_hex", SKIN_TONES[(h / 11) % SKIN_TONES.size()]))),
+		"eyes": Color(str(gen.get("eye_hex", EYE_COLORS[(h / 7) % EYE_COLORS.size()]))),
+		"eye_color": str(gen.get("eye_color", "")),
 		"fem": fem,
-		"veteran": veteran,
+		"archetype": archetype,
+		"outfit_kind": outfit_kind(hero),
+		"face": face,
+		"hair_kind": str(piece.get("hair", "short")),
+		"body": body,
+		"age": age,
 		"beard": beard,
-		"scar": (h / 977) % 100 < 11,
+		# il volto "calmo" dello studioso porta gli occhiali, come nel foglio
+		"glasses": bool(gen.get("glasses", false)) or (archetype == "scholar" and face == 1),
+		"scar": (bool(gen.get("scar", false)) or str(gen.get("face_detail", "")) == "scar") and face != 0,
+		"freckles": str(gen.get("face_detail", "")) == "freckles",
+		"eye_size": 1.0 + (float(gen.get("eye_size", 1.0)) - 1.0) * 0.3,
+		"height": 1.0 + (float(gen.get("height_scale", 1.0)) - 1.0) * 0.35,
+		"outfit": Color(str(gen.get("outfit_hex", OUTFIT_COLORS[(h / 13) % OUTFIT_COLORS.size()]))),
+		"accent": Color.from_hsv(hue, 0.52, 0.58),
+		"category": str(gen.get("category", "")),
 		"seed": h,
+		"veteran": age >= 50,
+		# attrezzo del mestiere in mano finché non ha una classe
+		"prop": str(COMMONER_JOBS.get(job, {}).get("prop", "")) if bool(hero.get("commoner", false)) and not bool(hero.get("class_chosen", true)) else "",
+		# disegno 2D di riserva (carte quando il 3D non è disponibile)
+		"hair_style": {"long_straight": 2, "long_wavy": 2, "braid": 3, "tied_back": 3, "bun": 3, "messy": 1, "short": 0, "crop": 0, "slicked": 0}.get(str(piece.get("hair", "")), 5 if fem else 0),
+		"portrait": "",
 	}
 
 func _starter_equipment(role: String) -> Dictionary:
@@ -1019,6 +1217,59 @@ func refine_material(recipe_id: String) -> Dictionary:
 	save_and_notify()
 	return {"ok": true}
 
+# --- Negozio -----------------------------------------------------------------
+## Solo valute di gioco, prezzi e quantità sempre visibili. Niente che annulli il
+## rischio: nessuna resurrezione o protezione dalla morte permanente.
+## `limit` è il numero di acquisti per giorno (si azzera a mezzanotte UTC).
+const SHOP_TABS := [["daily", "Offerte del giorno"], ["material", "Materiali"], ["premium", "Gemme"]]
+const SHOP_OFFERS := {
+	"daily_supplies": {"tab": "daily", "name": "Scorta da campo", "icon": "herbs", "color": "#4fe3a3", "price": {"gold": 1200}, "items": {"herbs": 4, "medicine": 2}, "limit": 1},
+	"daily_forge": {"tab": "daily", "name": "Kit di forgia", "icon": "ore", "color": "#ffbb4d", "price": {"gold": 3200}, "items": {"ore": 5, "leather": 3}, "limit": 1},
+	"daily_cores": {"tab": "daily", "name": "Nuclei instabili", "icon": "cores", "color": "#b57cff", "price": {"gold": 6000}, "items": {"cores": 2}, "limit": 1},
+	"daily_gems": {"tab": "daily", "name": "Cambio in Gemme", "icon": "gems", "color": "#46dcf2", "price": {"gold": 20000}, "items": {"gems": 60}, "limit": 1},
+	"mat_ore": {"tab": "material", "name": "Minerale", "icon": "ore", "color": "#9aa6b6", "price": {"gold": 700}, "items": {"ore": 5}, "limit": 5},
+	"mat_leather": {"tab": "material", "name": "Pelle", "icon": "leather", "color": "#c08a5a", "price": {"gold": 700}, "items": {"leather": 5}, "limit": 5},
+	"mat_wood": {"tab": "material", "name": "Legno", "icon": "wood", "color": "#6f8f3e", "price": {"gold": 500}, "items": {"wood": 5}, "limit": 5},
+	"mat_herbs": {"tab": "material", "name": "Erbe", "icon": "herbs", "color": "#4fe3a3", "price": {"gold": 500}, "items": {"herbs": 5}, "limit": 5},
+	"mat_medicine": {"tab": "material", "name": "Medicine", "icon": "medicine", "color": "#ff4f74", "price": {"gold": 1400}, "items": {"medicine": 3}, "limit": 3},
+	"mat_cores": {"tab": "material", "name": "Nuclei", "icon": "cores", "color": "#b57cff", "price": {"gold": 3000}, "items": {"cores": 2}, "limit": 3},
+	"gem_stone": {"tab": "premium", "name": "Pietra di promozione", "icon": "stones", "color": "#f052c8", "price": {"gems": 450}, "items": {"stones": 1}, "limit": 2},
+	"gem_chest": {"tab": "premium", "name": "Forziere raro", "icon": "star", "color": "#ffbb4d", "price": {"gems": 300}, "items": {"ore": 6, "leather": 6, "wood": 6, "cores": 3}, "limit": 1},
+	"gem_gold": {"tab": "premium", "name": "Sacca d'oro", "icon": "gold", "color": "#ffbb4d", "price": {"gems": 150}, "items": {"gold": 12000}, "limit": 3},
+}
+
+func shop_day() -> int:
+	return int(now() / 86400.0)
+
+func _shop_state() -> Dictionary:
+	var shop: Dictionary = data.get_or_add("shop", {"day": -1, "bought": {}})
+	if int(shop.get("day", -1)) != shop_day():
+		shop.day = shop_day()
+		shop.bought = {}
+	return shop
+
+func shop_remaining(offer_id: String) -> int:
+	var offer: Dictionary = SHOP_OFFERS.get(offer_id, {})
+	if offer.is_empty(): return 0
+	return maxi(0, int(offer.limit) - int(_shop_state().bought.get(offer_id, 0)))
+
+## Secondi al prossimo rinnovo delle offerte.
+func shop_refresh_in() -> int:
+	return int((shop_day() + 1) * 86400.0 - now())
+
+func shop_buy(offer_id: String) -> Dictionary:
+	var offer: Dictionary = SHOP_OFFERS.get(offer_id, {})
+	if offer.is_empty(): return {"ok": false, "message": "Offerta sconosciuta"}
+	if shop_remaining(offer_id) <= 0: return {"ok": false, "message": "Esaurito per oggi"}
+	for key in offer.items:
+		if MATERIALS.has(key) and resource_amount(key) >= material_cap(): return {"ok": false, "message": "Scorte piene di %s: potenzia il Magazzino" % MATERIALS[key].name}
+	if not pay(offer.price, "Negozio · " + str(offer.name), "shop"): return {"ok": false, "message": "Non hai abbastanza " + cost_text(offer.price)}
+	for key in offer.items: grant(key, int(offer.items[key]), "Negozio · " + str(offer.name), "shop")
+	var shop := _shop_state()
+	shop.bought[offer_id] = int(shop.bought.get(offer_id, 0)) + 1
+	save_and_notify()
+	return {"ok": true}
+
 func brew_potion(recipe_id: String, hero_id: String) -> Dictionary:
 	if not facility_built("alchemy"): return {"ok": false, "message": "Costruisci prima il Centro Alchemico"}
 	var recipe: Dictionary = ALCHEMY_RECIPES.get(recipe_id, {})
@@ -1185,14 +1436,43 @@ func set_dev_mode(enabled: bool) -> void:
 
 func dev_unlock_all() -> void:
 	data.dev.all_content = true
-	data.world.max_floor = maxi(int(data.world.max_floor), 5)
-	for floor_index in range(1, int(data.world.max_floor) + 1): _materialize_stage(floor_index)
-	add_event("DEV", "Contenuti sbloccati", "Piani e requisiti di progressione ignorati per i test.", "warn")
+	data.world.max_floor = MAX_FLOOR
+	for floor_index in range(1, MAX_FLOOR + 1): _materialize_stage(floor_index)
+	add_event("DEV", "Contenuti sbloccati", "Tutti i %d piani della Torre si possono scegliere; requisiti di progressione ignorati." % MAX_FLOOR, "warn")
+	save_and_notify()
+
+## Segna come completati tutti i piani: sblocca evocazioni, espansioni e promozioni legate ai piani.
+func dev_clear_all_floors() -> void:
+	data.dev.all_content = true
+	debug_clear_floors(MAX_FLOOR)
+	data.world.max_floor = MAX_FLOOR
+	add_event("DEV", "Torre completata", "Piani 1–%d segnati come completati." % MAX_FLOOR, "warn")
+	save_and_notify()
+
+## Base al livello massimo con tutte le strutture costruite e al massimo livello.
+func dev_max_base() -> void:
+	data.world.base_level = BASE_LEVELS.size()
+	for id in FACILITY_ORDER:
+		data.facilities.get_or_add(id, {"level": 0})
+		data.facilities[id].level = mini(5, facility_max_level())
+	add_event("DEV", "Base al massimo", "Base Lv.%d, tutte le strutture costruite e potenziate." % base_level(), "warn")
+	save_and_notify()
+
+## Porta tutti gli eroi vivi al livello massimo della loro rarità.
+func dev_max_heroes() -> void:
+	for hero in data.heroes:
+		if hero.state != "ALIVE": continue
+		var guard := 0
+		while int(hero.level) < level_cap(hero) and guard < 200:
+			_apply_level_up(hero)
+			guard += 1
+		hero.xp = 0
+	add_event("DEV", "Eroi al livello massimo", "Ogni eroe vivo ha raggiunto il cap della sua rarità.", "warn")
 	save_and_notify()
 
 ## Segna come completati i piani fino a `up_to` (strumenti di sviluppo e test).
 func debug_clear_floors(up_to: int) -> void:
-	for f in range(1, up_to + 1):
+	for f in range(1, mini(up_to, MAX_FLOOR) + 1):
 		var record := _materialize_stage(f)
 		record.cleared = true
 		if not data.world.completed.has(f): data.world.completed.append(f)

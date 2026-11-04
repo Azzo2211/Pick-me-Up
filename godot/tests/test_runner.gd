@@ -37,6 +37,13 @@ func _initialize() -> void:
 	_test("oggetti vecchi senza id ricevono un id", _test_item_ids)
 	_test("luce della base salvata e migrata", _test_light_setting)
 	_test("tratti diversi e abilità in italiano", _test_traits_skills)
+	_test("sviluppo: tutti i piani, base e eroi al massimo", _test_dev_tools)
+	_test("negozio: prezzi, limiti giornalieri e scorte", _test_shop)
+	_test("pacchetto personaggi: aspetto salvato e migrato", _test_character_pack)
+	_test("popolani 1★-2★: mestiere, consiglio e scelta della classe", _test_commoners)
+	_test("aspetto a pezzi: archetipo, volto, capelli, età", _test_modular_look)
+	_test("kit 3D: corpi vestiti, teste, capelli e accessori", _test_character_kit)
+	_test("pacchetto animazioni: 40 clip sullo scheletro", _test_motion_pack)
 	print("\nRisultato: %d passati, %d falliti" % [passed, failed])
 	quit(0 if failed == 0 else 1)
 
@@ -383,3 +390,181 @@ func _test_traits_skills() -> Array:
 	valid = valid and RiftwardState.skill_label("Mend") == "Cura"
 	game.free()
 	return [valid, "Tratti duplicati o abilità non tradotte"]
+
+func _test_dev_tools() -> Array:
+	var game := _fresh("dev-tools-seed")
+	game.set_dev_mode(true)
+	game.dev_unlock_all()
+	var valid: bool = int(game.data.world.max_floor) == game.MAX_FLOOR and game.get_stage(game.MAX_FLOOR).has("descriptor")
+	game.dev_clear_all_floors()
+	valid = valid and game.cleared_floor_count() == game.MAX_FLOOR and game.summon_pool_unlocked("transcendent")
+	game.dev_max_base()
+	valid = valid and game.base_level() == game.BASE_LEVELS.size()
+	for id in game.FACILITY_ORDER: valid = valid and game.facility_level(id) == 5
+	var top := game.dev_spawn_hero(7)
+	game.dev_max_heroes()
+	valid = valid and int(top.current_rarity) == 7 and int(top.level) == game.level_cap(top)
+	game.free()
+	return [valid, "Gli strumenti di sviluppo non sbloccano tutto"]
+
+func _test_shop() -> Array:
+	var game := _fresh("shop-seed")
+	var gold := game.resource_amount("gold")
+	var ore := game.resource_amount("ore")
+	var bought: bool = game.shop_buy("mat_ore").ok
+	var valid: bool = bought and game.resource_amount("gold") == gold - 700 and game.resource_amount("ore") == ore + 5
+	valid = valid and game.shop_remaining("mat_ore") == 4
+	game.shop_buy("daily_supplies")
+	valid = valid and not game.shop_buy("daily_supplies").ok
+	# un nuovo giorno azzera i limiti
+	game.data.shop.day = game.shop_day() - 1
+	valid = valid and game.shop_remaining("daily_supplies") == 1
+	# niente acquisti senza fondi
+	game.data.world.gems = 10
+	valid = valid and not game.shop_buy("gem_stone").ok and int(game.data.world.stones) == 1
+	# scorte piene: l'acquisto viene rifiutato senza pagare
+	game.data.world.materials.wood = game.material_cap()
+	var before := game.resource_amount("gold")
+	valid = valid and not game.shop_buy("mat_wood").ok and game.resource_amount("gold") == before
+	game.free()
+	return [valid, "Il negozio non rispetta prezzi o limiti"]
+
+func _test_character_pack() -> Array:
+	var game := _fresh("character-pack-seed")
+	var hero: Dictionary = game.data.heroes[0]
+	var generator := load("res://scripts/characters/character_generator.gd")
+	var valid: bool = hero.has("appearance") and generator.CATEGORIES.has(hero.category)
+	var look := RiftwardState.appearance_for(hero)
+	valid = valid and look.eyes == Color(str(hero.appearance.eye_hex))
+	# capelli dal generatore (ingrigiti solo con l'età)
+	if int(look.age) < 46: valid = valid and look.hair == Color(str(hero.appearance.hair_hex)) and look.hair_color == str(hero.appearance.hair_color)
+	# salvataggio vecchio senza aspetto: la migrazione lo aggiunge senza toccare il resto
+	var level := int(hero.level)
+	var expected: Dictionary = hero.appearance.duplicate()
+	hero.erase("appearance")
+	hero.erase("category")
+	game._migrate()
+	valid = valid and hero.appearance == expected and int(hero.level) == level
+	# stesso id, stesso aspetto
+	valid = valid and generator.generate("abc:appearance") == generator.generate("abc:appearance")
+	game.free()
+	return [valid, "Aspetto del generatore assente, diverso o perso nella migrazione"]
+
+func _test_commoners() -> Array:
+	var game := _fresh("commoner-seed")
+	var valid := true
+	var look_script := load("res://scripts/characters/hero_look.gd")
+	# evocati a 1★-2★: persone comuni con un mestiere, senza classe, che ne consigliano una
+	for i in 24:
+		var hero := game.generate_hero("commoner-%d" % i, 1 + i % 2)
+		var job := str(hero.get("job", ""))
+		valid = valid and bool(hero.commoner) and not bool(hero.class_chosen) and game.COMMONER_JOBS.has(job)
+		valid = valid and game.ROLES.has(str(hero.recommended_role)) and str(hero.role) == str(hero.recommended_role)
+		valid = valid and str(hero.alt_role) != str(hero.recommended_role) and str(hero.advice).contains(game.role_label(str(hero.alt_role)))
+		valid = valid and str(hero.equipment.main.name) == str(game.COMMONER_JOBS[job].tool)
+		valid = valid and str(hero.look.archetype) == str(game.COMMONER_JOBS[job].look)
+		valid = valid and RiftwardState.outfit_kind(hero) == str(game.COMMONER_JOBS[job].look)
+	# il consiglio segue le statistiche: un archivista consiglia una classe di intelletto
+	var scholar := {"str": 9, "int": 34, "sta": 14, "agi": 12}
+	valid = valid and str(game.class_advice(scholar, "Archivista").role) in ["Mage", "Support"]
+	var smith := {"str": 30, "int": 9, "sta": 24, "agi": 12}
+	valid = valid and str(game.class_advice(smith, "Fabbro").role) in ["Vanguard", "Guardian", "Lancer"]
+	# il giocatore sceglie: anche una classe diversa da quella consigliata
+	var hero := game.generate_hero("commoner-choice", 1)
+	game.data.heroes.append(hero)
+	valid = valid and game.needs_class(hero) and game.hero_class_label(hero).begins_with("Popolano")
+	var pick := str(hero.alt_role)
+	var result: Dictionary = game.choose_class(str(hero.id), pick)
+	valid = valid and bool(result.ok) and str(hero.role) == pick and bool(hero.class_chosen) and not game.needs_class(hero)
+	valid = valid and str(hero.skills[0].name) == str(game.ROLES[pick].skill)
+	valid = valid and str(hero.equipment.main.name) == str(game._starter_equipment(pick).main.name)
+	valid = valid and str(hero.equipment.armor.name) != "Abiti da lavoro"
+	valid = valid and RiftwardState.outfit_kind(hero) == str(look_script.CLASS_OUTFIT[pick])
+	valid = valid and not bool(game.choose_class(str(hero.id), "Mage").ok)
+	# dal 3★ in su: classe dal Nexus, nessuna scelta
+	var rare := game.generate_hero("rare-hero", 3)
+	valid = valid and not bool(rare.commoner) and bool(rare.class_chosen) and not game.needs_class(rare)
+	# squadra iniziale: popolani che hanno già la loro classe
+	for starter in game.data.heroes.slice(0, 5):
+		valid = valid and not game.needs_class(starter)
+	# salvataggio vecchio: i 1★-2★ diventano popolani con la classe che avevano
+	var legacy: Dictionary = game.data.heroes[0]
+	var role := str(legacy.role)
+	for key in ["commoner", "class_chosen", "job", "recommended_role", "alt_role", "advice"]: legacy.erase(key)
+	game._migrate()
+	valid = valid and bool(legacy.commoner) and bool(legacy.class_chosen) and str(legacy.role) == role and game.COMMONER_JOBS.has(str(legacy.job))
+	game.free()
+	return [valid, "Popolani senza mestiere, consiglio sbagliato o scelta della classe non applicata"]
+
+func _test_character_kit() -> Array:
+	var kit := load("res://scripts/characters/character_kit.gd")
+	var look_script := load("res://scripts/characters/hero_look.gd")
+	var valid := true
+	var missing := []
+	for outfit in ["villager", "guard", "merchant", "scholar", "hunter"]:
+		var inst: Node = kit.body_instance(outfit)
+		if inst == null:
+			missing.append("body_" + outfit)
+			continue
+		var skels := inst.find_children("*", "Skeleton3D", true, false)
+		var meshes := inst.find_children("*", "MeshInstance3D", true, false)
+		valid = valid and skels.size() == 1 and meshes.size() == 1
+		if skels.size() == 1:
+			var sk := skels[0] as Skeleton3D
+			for joint in CharacterModel.JOINT_NAMES: valid = valid and sk.find_bone(joint) >= 0
+		if meshes.size() == 1:
+			var mi := meshes[0] as MeshInstance3D
+			for key in ["fem", "slim", "athletic", "muscular", "chubby"]: valid = valid and mi.find_blend_shape_by_name(key) >= 0
+		inst.free()
+	var pieces := ["head", "glasses", "headband", "beard_short", "beard_goatee"]
+	for arch in look_script.ARCHETYPES.values():
+		for h in arch.hair_m + arch.hair_f:
+			if not pieces.has("hair_" + str(h)): pieces.append("hair_" + str(h))
+	for piece in pieces:
+		if kit.part(piece) == null: missing.append(piece)
+	# un eroe costruito dal kit ha lo scheletro e la testa con il volto
+	var game := _fresh("kit-seed")
+	var hero: Dictionary = game.data.heroes[0]
+	var model := CharacterModel.new()
+	model.build_hero(hero, RiftwardState.appearance_for(hero))
+	valid = valid and model._skel != null and model._face_mat != null and model._head_kit != null and model._head_kit.get_child_count() >= 2
+	model.free()
+	game.free()
+	valid = valid and missing.is_empty()
+	return [valid, "pezzi mancanti: %s" % [missing] if not missing.is_empty() else "5 vestiti, %d pezzi della testa" % pieces.size()]
+
+func _test_modular_look() -> Array:
+	var game := _fresh("modular-look-seed")
+	var look_script := load("res://scripts/characters/hero_look.gd")
+	var valid := true
+	var face_sum := {1: 0, 6: 0}
+	for i in 120:
+		for rarity in [1, 6]:
+			var hero := game.generate_hero("look-%d-%d" % [rarity, i], rarity)
+			var piece: Dictionary = hero.look
+			var arch: Dictionary = look_script.ARCHETYPES[piece.archetype]
+			var hairs: Array = arch.hair_f if RiftwardState.is_feminine(hero) else arch.hair_m
+			valid = valid and int(piece.face) >= 0 and int(piece.face) <= 2 and hairs.has(str(piece.hair))
+			valid = valid and (arch.bodies as Array).has(str(piece.body)) and int(piece.age) >= 16 and int(piece.age) <= 62
+			face_sum[rarity] += int(piece.face)
+			if rarity == 6: valid = valid and str(piece.archetype) == str(look_script.CLASS_ARCHETYPE[str(hero.role)])
+	# più rara, più spesso il volto bello (indice 0)
+	valid = valid and face_sum[6] < face_sum[1]
+	# stesso eroe, stesso aspetto; la migrazione lo ricrea uguale
+	var first: Dictionary = game.data.heroes[0]
+	var before: Dictionary = first.look.duplicate()
+	first.erase("look")
+	game._migrate()
+	valid = valid and first.look == before
+	var look := RiftwardState.appearance_for(first)
+	valid = valid and look.eyes == Color(str(first.appearance.eye_hex)) and str(look.hair_kind) == str(before.hair)
+	game.free()
+	return [valid, "Pezzi dell'aspetto fuori dal foglio o non deterministici"]
+
+func _test_motion_pack() -> Array:
+	var motion := load("res://scripts/hub3d/motion_library.gd")
+	var valid: bool = motion.ensure() and motion.clip_names().size() == 40
+	for clip in ["Idle", "Walk_F", "Interact", "Cheer", "Death", "Bow_Shot", "Cast_Spell"]:
+		var pose: Dictionary = motion.sample(clip, 0.4)
+		valid = valid and pose.size() == motion.JOINTS.size() + 1
+	return [valid, "Clip mancanti o scheletro non compatibile"]

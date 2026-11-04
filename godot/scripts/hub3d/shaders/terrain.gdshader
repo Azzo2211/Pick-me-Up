@@ -29,26 +29,28 @@ void vertex() {
 
 void fragment() {
 	vec2 p = wpos.xz;
+	float fw = length(fwidth(p));
 	float n1 = fbm(p * 0.16);
 	float n2 = fbm(p * 0.85 + 3.0);
-	float n3 = vnoise(p * 5.5);
+	float n3 = mix(0.5, vnoise(p * 5.5), aa_keep(5.5, fw));
 	vec3 grass = mix(grass_dark, grass_light, smoothstep(0.28, 0.78, n1));
 	grass = mix(grass, grass_dry, smoothstep(0.6, 0.85, n2) * 0.55);
 	grass *= 0.8 + 0.34 * n3;
-	float bloom = smoothstep(0.86, 0.9, vnoise(p * 7.0 + 11.0)) * smoothstep(0.55, 0.7, n2) * flower_amount;
+	float bloom = smoothstep(0.86, 0.9, vnoise(p * 7.0 + 11.0)) * smoothstep(0.55, 0.7, n2) * flower_amount * aa_keep(7.0, fw);
 	grass = mix(grass, mix(vec3(0.55, 0.48, 0.62), vec3(0.75, 0.66, 0.38), hash12(floor(p * 7.0))), bloom);
 
-	vec3 dirt = mix(dirt_color, dirt_light, n2) * (0.84 + 0.26 * vnoise(p * 9.0));
-	float pebble = smoothstep(0.8, 0.84, vnoise(p * 15.0));
+	vec3 dirt = mix(dirt_color, dirt_light, n2) * (0.84 + 0.26 * mix(0.5, vnoise(p * 9.0), aa_keep(9.0, fw)));
+	float pebble = smoothstep(0.8, 0.84, vnoise(p * 15.0)) * aa_keep(15.0, fw);
 	dirt = mix(dirt, dirt_light * 1.12, pebble * 0.55);
 	float rut = smoothstep(0.55, 0.9, fbm3(p * 2.5));
 	dirt *= 1.0 - rut * 0.12;
 
 	vec4 v = voronoi(p * cobble_scale);
 	float stone_id = hash12(v.zw);
-	vec3 cobble = mix(cobble_a, cobble_b, stone_id) * (0.86 + 0.24 * vnoise(p * 11.0));
+	vec3 cobble = mix(cobble_a, cobble_b, stone_id) * (0.86 + 0.24 * mix(0.5, vnoise(p * 11.0), aa_keep(11.0, fw)));
 	cobble *= mix(0.72, 1.0, smoothstep(0.02, 0.16, v.y));
-	cobble = mix(gap_color, cobble, smoothstep(0.025, 0.06, v.y));
+	float gap_w = fw * cobble_scale;
+	cobble = mix(mix(cobble, gap_color, 0.35), mix(gap_color, cobble, smoothstep(0.025 - gap_w, 0.06 + gap_w, v.y)), aa_keep(cobble_scale * 6.0, fw));
 	cobble = mix(cobble, moss_color, smoothstep(0.06, 0.0, v.y) * smoothstep(0.5, 0.8, n2) * 0.6);
 
 	float strata = sin(wpos.y * 2.7 + fbm(vec2(wpos.x + wpos.z, wpos.y) * 0.6) * 5.0) * 0.5 + 0.5;

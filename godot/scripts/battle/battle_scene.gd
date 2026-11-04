@@ -428,7 +428,7 @@ func _build_hud() -> void:
 	boss_bar = ProgressBar.new()
 	boss_bar.show_percentage = false
 	boss_bar.custom_minimum_size = Vector2(760, 16)
-	boss_bar.add_theme_stylebox_override("background", UIKit.box(Color(0.05, 0.03, 0.04, 0.9), Color("#9c7448"), 2, 2, 0))
+	boss_bar.add_theme_stylebox_override("background", UIKit.box(Color(0.05, 0.03, 0.04, 0.9), Color("#2fb4cf"), 2, 2, 0))
 	boss_bar.add_theme_stylebox_override("fill", UIKit.box(Color("#b8323e"), Color.TRANSPARENT, 0, 1, 0))
 	bv.add_child(boss_bar)
 	boss_panel.add_child(bv)
@@ -565,7 +565,7 @@ func _make_party_card(unit: Dictionary) -> void:
 	hp.custom_minimum_size.y = 10
 	hp.max_value = float(unit.max_hp)
 	hp.value = float(unit.hp)
-	hp.add_theme_stylebox_override("background", UIKit.box(Color(0.05, 0.03, 0.04, 0.9), Color("#4d3c2e"), 1, 2, 0))
+	hp.add_theme_stylebox_override("background", UIKit.box(Color(0.05, 0.03, 0.04, 0.9), Color("#26344b"), 1, 2, 0))
 	hp.add_theme_stylebox_override("fill", UIKit.box(Color("#4fae7c"), Color.TRANSPARENT, 0, 1, 0))
 	hp.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	v.add_child(hp)

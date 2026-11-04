@@ -1,9 +1,9 @@
 extends Control
 class_name OrnateDivider
 
-## Linea divisoria in bronzo che sfuma ai lati, con un rombo al centro.
+## Linea divisoria neon che sfuma ai lati, con un segmento acceso al centro.
 
-var color := Color("#9c7448")
+var color := Color("#46dcf2")
 
 func _ready() -> void:
 	custom_minimum_size.y = 10
@@ -18,7 +18,7 @@ func _draw() -> void:
 		var t1 := float(i + 1) / steps
 		var a := 1.0 - absf((t0 + t1) - 1.0)
 		var c := color
-		c.a = a * 0.85
+		c.a = a * 0.6
 		draw_line(Vector2(size.x * t0, y), Vector2(size.x * t1, y), c, 1.0, true)
 	var center := Vector2(size.x * 0.5, y)
-	draw_colored_polygon(PackedVector2Array([center + Vector2(0, -4), center + Vector2(4, 0), center + Vector2(0, 4), center + Vector2(-4, 0)]), color.lightened(0.25))
+	draw_line(center - Vector2(18, 0), center + Vector2(18, 0), color.lightened(0.3), 2.5, true)

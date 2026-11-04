@@ -55,6 +55,7 @@ Locked reference values:
 - Transcendent summon: 3,000 Gems, unlocked after Floor 20 — 5★ 98% · 6★ 1.8% · 7★ 0.2%.
 - No account energy system. Real economy by default; development mode is optional (Settings).
 - Starting resources: 60,000 Gold, 1,500 Gems, 1 Stone.
+- Shop (`GameState.SHOP_OFFERS`): only Gold and Gems, prices and quantities always shown, daily purchase limits (reset at midnight UTC). Purchases are refused when the Warehouse cap for that material is full. No item may undo risk (no revive, no death protection).
 
 ## Base, time and progression
 - Base level 1–5 (Nexus crystal). Requirements: Lv.2 Floor 3 + 40k Gold, Lv.3 Floor 6 + 120k, Lv.4 Floor 10 + 300k, Lv.5 Floor 15 + 700k.

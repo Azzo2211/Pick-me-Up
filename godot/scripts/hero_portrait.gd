@@ -1,15 +1,26 @@
 extends Control
 class_name HeroPortrait
 
-## Ritratto a mezzo busto in stile manhwa, disegnato interamente in codice.
-## Proporzioni adulte, lineart scura, ombre a due toni (cel shading).
-## Capelli, pelle, occhi, abiti e dettagli (barba, cicatrici, età) derivano
-## dall'id dell'eroe, quindi lo stesso eroe ha sempre lo stesso volto.
+## Ritratto dell'eroe: la foto del suo personaggio 3D (studio delle carte), così
+## carta e gioco mostrano la stessa persona. Finché la foto non è pronta (e nei
+## test senza schermo) resta il ritratto disegnato in codice, con gli stessi colori.
 ##
-## framed = true  → ritratto quadrato con cornice in bronzo (liste, HUD)
+## framed = true  → ritratto quadrato con cornice neon del colore di rarità (liste, HUD)
 ## framed = false → solo figura su fondo trasparente (dentro le carte)
 
 const LINE := Color(0.08, 0.05, 0.06, 0.92)
+const StudioScript := preload("res://scripts/ui/portrait_studio.gd")
+const VIGNETTE := Color("#0e1520")
+## Ritratto dei caduti: grigio e spento.
+## (In Godot 4 COLOR nel fragment è già colore dei vertici × texture.)
+const GREY_SHADER := """shader_type canvas_item;
+void fragment() {
+	vec4 c = COLOR;
+	float g = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+	COLOR = vec4(mix(c.rgb, vec3(g), 0.85) * 0.75, c.a);
+}
+"""
+static var _grey_material: ShaderMaterial
 
 var hero_name := "Hero"
 var role := "Guardian"
@@ -19,6 +30,23 @@ var look: Dictionary = {}
 var framed := true
 var framing := "face"
 var portrait_size := Vector2(96, 96)
+
+## Foto del personaggio 3D: sostituisce il ritratto disegnato appena è pronta.
+var photo: Texture2D = null
+var photo_focus := Vector2(0.5, 0.42)
+var _photo_pending := false
+## Parallasse delle carte: -1…1 sposta il volto, zoom > 1 lo avvicina.
+var tilt := Vector2.ZERO:
+	set(value):
+		tilt = value
+		_redraw_layers()
+var zoom := 1.0:
+	set(value):
+		zoom = value
+		_redraw_layers()
+## Livelli del ritratto dipinto: la foto (con lo shader dei colori) e, sopra, ombre e cornice.
+var _photo_layer: Control = null
+var _front_layer: Control = null
 
 var _origin := Vector2.ZERO
 var _unit := 1.0
@@ -30,6 +58,11 @@ func setup(hero: Dictionary, size_px: float = 96.0, mode: String = "") -> void:
 	rarity = clampi(int(hero.get("current_rarity", hero.get("rarity", 1))), 1, 7)
 	dead = str(hero.get("state", "ALIVE")) != "ALIVE"
 	look = RiftwardState.appearance_for(hero)
+	photo = null
+	var studio := StudioScript.instance()
+	if studio != null: photo = studio.request(hero, _on_photo)
+	_photo_pending = photo == null and StudioScript.can_shoot()
+	if photo != null: _build_layers()
 	if mode == "bust":
 		framed = false
 		framing = "bust"
@@ -124,17 +157,68 @@ func uline(points, color: Color, width_scale: float = 1.0) -> void:
 # Disegno
 # =============================================================================
 
+static func grey_material() -> ShaderMaterial:
+	if _grey_material == null:
+		var shader := Shader.new()
+		shader.code = GREY_SHADER
+		_grey_material = ShaderMaterial.new()
+		_grey_material.shader = shader
+	return _grey_material
+
+signal photo_ready
+
+## Crea i due livelli della foto: l'immagine e, sopra, ombre e cornice.
+func _build_layers() -> void:
+	if _photo_layer == null:
+		_photo_layer = Control.new()
+		_photo_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_photo_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		_photo_layer.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		_photo_layer.draw.connect(_draw_photo)
+		add_child(_photo_layer)
+		_front_layer = Control.new()
+		_front_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_front_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		_front_layer.draw.connect(_draw_front)
+		add_child(_front_layer)
+	_photo_layer.material = grey_material() if dead else null
+	_front_layer.material = grey_material() if dead else null
+	_redraw_layers()
+
+func _on_photo(tex: Texture2D) -> void:
+	if tex == null or not is_instance_valid(self): return
+	photo = tex
+	_photo_pending = false
+	_build_layers()
+	queue_redraw()
+	photo_ready.emit()
+
+func _redraw_layers() -> void:
+	if _photo_layer != null:
+		_photo_layer.queue_redraw()
+		_front_layer.queue_redraw()
+
 func _draw() -> void:
 	var w := size.x
 	var h := size.y
 	if w < 4.0 or h < 4.0: return
+	if photo != null:
+		# sotto la foto (sfondo trasparente): fondale con l'alone del colore di rarità
+		_draw_backdrop()
+		_redraw_layers()
+		return
+	if _photo_pending:
+		# la foto 3D sta arrivando: solo il fondale, niente volto disegnato diverso
+		_draw_backdrop()
+		if framed: _draw_frame()
+		return
 	if framing == "bust":
 		_unit = minf(h * 0.38, w * 0.47)
 		_origin = Vector2(w * 0.5, h * 0.39)
 	else:
 		_unit = minf(w, h) * 0.64
 		_origin = Vector2(w * 0.5, h * 0.48)
-	_line_w = maxf(0.9, _unit * 0.016)
+	_line_w = maxf(0.8, _unit * 0.0125)
 	if framed: _draw_backdrop()
 	var skin: Color = look.get("skin", Color("#e4c0a2"))
 	var hair: Color = look.get("hair", Color("#2a201b"))
@@ -162,32 +246,106 @@ func _draw() -> void:
 	if dead:
 		draw_rect(Rect2(Vector2.ZERO, size), Color(0.05, 0.04, 0.06, 0.35))
 
+# --- Ritratto dipinto -----------------------------------------------------------
+
+## Zona dell'immagine da mostrare: proporzioni della destinazione, centrata sul
+## volto, spostata dalla parallasse e ristretta dallo zoom.
+func _photo_region(aspect: float) -> Rect2:
+	var ts := photo.get_size()
+	var rw := ts.y * aspect
+	var rh := ts.y
+	if rw > ts.x:
+		rw = ts.x
+		rh = ts.x / aspect
+	rw /= zoom
+	rh /= zoom
+	var cx := photo_focus.x * ts.x - tilt.x * rw * 0.05
+	var cy := photo_focus.y * ts.y - tilt.y * rh * 0.05
+	var x := clampf(cx - rw * 0.5, 0.0, ts.x - rw)
+	var y := clampf(cy - rh * 0.42, 0.0, ts.y - rh)
+	return Rect2(x, y, rw, rh)
+
+## Disegna la zona `src` dell'immagine dentro `dest`, con trasparenza in alto e in basso.
+func _photo_quad(ci: CanvasItem, dest: Rect2, src: Rect2, top_alpha: float = 1.0, bottom_alpha: float = 1.0) -> void:
+	var ts := photo.get_size()
+	var pts := PackedVector2Array([dest.position, Vector2(dest.end.x, dest.position.y), dest.end, Vector2(dest.position.x, dest.end.y)])
+	var uvs := PackedVector2Array([src.position / ts, Vector2(src.end.x, src.position.y) / ts, src.end / ts, Vector2(src.position.x, src.end.y) / ts])
+	var c0 := Color(1, 1, 1, top_alpha)
+	var c1 := Color(1, 1, 1, bottom_alpha)
+	ci.draw_polygon(pts, PackedColorArray([c0, c0, c1, c1]), uvs, photo)
+
+## Livello della foto: solo l'immagine, perché lo shader dei colori vale per tutto ciò che vi si disegna.
+func _draw_photo() -> void:
+	var ci := _photo_layer
+	var w := size.x
+	var h := size.y
+	if w < 4.0 or h < 4.0: return
+	if framing == "bust":
+		# volto in alto a tutta larghezza, che sfuma verso nome e stelle
+		var dest_h := minf(h, w / 0.84)
+		var src := _photo_region(w / dest_h)
+		var cut := 0.68
+		_photo_quad(ci, Rect2(0, 0, w, dest_h * cut), Rect2(src.position, Vector2(src.size.x, src.size.y * cut)))
+		_photo_quad(ci, Rect2(0, dest_h * cut, w, dest_h * (1.0 - cut)), Rect2(src.position + Vector2(0, src.size.y * cut), Vector2(src.size.x, src.size.y * (1.0 - cut))), 1.0, 0.0)
+	else:
+		_photo_quad(ci, Rect2(0, 0, w, h), _photo_region(w / h))
+
+## Livello davanti alla foto: ombre ai bordi, cornice, velo dei caduti.
+func _draw_front() -> void:
+	var ci := _front_layer
+	var w := size.x
+	var h := size.y
+	if w < 4.0 or h < 4.0: return
+	if framing == "window":
+		_vignette(ci, Rect2(0, 0, w, h), 0.1, 0.22)
+		ci.draw_polygon(PackedVector2Array([Vector2(0, h * 0.8), Vector2(w, h * 0.8), Vector2(w, h), Vector2(0, h)]), PackedColorArray([Color(VIGNETTE, 0.0), Color(VIGNETTE, 0.0), Color(VIGNETTE, 0.45), Color(VIGNETTE, 0.45)]))
+	elif framing == "bust":
+		_vignette(ci, Rect2(0, 0, w, minf(h, w / 0.84)), 0.16, 0.5, 0.68)
+	else:
+		_vignette(ci, Rect2(0, 0, w, h), 0.14, 0.35)
+	if framed: _draw_frame(ci)
+	elif dead: ci.draw_rect(Rect2(Vector2.ZERO, size), Color(0.05, 0.04, 0.06, 0.25))
+
+## Bordi laterali scuriti: il ritratto si fonde con il fondo scuro dell'interfaccia.
+## Da `fade_from` (0–1 dell'altezza) in giù l'ombra svanisce insieme all'immagine.
+func _vignette(ci: CanvasItem, rect: Rect2, frac: float, alpha: float, fade_from: float = 1.0) -> void:
+	var edge := rect.size.x * frac
+	var dark := Color(VIGNETTE, alpha)
+	var clear := Color(VIGNETTE, 0.0)
+	var ym := rect.position.y + rect.size.y * fade_from
+	for side in [0, 1]:
+		var x0 := rect.position.x if side == 0 else rect.end.x
+		var x1 := x0 + edge if side == 0 else x0 - edge
+		ci.draw_polygon(PackedVector2Array([Vector2(x0, rect.position.y), Vector2(x1, rect.position.y), Vector2(x1, ym), Vector2(x0, ym)]), PackedColorArray([dark, clear, clear, dark]))
+		if fade_from < 1.0:
+			ci.draw_polygon(PackedVector2Array([Vector2(x0, ym), Vector2(x1, ym), Vector2(x1, rect.end.y), Vector2(x0, rect.end.y)]), PackedColorArray([dark, clear, clear, clear]))
+
 func _draw_backdrop() -> void:
 	var s := size
 	var frame := UIKit.rarity_color(rarity)
-	draw_rect(Rect2(Vector2.ZERO, s), Color("#120e15"))
+	draw_rect(Rect2(Vector2.ZERO, s), Color("#0c121c"))
 	for i in 6:
 		var r := s.x * (0.75 - i * 0.1)
 		var c := frame.darkened(0.55)
 		c.a = 0.10 + i * 0.03
 		draw_circle(Vector2(s.x * 0.5, s.y * 0.42), r, c)
-	draw_arc(Vector2(s.x * 0.5, s.y * 0.42), s.x * 0.44, 0, TAU, 40, Color(0.69, 0.51, 0.31, 0.22), 1.0, true)
+	draw_arc(Vector2(s.x * 0.5, s.y * 0.42), s.x * 0.44, 0, TAU, 40, Color(frame.r, frame.g, frame.b, 0.18), 1.0, true)
 
-func _draw_frame() -> void:
+func _draw_frame(ci: CanvasItem = self) -> void:
 	var s := size
 	var frame := UIKit.rarity_color(rarity)
 	var cut := s.x * 0.12
 	var pts := OrnateStyle.octagon(Rect2(Vector2(1, 1), s - Vector2(2, 2)), cut)
-	draw_polyline(OrnateStyle.closed(pts), Color("#a07a4c"), maxf(2.0, s.x * 0.035), true)
+	ci.draw_polyline(OrnateStyle.closed(pts), Color("#1c2a3e"), maxf(2.0, s.x * 0.035), true)
 	var inner := OrnateStyle.octagon(Rect2(Vector2(1, 1), s - Vector2(2, 2)).grow(-s.x * 0.05), cut * 0.7)
-	draw_polyline(OrnateStyle.closed(inner), Color(frame.r, frame.g, frame.b, 0.75), maxf(1.0, s.x * 0.014), true)
+	ci.draw_polyline(OrnateStyle.closed(inner), Color(frame.r, frame.g, frame.b, 0.75), maxf(1.0, s.x * 0.014), true)
 	# angoli tagliati: copre il ritratto oltre la cornice
 	for corner in [[Vector2(0, 0), Vector2(cut + 1, 0), Vector2(0, cut + 1)], [Vector2(s.x, 0), Vector2(s.x, cut + 1), Vector2(s.x - cut - 1, 0)], [Vector2(s.x, s.y), Vector2(s.x - cut - 1, s.y), Vector2(s.x, s.y - cut - 1)], [Vector2(0, s.y), Vector2(0, s.y - cut - 1), Vector2(cut + 1, s.y)]]:
-		draw_colored_polygon(PackedVector2Array(corner), Color("#0b080d"))
+		ci.draw_colored_polygon(PackedVector2Array(corner), Color("#070b11"))
 	var gem := Vector2(s.x * 0.5, s.y - s.x * 0.035)
 	var g := s.x * 0.06
-	draw_colored_polygon(PackedVector2Array([gem + Vector2(0, -g), gem + Vector2(g, 0), gem + Vector2(0, g), gem + Vector2(-g, 0)]), frame)
-	draw_polyline(PackedVector2Array([gem + Vector2(0, -g), gem + Vector2(g, 0), gem + Vector2(0, g), gem + Vector2(-g, 0), gem + Vector2(0, -g)]), Color("#2a1d14"), 1.0, true)
+	ci.draw_colored_polygon(PackedVector2Array([gem + Vector2(0, -g), gem + Vector2(g, 0), gem + Vector2(0, g), gem + Vector2(-g, 0)]), frame)
+	ci.draw_polyline(PackedVector2Array([gem + Vector2(0, -g), gem + Vector2(g, 0), gem + Vector2(0, g), gem + Vector2(-g, 0), gem + Vector2(0, -g)]), Color("#070b11"), 1.0, true)
 
 # --- Capelli dietro --------------------------------------------------------
 
@@ -338,18 +496,26 @@ func _draw_face(skin: Color, eyes: Color, hair: Color, fem: bool) -> void:
 	ufill(smooth([Vector2(0.16, -0.46), Vector2(0.31, -0.38), Vector2(0.345, -0.18), Vector2(0.34, 0.04), Vector2(0.31, 0.17), Vector2(jaw_x, 0.27), Vector2(0.17, 0.39), Vector2(0.09, 0.46), Vector2(0.12, 0.36), Vector2(0.21, 0.22), Vector2(0.25, 0.06), Vector2(0.24, -0.15), Vector2(0.20, -0.33)], true, 3), shade, false)
 	# ombra sotto la frangia
 	ufill(smooth([Vector2(-0.33, -0.22), Vector2(0, -0.30), Vector2(0.33, -0.22), Vector2(0.32, -0.14), Vector2(0, -0.20), Vector2(-0.32, -0.14)], true, 3), Color(shade.r, shade.g, shade.b, 0.75), false)
+	# luce morbida su fronte e naso, guance rosate
+	ufill(ellipse(Vector2(-0.06, -0.12), 0.13, 0.08, 16), Color(1, 0.96, 0.9, 0.10), false)
+	ufill(ellipse(Vector2(0.0, 0.12), 0.035, 0.09, 12), Color(1, 0.96, 0.9, 0.08), false)
+	for side in [-1.0, 1.0]:
+		var blush := Color("#e0707a")
+		for i in 3:
+			ufill(ellipse(Vector2(0.19 * side, 0.19), 0.07 - i * 0.018, 0.035 - i * 0.008, 14), Color(blush.r, blush.g, blush.b, 0.07 + (0.04 if fem else 0.0)), false)
 	if look.get("veteran", false):
 		uline([Vector2(-0.16, -0.24), Vector2(0, -0.255), Vector2(0.16, -0.24)], skin.darkened(0.28), 0.7)
 		for side in [-1.0, 1.0]: uline([Vector2(0.075 * side, 0.235), Vector2(0.115 * side, 0.30), Vector2(0.12 * side, 0.355)], skin.darkened(0.25), 0.8)
 	_draw_eyes(eyes, hair, skin, fem)
 	# naso
-	uline([Vector2(0.015, 0.08), Vector2(0.03, 0.20), Vector2(0.045, 0.235)], skin.darkened(0.3), 0.9)
+	uline([Vector2(0.015, 0.08), Vector2(0.03, 0.20), Vector2(0.045, 0.235)], Color(skin.darkened(0.35), 0.7), 0.8)
 	ufill([Vector2(-0.035, 0.245), Vector2(0.045, 0.235), Vector2(0.02, 0.255), Vector2(-0.02, 0.258)], skin.darkened(0.25), false)
 	# bocca
 	var mouth_y := 0.335
 	if fem:
 		ufill(smooth([Vector2(-0.065, mouth_y), Vector2(0, mouth_y - 0.012), Vector2(0.065, mouth_y), Vector2(0, mouth_y + 0.035)], true, 3), skin.lerp(Color("#b3545c"), 0.45), false)
 		uline([Vector2(-0.07, mouth_y), Vector2(0, mouth_y + 0.004), Vector2(0.07, mouth_y)], Color("#5e2c2c"), 1.0)
+		ufill(ellipse(Vector2(0.012, mouth_y + 0.02), 0.022, 0.007, 8), Color(1, 0.9, 0.9, 0.35), false)
 	else:
 		uline([Vector2(-0.075, mouth_y), Vector2(-0.02, mouth_y + 0.006), Vector2(0.03, mouth_y + 0.004), Vector2(0.075, mouth_y - 0.006)], Color("#5a302b"), 1.0)
 		uline([Vector2(-0.025, mouth_y + 0.05), Vector2(0.03, mouth_y + 0.05)], skin.darkened(0.2), 0.8)
@@ -357,14 +523,33 @@ func _draw_face(skin: Color, eyes: Color, hair: Color, fem: bool) -> void:
 	if look.get("scar", false):
 		uline([Vector2(0.11, -0.13), Vector2(0.16, 0.0), Vector2(0.21, 0.16)], Color("#c98b86"), 1.6)
 		uline([Vector2(0.115, -0.12), Vector2(0.165, 0.0), Vector2(0.215, 0.15)], Color(0.35, 0.15, 0.15, 0.5), 0.6)
+	if look.get("freckles", false):
+		var r := RandomNumberGenerator.new()
+		r.seed = int(look.get("seed", 0))
+		for i in 14:
+			var side := -1.0 if i % 2 == 0 else 1.0
+			ufill(ellipse(Vector2(side * r.randf_range(0.10, 0.25), r.randf_range(0.10, 0.22)), 0.007, 0.006, 6), Color(skin.darkened(0.38), 0.55), false)
+	if look.get("glasses", false) and not dead:
+		var frame := Color("#2a2226")
+		for side in [-1.0, 1.0]:
+			var c := Vector2(0.137 * side, 0.016)
+			draw_arc(T(c), _unit * 0.098, 0, TAU, 28, frame, _line_w * 1.1, true)
+			ufill(ellipse(c + Vector2(-0.03 * side, -0.03), 0.035, 0.018, 10), Color(1, 1, 1, 0.12), false)
+			uline([c + Vector2(0.098 * side, -0.01), Vector2(0.33 * side, -0.03)], frame, 0.9)
+		uline([Vector2(-0.04, 0.0), Vector2(0, -0.012), Vector2(0.04, 0.0)], frame, 0.9)
 
 func _eye_points(side: float, fem: bool) -> Dictionary:
-	return {
+	# occhi un po' più grandi e aperti, come nei manhwa
+	var c := Vector2(0.137 * side, 0.012)
+	var k := (1.14 if fem else 1.08) * float(look.get("eye_size", 1.0))
+	var pts := {
 		"inner": Vector2(0.05 * side, 0.035),
 		"outer": Vector2((0.228 if fem else 0.222) * side, 0.0 if fem else 0.006),
-		"top": Vector2(0.135 * side, -0.058 if fem else -0.044),
-		"bottom": Vector2(0.14 * side, 0.07 if fem else 0.06),
+		"top": Vector2(0.135 * side, -0.066 if fem else -0.05),
+		"bottom": Vector2(0.14 * side, 0.074 if fem else 0.062),
 	}
+	for key in pts: pts[key] = c + (pts[key] - c) * k
+	return pts
 
 func _eye_shape(side: float, fem: bool) -> Array:
 	var e := _eye_points(side, fem)
@@ -387,10 +572,12 @@ func _draw_eyes(eyes: Color, hair: Color, skin: Color, fem: bool) -> void:
 		var shape_px := TA(_eye_shape(side, fem))
 		draw_colored_polygon(shape_px, Color("#ece4dc"))
 		var iris_c := Vector2(0.137 * side, 0.014)
-		var iris_r := 0.05 if fem else 0.046
+		var iris_r := 0.058 if fem else 0.051
 		for poly in Geometry2D.intersect_polygons(TA(ellipse(iris_c, iris_r, iris_r * 1.1, 20)), shape_px): draw_colored_polygon(poly, eyes.darkened(0.25))
 		for poly in Geometry2D.intersect_polygons(TA(ellipse(iris_c + Vector2(0, 0.016), iris_r * 0.78, iris_r * 0.62, 16)), shape_px): draw_colored_polygon(poly, eyes.lightened(0.22))
+		for poly in Geometry2D.intersect_polygons(TA(ellipse(iris_c + Vector2(0, 0.024), iris_r * 0.55, iris_r * 0.32, 14)), shape_px): draw_colored_polygon(poly, eyes.lightened(0.45))
 		for poly in Geometry2D.intersect_polygons(TA(ellipse(iris_c, iris_r * 0.42, iris_r * 0.55, 12)), shape_px): draw_colored_polygon(poly, Color("#120a0c"))
+		draw_arc(T(iris_c), _unit * iris_r * 1.02, 0, TAU, 24, eyes.darkened(0.55), _line_w * 0.7, true)
 		# ombra della palpebra superiore sull'occhio
 		for poly in Geometry2D.intersect_polygons(TA(smooth([e.inner, e.top + Vector2(0, -0.02), e.outer, e.top + Vector2(0, 0.03)], true, 3)), shape_px): draw_colored_polygon(poly, Color(0.1, 0.05, 0.06, 0.35))
 		draw_circle(T(iris_c + Vector2(-0.018 * side + 0.004, -0.014)), _unit * 0.013, Color(1, 1, 1, 0.95))

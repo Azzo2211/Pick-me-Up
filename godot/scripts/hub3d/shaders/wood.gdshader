@@ -12,7 +12,7 @@ void fragment() {
 	vec2 uv = UV;
 	float plank_id = planks > 0.0 ? floor(uv.y / planks) : 0.0;
 	float grain = fbm(vec2(uv.x * 1.2 + plank_id * 3.7, uv.y * 14.0 + plank_id));
-	float rings = sin((uv.y * 30.0 + grain * 6.0)) * 0.5 + 0.5;
+	float rings = mix(0.5, sin((uv.y * 30.0 + grain * 6.0)) * 0.5 + 0.5, aa_keep(30.0 / 6.28, length(fwidth(uv))));
 	vec3 c = mix(dark_color, base_color, 0.55 + 0.45 * grain);
 	c *= 0.9 + 0.12 * rings;
 	c *= 0.88 + 0.2 * hash12(vec2(plank_id, 1.7));

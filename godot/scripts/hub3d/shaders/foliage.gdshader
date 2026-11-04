@@ -32,6 +32,9 @@ void fragment() {
 		c *= t.rgb;
 		ALPHA = t.a;
 		ALPHA_SCISSOR_THRESHOLD = 0.45;
+		// bordi delle foglie sfumati con l'MSAA (alpha to coverage): niente puntini che sfarfallano
+		ALPHA_ANTIALIASING_EDGE = 0.35;
+		ALPHA_TEXTURE_COORDINATE = UV * vec2(textureSize(leaf_tex, 0));
 	} else {
 		c *= 0.86 + 0.28 * vnoise(wpos.xz * 4.0 + vec2(wpos.y * 3.0));
 	}
