@@ -17,14 +17,15 @@ These are the shared engineering instructions for **Riftward: The Last Ascent**.
 11. Preserve existing save/data compatibility whenever reasonably possible. If a migration is required, explain it.
 12. Run relevant Godot tests or smoke checks after changes. If a test cannot be run, state why.
 13. Do not silently remove working features.
-14. Do not merge directly to `main` unless the user explicitly authorizes it.
+14. Commit directly to `main` (user decision, 2026-11-04). Stay inside your department's folders as listed in `REPARTI.md`.
 15. Treat the current content as the present state of a game in continuous development, **not as a fixed vertical slice or final scope**.
 
 ## Git workflow
-- Use a dedicated branch for meaningful work.
-- Before editing, inspect the current branch, recent relevant files, and any related open work if needed.
+- Work directly on `main`: no feature branches or pull requests unless the user asks for one.
+- Read `REPARTI.md` first and touch only the folders and files your department owns. Ask the owning department for changes elsewhere.
+- Always `git pull origin main` before committing, then commit and push. If a pull conflicts in a file you do not own, stop and ask instead of resolving it.
+- Before editing, inspect recent relevant files and recent commits on `main`.
 - After implementation, summarize changed files, tests run, known risks, and follow-up work.
-- Significant work should end in a pull request for review.
 - Never use destructive Git operations such as hard resets or cleaning untracked files unless the user explicitly authorizes them and the consequences are understood.
 
 ## Design priority order
