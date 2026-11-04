@@ -120,14 +120,78 @@ func build_monster(kind: String, tint: Color) -> void:
 			_dress_golem(tint)
 			attack_style = "heavy"
 		"archer":
+			if _build_raider(tint, true): return
 			_build_rig({"scale": 0.98, "shoulder": 0.195, "hip": 0.1})
 			_dress_bandit(accent, true)
 			attack_style = "bow"
 		_:
+			if _build_raider(tint, false): return
 			_build_rig({"scale": 1.0, "shoulder": 0.205, "hip": 0.1})
 			_dress_bandit(accent, false)
 			attack_style = "melee"
 	_finish()
+
+static var _raider_count := 0
+
+## Predoni del Varco col kit dei personaggi: corpo da cacciatore in cuoio scuro,
+## cappuccio e fazzoletto sul viso nel colore della banda, falcione o arco.
+## Stessa qualità degli eroi; false se il kit non c'è (si usa il modello semplice).
+func _build_raider(tint: Color, archer: bool) -> bool:
+	if not CharacterKitScript.has_outfit("hunter") or CharacterKitScript.part("hood") == null: return false
+	_raider_count += 1
+	var seed_text := "raider:%d:%s" % [_raider_count, tint.to_html(false)]
+	var gen: Dictionary = CharacterGeneratorScript.generate(seed_text)
+	var fake := {"id": seed_text, "name": "Predone", "commoner": true, "native_rarity": 1, "role": "Ranger" if archer else "Vanguard",
+		"hue": abs(seed_text.hash()) % 360, "appearance": gen, "gender": "m"}
+	var look := RiftwardState.appearance_for(fake)
+	look["fem"] = false
+	look["glasses"] = false
+	look["class_chosen"] = false
+	look["role"] = "Raider"
+	look["anime"] = true
+	look["face"] = 2 if _raider_count % 2 == 0 else 1
+	look["body"] = ["athletic", "muscular", "average"][_raider_count % 3]
+	look["hair_kind"] = "none" # sotto il cappuccio
+	look["beard"] = 0
+	_build_rig({"scale": 0.98 if archer else 1.0, "shoulder": 0.2, "hip": 0.1})
+	var inst := CharacterKitScript.body_instance("hunter")
+	var skel := inst.find_children("*", "Skeleton3D", true, false)[0] as Skeleton3D
+	skel.get_parent().remove_child(skel)
+	inst.free()
+	skel.name = "KitSkeleton"
+	skel.transform = Transform3D.IDENTITY
+	rig.add_child(skel)
+	_skel = skel
+	_bone_ids = PackedInt32Array()
+	for j in JOINT_NAMES: _bone_ids.append(skel.find_bone(j))
+	var band := Color.from_hsv(tint.h, clampf(tint.s, 0.35, 0.7), clampf(tint.v, 0.32, 0.5))
+	var pal := CharacterKitScript.palette(look, "hunter", 1)
+	var dark := {CharacterKitScript.MAIN: Color("#2d2622"), CharacterKitScript.SECOND: Color("#241e1b"),
+		CharacterKitScript.LIGHT: Color("#5a4c40"), CharacterKitScript.LEATHER: Color("#3b2a1f"),
+		CharacterKitScript.BOOT: Color("#1f1814"), CharacterKitScript.DARK: Color("#17120f"),
+		CharacterKitScript.ACCENT: band, CharacterKitScript.GOLD: Color("#6d6250")}
+	for slot in dark: pal = _kit_pal(pal, slot, dark[slot])
+	var shapes := {look.body: 1.0} if str(look.body) != "average" else {}
+	for node in skel.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		mi.material_override = _kit_material(pal)
+		for key in shapes:
+			var idx := mi.find_blend_shape_by_name(key)
+			if idx >= 0: mi.set_blend_shape_value(idx, shapes[key])
+		mi.material_overlay = _flash()
+		_meshes.append(mi)
+	_kit_head(look, pal, "hunter")
+	_kit_piece("hood", _kit_material(_kit_pal(pal, CharacterKitScript.MAIN, band.darkened(0.3))))
+	_kit_piece("mask", _kit_material(_kit_pal(pal, CharacterKitScript.DARK, Color("#1c1816"))))
+	if archer:
+		_bow(_b("hand_l"), Color("#3d2a1c"))
+		upright_l = true
+		attack_style = "bow"
+	else:
+		_falchion(_b("hand_r"), Color("#8d9097"))
+		attack_style = "melee"
+	_finish()
+	return true
 
 # =============================================================================
 # Scheletro
@@ -929,7 +993,7 @@ func _build_wolf(tint: Color) -> void:
 	rig = Node3D.new()
 	rig.scale = Vector3.ONE * METER * 1.15
 	add_child(rig)
-	var fur := Color("#3e3934").lerp(tint.darkened(0.55), 0.2)
+	var fur := Color("#4b433b").lerp(tint.darkened(0.55), 0.15)
 	var belly := fur.lightened(0.15)
 	hips = _pivot(rig, Vector3(0, 0.62, -0.32))
 	spine = _pivot(rig, Vector3(0, 0.66, 0.22))
@@ -940,35 +1004,52 @@ func _build_wolf(tint: Color) -> void:
 	shin_r = _pivot(leg_r, Vector3(0, -0.3, 0))
 	legs_back = [_pivot(hips, Vector3(-0.11, -0.02, -0.02)), _pivot(hips, Vector3(0.11, -0.02, -0.02))]
 	tail = _pivot(hips, Vector3(0, 0.06, -0.18))
+	# corpo morbido e muscoloso: groppa, torace profondo, collo con la gorgiera di pelo
 	var hb := _b("hips")
-	hb.sphere("cloth", 0.125, Vector3(0, 0.03, 0.06), fur, Vector3(0.95, 1.0, 1.7), 10, 6, false, Vector3.ZERO, belly)
+	hb.sphere("cloth", 0.13, Vector3(0, 0.02, 0.06), fur, Vector3(0.98, 1.15, 1.6), 16, 10, false, Vector3.ZERO, belly)
+	for sx in [-1.0, 1.0]: hb.sphere("cloth", 0.075, Vector3(sx * 0.075, -0.02, -0.02), fur, Vector3(0.8, 1.25, 1.2), 12, 8)
 	var sb := _b("spine")
-	sb.sphere("cloth", 0.15, Vector3(0, 0.0, -0.12), fur, Vector3(0.9, 1.15, 1.75), 12, 7, false, Vector3.ZERO, belly)
-	sb.sphere("cloth", 0.12, Vector3(0, 0.07, 0.14), fur.lightened(0.06), Vector3(0.95, 1.25, 1.1), 10, 6)
-	sb.rod("cloth", Vector3(0, 0.08, 0.12), Vector3(0, 0.15, 0.3), 0.07, 0.06, fur, 8)
+	sb.sphere("cloth", 0.155, Vector3(0, -0.03, -0.12), fur, Vector3(0.92, 1.4, 1.7), 16, 10, false, Vector3.ZERO, belly)
+	sb.sphere("cloth", 0.13, Vector3(0, -0.02, 0.12), fur.lightened(0.05), Vector3(1.0, 1.7, 1.1), 16, 10, false, Vector3.ZERO, belly)
+	for sx in [-1.0, 1.0]: sb.sphere("cloth", 0.07, Vector3(sx * 0.08, -0.03, 0.1), fur, Vector3(0.8, 1.3, 1.1), 12, 8)
+	sb.rod("cloth", Vector3(0, 0.06, 0.14), Vector3(0, 0.14, 0.3), 0.085, 0.065, fur, 12)
+	# gorgiera: ciocche di pelo a cono intorno al collo e sul dorso
+	for k in 9:
+		var a := -2.2 + 4.4 * k / 8.0
+		sb.cone("cloth", 0.035, 0.11, Vector3(sin(a) * 0.1, 0.1 + cos(a) * 0.06, 0.15), fur.darkened(0.06), 6, Vector3(-1.1 + cos(a) * 0.5, 0, -sin(a) * 0.9))
+	for k in 5:
+		sb.cone("cloth", 0.03, 0.08, Vector3(0, 0.15 - k * 0.012, 0.02 - k * 0.07), fur.darkened(0.12), 5, Vector3(-1.9, 0, 0))
 	var hd := _b("head")
-	hd.sphere("cloth", 0.095, Vector3(0, 0.02, 0.0), fur, Vector3(1.0, 0.9, 1.15), 10, 6)
-	hd.push(Transform3D(Basis(Vector3.RIGHT, 0.15), Vector3(0, -0.015, 0.13)))
-	hd.cylinder("cloth", 0.028, 0.055, 0.2, Vector3.ZERO, fur.darkened(0.08), 8, Vector3(PI / 2, 0, 0))
+	hd.sphere("cloth", 0.098, Vector3(0, 0.02, 0.0), fur, Vector3(1.05, 0.92, 1.1), 16, 10, false, Vector3.ZERO, belly)
+	for sx in [-1.0, 1.0]: hd.sphere("cloth", 0.05, Vector3(sx * 0.065, -0.02, 0.02), fur.lightened(0.04), Vector3(0.9, 1.0, 1.2), 10, 6)
+	hd.push(Transform3D(Basis(Vector3.RIGHT, 0.12), Vector3(0, -0.012, 0.13)))
+	hd.cylinder("cloth", 0.03, 0.062, 0.19, Vector3.ZERO, fur.darkened(0.04), 12, Vector3(PI / 2, 0, 0))
+	hd.box("cloth", Vector3(0.07, 0.025, 0.15), Vector3(0, -0.035, 0.0), belly.darkened(0.1))
 	hd.pop()
-	hd.sphere("cloth", 0.02, Vector3(0, -0.01, 0.235), Color("#121010"), Vector3.ONE, 6, 4)
+	hd.sphere("cloth", 0.022, Vector3(0, 0.0, 0.235), Color("#121010"), Vector3(1.2, 0.9, 1.0), 8, 6)
+	# zanne
+	for sx in [-1.0, 1.0]: hd.cone("cloth", 0.007, 0.03, Vector3(sx * 0.022, -0.05, 0.19), Color("#e8e0cc"), 5, Vector3(PI, 0, 0))
 	for sx in [-1.0, 1.0]:
-		hd.cone("cloth", 0.035, 0.09, Vector3(sx * 0.06, 0.12, -0.03), fur.darkened(0.15), 5, Vector3(-0.2, 0, sx * 0.3))
+		hd.cone("cloth", 0.04, 0.1, Vector3(sx * 0.06, 0.12, -0.03), fur.darkened(0.15), 6, Vector3(-0.25, 0, sx * 0.32))
+		hd.cone("cloth", 0.022, 0.06, Vector3(sx * 0.058, 0.115, -0.02), Color("#5a3e38"), 5, Vector3(-0.25, 0, sx * 0.32))
 	var eye := _glow("head", Color("#ffb347"), 2.8)
-	for sx in [-1.0, 1.0]: hd.sphere(eye, 0.014, Vector3(sx * 0.045, 0.04, 0.085), Color.WHITE, Vector3(1.3, 0.8, 0.6), 6, 4)
+	for sx in [-1.0, 1.0]: hd.sphere(eye, 0.015, Vector3(sx * 0.047, 0.045, 0.085), Color.WHITE, Vector3(1.4, 0.7, 0.6), 8, 5)
 	for i in 4:
-		var upper: Node3D = [leg_l, leg_r, legs_back[0], legs_back[1]][i]
 		var ub := _b(["leg_l", "leg_r", "back_0", "back_1"][i])
-		ub.cylinder("cloth", 0.045, 0.034, 0.32, Vector3(0, -0.15, 0), fur, 7)
-		if i < 2:
+		var front := i < 2
+		# coscia piena in alto, zampa asciutta in basso
+		ub.sphere("cloth", 0.07 if front else 0.085, Vector3(0, -0.07, 0.0 if front else -0.02), fur, Vector3(0.8, 1.7, 1.2), 12, 8)
+		ub.cylinder("cloth", 0.056, 0.036, 0.32, Vector3(0, -0.16, 0), fur, 12)
+		if front:
 			var lb := _b(["shin_l", "shin_r"][i])
-			lb.cylinder("cloth", 0.034, 0.028, 0.3, Vector3(0, -0.15, 0), fur.darkened(0.1), 6)
-			lb.box("cloth", Vector3(0.055, 0.03, 0.08), Vector3(0, -0.3, 0.02), fur.darkened(0.25))
+			lb.cylinder("cloth", 0.036, 0.028, 0.3, Vector3(0, -0.15, 0), fur.darkened(0.1), 10)
+			lb.sphere("cloth", 0.036, Vector3(0, -0.3, 0.025), fur.darkened(0.22), Vector3(1.0, 0.6, 1.5), 10, 6)
 		else:
-			ub.cylinder("cloth", 0.032, 0.028, 0.32, Vector3(0, -0.42, -0.04), fur.darkened(0.1), 6, Vector3(-0.25, 0, 0))
-			ub.box("cloth", Vector3(0.055, 0.03, 0.08), Vector3(0, -0.6, 0.0), fur.darkened(0.25))
-	_b("tail").rod("cloth", Vector3.ZERO, Vector3(0, -0.1, -0.2), 0.035, 0.05, fur.darkened(0.05), 6)
-	_b("tail").rod("cloth", Vector3(0, -0.1, -0.2), Vector3(0, -0.22, -0.4), 0.05, 0.02, fur.darkened(0.12), 6)
+			ub.cylinder("cloth", 0.036, 0.028, 0.32, Vector3(0, -0.42, -0.04), fur.darkened(0.1), 10, Vector3(-0.25, 0, 0))
+			ub.sphere("cloth", 0.036, Vector3(0, -0.6, 0.02), fur.darkened(0.22), Vector3(1.0, 0.6, 1.5), 10, 6)
+	# coda folta
+	_b("tail").sphere("cloth", 0.06, Vector3(0, -0.08, -0.16), fur.darkened(0.04), Vector3(0.8, 0.8, 1.9), 12, 8, false, Vector3(0.5, 0, 0))
+	_b("tail").sphere("cloth", 0.05, Vector3(0, -0.2, -0.32), fur.darkened(0.14), Vector3(0.8, 0.8, 1.8), 12, 8, false, Vector3(0.7, 0, 0))
 	attack_style = "bite"
 
 # =============================================================================

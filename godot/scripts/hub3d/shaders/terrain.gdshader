@@ -62,6 +62,13 @@ void fragment() {
 	float steep = smoothstep(0.78, 0.5, wnrm.y);
 	float rock_mask = clamp(COLOR.b + steep, 0.0, 1.0);
 	vec3 col = mix(grass, dirt, dirt_mask);
+	// bordo del sentiero: erba schiacciata e terra più scura dove si incontrano,
+	// così le macchie di sterrato non sembrano incollate sopra il prato
+	float rim = smoothstep(0.18, 0.5, COLOR.r + edge_noise) * (1.0 - smoothstep(0.5, 0.78, COLOR.r + edge_noise));
+	col *= 1.0 - rim * 0.22;
+	// ciuffi d'erba scuri sparsi sullo sterrato vicino al bordo
+	float tuft = smoothstep(0.62, 0.7, vnoise(p * 6.0 + 5.0)) * (1.0 - smoothstep(0.55, 0.85, COLOR.r + edge_noise)) * aa_keep(6.0, fw);
+	col = mix(col, grass_dark * 1.1, tuft * dirt_mask * 0.7);
 	col = mix(col, cobble, pave_mask);
 	vec3 cliff = mix(rock, moss_color * 1.2, smoothstep(0.62, 0.8, fbm3(vec2(wpos.x + wpos.z, wpos.y * 0.6) * 0.9)) * 0.55);
 	col = mix(col, cliff, rock_mask);

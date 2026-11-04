@@ -7,7 +7,7 @@ extends Node
 ## cambia l'aspetto (classe scelta, rarità, versione dello studio).
 ## Senza schermo (test headless) non fotografa: la carta usa il disegno di riserva.
 
-const VERSION := 3
+const VERSION := 4
 const SIZE := Vector2i(384, 480)
 const CACHE_DIR := "user://portraits3d"
 
@@ -95,6 +95,13 @@ func _setup() -> void:
 	fill.light_energy = 0.35
 	fill.light_color = Color("#a9b8ff")
 	_world.add_child(fill)
+	# controluce da dietro in alto: un filo di luce sul bordo di capelli e spalle,
+	# stacca il personaggio dallo sfondo scuro della carta
+	var rim := DirectionalLight3D.new()
+	rim.rotation_degrees = Vector3(-35, 200, 0)
+	rim.light_energy = 0.85
+	rim.light_color = Color("#d9e4ff")
+	_world.add_child(rim)
 	_cam = Camera3D.new()
 	_cam.fov = 18.0
 	_world.add_child(_cam)

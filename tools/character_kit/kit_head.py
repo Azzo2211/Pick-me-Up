@@ -5,7 +5,7 @@ sono chiavi di forma. Coordinate: rispetto al perno della testa di CharacterMode
 """
 import math
 from mathutils import Vector
-from kit_core import Cage, ring, smooth, lerp, sgnpow, SKIN, DARK, GOLD, LIGHT, METAL
+from kit_core import Cage, ring, smooth, lerp, sgnpow, SKIN, DARK, GOLD, LIGHT, METAL, MAIN
 
 # Altezza degli occhi e scala delle coordinate del volto (UV): lo shader del volto
 # lavora in queste unità (x da -1 a 1 è la larghezza della faccia).
@@ -270,4 +270,79 @@ def build_beard(kind="short"):
         for dy, lift in ((0.006, 0.0015), (0.0, 0.0055), (-0.007, 0.002)):
             rows_m.append([head_point(y + dy * (1.0 - 0.4 * smooth((abs(a) - 0.3) / 0.3)), a, lift=lift) for y, a in pts])
         c.sheet(rows_m, DARK, w, 0.0025, normal_fn=lambda p: head_normal(p))
+    return c
+
+
+def _hood_open(t):
+    """Mezza apertura (radianti) del cappuccio davanti al viso; t = angolo dall'alto."""
+    a = math.radians
+    if t <= a(30):
+        return 0.04
+    if t <= a(52):
+        return lerp(0.04, 1.0, smooth((t - a(30)) / a(22)))
+    if t <= a(118):
+        return 1.0
+    return lerp(1.0, 0.62, smooth((t - a(118)) / a(40)))
+
+
+def build_hood():
+    """Cappuccio dei predoni: guscio di stoffa largo e morbido sopra la testa (non
+    aderente), aperto davanti al viso, punta morbida all'indietro e bavero che scende
+    sulle spalle. Doppia faccia (si vede l'interno nell'apertura)."""
+    c = Cage()
+    cols = 24
+    grid = []
+    thetas = [math.radians(d) for d in (2, 12, 24, 36, 48, 60, 74, 88, 102, 116, 130, 142)]
+    for t in thetas:
+        a0 = _hood_open(t)
+        row = []
+        for i in range(cols):
+            a = a0 + (2 * math.pi - 2 * a0) * i / (cols - 1)
+            s, cs = math.sin(a), math.cos(a)
+            front = cs >= 0
+            rx, ry = 0.138, 0.152
+            rz = 0.128 if front else 0.152
+            d = Vector((math.sin(t) * s * rx, math.cos(t) * ry, math.sin(t) * cs * rz))
+            p = CENTER + d
+            # punta morbida verso dietro, il cappuccio "cade" sulla nuca
+            p.z -= 0.035 * smooth(1.0 - t / math.radians(60)) * 1.0
+            p.y += 0.012 * smooth(1.0 - t / math.radians(40))
+            row.append(p)
+        grid.append(row)
+    # bavero: scende dal mento alle spalle e si allarga
+    for y, rx, rz in ((0.0, 0.135, 0.14), (-0.045, 0.165, 0.16), (-0.085, 0.19, 0.175)):
+        a0 = 0.62 if y > -0.03 else 0.5
+        row = []
+        for i in range(cols):
+            a = a0 + (2 * math.pi - 2 * a0) * i / (cols - 1)
+            s, cs = math.sin(a), math.cos(a)
+            row.append(Vector((rx * s, y, rz * cs * (0.9 if cs >= 0 else 1.0) + CENTER.z - 0.01)))
+        grid.append(row)
+
+    def out(p):
+        v = p - CENTER
+        v.y *= 0.7
+        return v.normalized()
+    c.sheet(grid, MAIN, lambda p: {"head": 1.0}, 0.008, normal_fn=out, ao_back=0.5, crease=0.0)
+    return c
+
+
+def build_mask():
+    """Fazzoletto scuro sulla parte bassa del viso, legato dietro la testa."""
+    c = Cage()
+    ys = [0.112, 0.1, 0.085, 0.068, 0.05, 0.034, 0.02]
+    cols = 20
+    grid = []
+    for y in ys:
+        row = []
+        for i in range(cols):
+            a = -2.0 + 4.0 * i / (cols - 1)
+            lift = 0.008 + 0.006 * smooth((0.06 - y) / 0.05)
+            p = head_point(max(y, 0.03), a, lift=lift)
+            if y < 0.03:
+                p.y = y
+                p.z += 0.004
+            row.append(p)
+        grid.append(row)
+    c.sheet(grid, DARK, lambda p: {"head": 1.0}, 0.004, normal_fn=lambda p: head_normal(p), ao_back=0.7)
     return c

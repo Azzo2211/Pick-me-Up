@@ -112,7 +112,7 @@ static func terrain_biome(grass_dark: Color, grass_light: Color, dry: Color, dir
 	m.set_shader_parameter("grass_light", grass_light)
 	m.set_shader_parameter("grass_dry", dry)
 	m.set_shader_parameter("dirt_color", dirt)
-	m.set_shader_parameter("dirt_light", dirt.lightened(0.3))
+	m.set_shader_parameter("dirt_light", dirt.lightened(0.16))
 	return _put(key, m)
 
 const STONE_VARIANTS := {

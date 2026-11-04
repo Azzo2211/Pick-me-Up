@@ -9,7 +9,7 @@ Esce:
   body_<vestito>.glb  corpo vestito legato allo scheletro, chiavi di forma per
                       corporatura (fem, slim, athletic, muscular, chubby)
   parts.glb           testa base (chiavi fem, sharp, square, full), capigliature,
-                      barbe, occhiali e fascia, tutto rispetto al perno della testa
+                      barbe, occhiali, fascia, cappuccio e fazzoletto dei predoni, tutto rispetto al perno della testa
 """
 import os
 import sys
@@ -77,7 +77,8 @@ def build_parts(out_dir):
         objs.append(o)
     for name, cage, lv in (("glasses", kit_head.build_glasses(), 0), ("headband", kit_head.build_headband(), 1),
                            ("beard_short", kit_head.build_beard("short"), 1),
-                           ("beard_goatee", kit_head.build_beard("goatee"), 1)):
+                           ("beard_goatee", kit_head.build_beard("goatee"), 1),
+                           ("hood", kit_head.build_hood(), 1), ("mask", kit_head.build_mask(), 1)):
         o = K.cage_to_object(cage, name, levels=lv, groups=False)
         K.finish_attributes(o)
         objs.append(o)
