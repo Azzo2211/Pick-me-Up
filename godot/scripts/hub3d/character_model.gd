@@ -181,8 +181,9 @@ func _build_raider(tint: Color, archer: bool) -> bool:
 		mi.material_overlay = _flash()
 		_meshes.append(mi)
 	_kit_head(look, pal, "hunter")
-	_kit_piece("hood", _kit_material(_kit_pal(pal, CharacterKitScript.MAIN, band.darkened(0.3))))
-	_kit_piece("mask", _kit_material(_kit_pal(pal, CharacterKitScript.DARK, Color("#1c1816"))))
+	_kit_piece("hood", _kit_material(_kit_pal(pal, CharacterKitScript.MAIN, band.darkened(0.08))))
+	# fazzoletto di stoffa grezza, tinto appena col colore della banda: si legge come stoffa, non come una macchia nera
+	_kit_piece("mask", _kit_material(_kit_pal(pal, CharacterKitScript.DARK, Color("#6a5e52").lerp(band, 0.25))))
 	if archer:
 		_bow(_b("hand_l"), Color("#3d2a1c"))
 		upright_l = true
