@@ -86,6 +86,26 @@ static func part(name: String) -> Mesh:
 			root.free()
 	return _parts.get(name)
 
+# -----------------------------------------------------------------------------
+# Modelli fatti dall'utente (tools/character_kit/import_user_model.py)
+# -----------------------------------------------------------------------------
+
+## Corpi completi fatti a parte, con le texture dipinte: se c'è quello di un vestito,
+## lo usano gli eroi con quel vestito al posto del corpo del kit. Stesso scheletro del
+## kit, ma con le braccia tese come nel file (CharacterModel corregge il riposo).
+const USER_DIR := "res://assets/characters/user/"
+static var _user: Dictionary = {}
+
+static func has_user_body(outfit: String) -> bool:
+	var path := USER_DIR + "%s.glb" % outfit
+	return ResourceLoader.exists(path) or FileAccess.file_exists(path)
+
+static func user_body(outfit: String) -> Node:
+	if not _user.has(outfit):
+		_user[outfit] = _load_scene(USER_DIR + "%s.glb" % outfit) if has_user_body(outfit) else null
+	var template: Node = _user[outfit]
+	return template.duplicate() if template != null else null
+
 static func has_outfit(outfit: String) -> bool:
 	var path := DIR + "body_%s.glb" % outfit
 	return ResourceLoader.exists(path) or FileAccess.file_exists(path)

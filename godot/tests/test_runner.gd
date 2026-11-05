@@ -526,9 +526,20 @@ func _test_character_kit() -> Array:
 	var game := _fresh("kit-seed")
 	var hero: Dictionary = game.data.heroes[0]
 	var model := CharacterModel.new()
-	model.build_hero(hero, RiftwardState.appearance_for(hero))
+	var look: Dictionary = RiftwardState.appearance_for(hero)
+	look["outfit_kind"] = "villager" # la Guardia maschio usa il modello 3D dell'utente, non il kit
+	model.build_hero(hero, look)
 	valid = valid and model._skel != null and model._face_mat != null and model._head_kit != null and model._head_kit.get_child_count() >= 2
 	model.free()
+	# modello 3D dell'utente (Guardia): scheletro del kit corretto dalla posa a T, arma in mano
+	if kit.has_user_body("guard"):
+		look["outfit_kind"] = "guard"
+		look["fem"] = false
+		var guard := CharacterModel.new()
+		guard.build_hero(hero, look)
+		valid = valid and guard._skel != null and guard._bone_fix.size() == CharacterModel.JOINT_NAMES.size()
+		valid = valid and not guard._bone_ids.has(-1) and guard._skel.find_children("Hold_*", "", true, false).size() >= 1
+		guard.free()
 	game.free()
 	valid = valid and missing.is_empty()
 	return [valid, "pezzi mancanti: %s" % [missing] if not missing.is_empty() else "5 vestiti, %d pezzi della testa" % pieces.size()]

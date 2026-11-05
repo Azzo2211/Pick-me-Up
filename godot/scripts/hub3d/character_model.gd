@@ -16,6 +16,8 @@ const CharacterKitScript := preload("res://scripts/characters/character_kit.gd")
 const KitToonShader := preload("res://scripts/hub3d/shaders/kit_toon.gdshader")
 const KitOutlineShader := preload("res://scripts/hub3d/shaders/kit_outline.gdshader")
 const HairShader := preload("res://scripts/hub3d/shaders/hair.gdshader")
+const PaintedShader := preload("res://scripts/hub3d/shaders/painted_model.gdshader")
+const PaintedOutlineShader := preload("res://scripts/hub3d/shaders/painted_outline.gdshader")
 ## Animazione base → clip del pacchetto di animazioni. Quello che manca qui resta
 ## procedurale: "sit" e "rest" (pose tarate su panche e letti), "train" e i colpi di
 ## spada e lancia, che nei clip si leggono meno bene da lontano.
@@ -72,6 +74,12 @@ const KIT_HEAD_SCALE := 1.0
 ## Corpo del kit (tools/character_kit): scheletro mosso dalle articolazioni del rig.
 var _skel: Skeleton3D
 var _bone_ids := PackedInt32Array()
+## Corpo 3D dell'utente (posa a T): per ogni articolazione [inversa del padre, propria],
+## la rotazione che porta l'osso dalla posa a T a quella del rig (braccia lungo i fianchi).
+var _bone_fix: Array = []
+## Apertura delle braccia del corpo dell'utente: un po' fuori dal mantello largo.
+const USER_ARM_OPEN := 0.3
+static var _painted_cache: Dictionary = {}
 static var _toon_cache: Dictionary = {}
 
 # =============================================================================
@@ -207,6 +215,7 @@ func _pivot(parent: Node3D, pos: Vector3) -> Node3D:
 func _build_rig(p: Dictionary) -> void:
 	body_type = "human"
 	_head_kit = null
+	_bone_fix = []
 	rig = Node3D.new()
 	rig.scale = Vector3.ONE * METER * float(p.get("scale", 1.0))
 	add_child(rig)
@@ -281,8 +290,10 @@ func _finish() -> void:
 	_flash()
 	for part in _parts:
 		var b: MeshBuilder = _parts[part]
-		var pivot: Node3D = map.get(part)
-		if pivot == null or not b.has_geometry(): continue
+		if not b.has_geometry(): continue
+		# sul corpo dell'utente armi e attrezzi seguono le ossa vere, non i perni del rig
+		var pivot: Node3D = _bone_holder(part) if not _bone_fix.is_empty() and part in JOINT_NAMES else map.get(part)
+		if pivot == null: continue
 		var mi := b.instance(pivot)
 		mi.material_overlay = _flash_mat
 		_meshes.append(mi)
@@ -640,6 +651,8 @@ func _build_anime(look_in: Dictionary, role: String, rarity: int, outfit: String
 ## con il volto disegnato, capelli e accessori; arma o attrezzo come prima.
 func _build_kit(look: Dictionary, role: String, rarity: int, outfit: String, prop: String) -> void:
 	var fem: bool = look.get("fem", false)
+	# il modello dell'utente è un uomo: le donne con lo stesso vestito restano dal kit
+	if not fem and CharacterKitScript.has_user_body(outfit) and _build_user_body(look, role, outfit, prop): return
 	var height := clampf(float(look.get("height", 1.0)), 0.93, 1.07)
 	if int(look.get("age", 28)) < 18: height *= 0.97
 	# le articolazioni restano quelle del kit: le corporature sono chiavi di forma
@@ -676,6 +689,112 @@ func _build_kit(look: Dictionary, role: String, rarity: int, outfit: String, pro
 	else:
 		_class_weapon(role, look)
 	_finish()
+
+## Corpo 3D fatto dall'utente (assets/characters/user/<vestito>.glb, preparato da
+## tools/character_kit/import_user_model.py): colori dipinti nella texture e scheletro
+## con gli stessi nomi del kit, ma in posa a T. Le animazioni restano quelle di tutti:
+## ogni osso riceve la rotazione del suo perno corretta da _bone_fix.
+func _build_user_body(look: Dictionary, role: String, outfit: String, prop: String) -> bool:
+	var inst := CharacterKitScript.user_body(outfit)
+	if inst == null: return false
+	var found := inst.find_children("*", "Skeleton3D", true, false)
+	if found.is_empty():
+		inst.free()
+		return false
+	var height := clampf(float(look.get("height", 1.0)), 0.95, 1.05)
+	_build_rig({"scale": height, "shoulder": 0.22, "hip": 0.11})
+	var skel := found[0] as Skeleton3D
+	skel.get_parent().remove_child(skel)
+	inst.free()
+	skel.name = "UserSkeleton"
+	skel.transform = Transform3D.IDENTITY
+	rig.add_child(skel)
+	_skel = skel
+	_bone_ids = PackedInt32Array()
+	for j in JOINT_NAMES: _bone_ids.append(skel.find_bone(j))
+	_user_rest_fix()
+	for node in skel.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		for s in mi.mesh.get_surface_count():
+			mi.set_surface_override_material(s, _painted_material(mi.mesh.surface_get_material(s)))
+		mi.material_overlay = _flash()
+		_meshes.append(mi)
+	if role == "Villager":
+		attack_style = "melee"
+	elif not prop.is_empty():
+		_prop(prop, look)
+	else:
+		_class_weapon(role, look)
+	_finish()
+	return true
+
+## Dalla posa a T alla posa del rig: braccia giù (aperte di USER_ARM_OPEN), la mano
+## segue l'avambraccio (non ha figli). Le gambe restano come nel modello (un po'
+## aperte, come nel foglio): raddrizzarle stirava il tabarro tra le gambe.
+func _user_rest_fix() -> void:
+	var rest := {}
+	for i in JOINT_NAMES.size():
+		rest[JOINT_NAMES[i]] = _skel.get_bone_rest(_bone_ids[i]).origin if _bone_ids[i] >= 0 else Vector3.ZERO
+	var own := {}
+	for side in ["l", "r"]:
+		var down := _user_down(side)
+		own["arm_" + side] = _arc(rest["fore_" + side], down)
+		own["fore_" + side] = _arc(rest["hand_" + side], down)
+		own["hand_" + side] = own["fore_" + side]
+	var parent := {"arm_l": "spine", "arm_r": "spine", "fore_l": "arm_l", "fore_r": "arm_r", "hand_l": "fore_l",
+		"hand_r": "fore_r", "leg_l": "hips", "leg_r": "hips", "shin_l": "leg_l", "shin_r": "leg_r", "spine": "hips", "head": "spine"}
+	_bone_fix = []
+	for j in JOINT_NAMES:
+		var up: Quaternion = own.get(parent.get(j, ""), Quaternion.IDENTITY)
+		_bone_fix.append([up.inverse(), own.get(j, Quaternion.IDENTITY)])
+	# il bacino del modello è la sua altezza da fermo: passo e seduta restano giusti
+	hip_height = (rest["hips"] as Vector3).y
+	hips.position = Vector3(0, hip_height, 0)
+
+func _user_down(side: String) -> Vector3:
+	var sx := -1.0 if side == "l" else 1.0
+	return Vector3(sx * sin(USER_ARM_OPEN), -cos(USER_ARM_OPEN), 0.0)
+
+static func _arc(from: Vector3, to: Vector3) -> Quaternion:
+	if from.length() < 0.001: return Quaternion.IDENTITY
+	return Quaternion(from.normalized(), to.normalized())
+
+## Punto d'attacco sull'osso vero del corpo dell'utente: segue la mano (o l'avambraccio,
+## la testa...) del modello, con gli assi del perno del rig come se l'arto pendesse
+## lungo il braccio aperto. Così spada e scudo restano in mano.
+func _bone_holder(part: String) -> Node3D:
+	var i := JOINT_NAMES.find(part)
+	if _skel == null or i < 0 or _bone_ids[i] < 0: return null
+	var att := BoneAttachment3D.new()
+	att.name = "Bone_" + part
+	_skel.add_child(att)
+	att.bone_name = part
+	var holder := Node3D.new()
+	holder.name = "Hold_" + part
+	var tilt := Quaternion.IDENTITY
+	if part.begins_with("arm_") or part.begins_with("fore_") or part.begins_with("hand_"):
+		tilt = Quaternion(Vector3.DOWN, _user_down(part.right(1)))
+	holder.quaternion = (_bone_fix[i][1] as Quaternion).inverse() * tilt
+	if part.begins_with("fore_"):
+		# il braccio del modello è più largo di quello del kit (spallacci): lo scudo più in fuori
+		holder.position = holder.quaternion * Vector3(-0.05 if part.ends_with("l") else 0.05, 0.0, 0.0)
+	att.add_child(holder)
+	return holder
+
+## Materiale dipinto: la texture del modello con una luce morbida (painted_model.gdshader).
+func _painted_material(src: Material) -> Material:
+	var tex: Texture2D = (src as BaseMaterial3D).albedo_texture if src is BaseMaterial3D else null
+	if tex == null: return src
+	if not _painted_cache.has(tex):
+		var m := ShaderMaterial.new()
+		m.shader = PaintedShader
+		m.set_shader_parameter("albedo_tex", tex)
+		# contorno scuro come gli altri personaggi, altrimenti da lontano sembra sbiadito
+		var line := ShaderMaterial.new()
+		line.shader = PaintedOutlineShader
+		m.next_pass = line
+		_painted_cache[tex] = m
+	return _painted_cache[tex]
 
 func _kit_material(pal: Array) -> ShaderMaterial:
 	var m := ShaderMaterial.new()
@@ -1086,9 +1205,14 @@ func update_animation(delta: float, speed_scale: float = 1.0) -> void:
 func _sync_skeleton() -> void:
 	if _skel == null or _bone_ids.is_empty(): return
 	var nodes := _joints()
+	var fix := not _bone_fix.is_empty()
 	for i in nodes.size():
 		var b := _bone_ids[i]
-		if b >= 0: _skel.set_bone_pose_rotation(b, (nodes[i] as Node3D).quaternion)
+		if b < 0: continue
+		var q := (nodes[i] as Node3D).quaternion
+		# corpo dell'utente: dalla posa a T dell'osso a quella del perno
+		if fix: q = (_bone_fix[i][0] as Quaternion) * q * (_bone_fix[i][1] as Quaternion)
+		_skel.set_bone_pose_rotation(b, q)
 	if _bone_ids[0] >= 0: _skel.set_bone_pose_position(_bone_ids[0], hips.position)
 
 ## Pose dai clip: animazione base su tutto il corpo, arco e magia sulla parte alta
