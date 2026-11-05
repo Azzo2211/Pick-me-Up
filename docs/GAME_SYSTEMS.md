@@ -46,18 +46,22 @@ Higher-rarity and endgame systems can be expanded progressively as the full game
 ## Missions and tower
 Mission archetypes: Subjugation, Survival, Exploration, Defense and Boss. Floors 1–5 are hand-made; floors 6–100 are generated deterministically from the world seed (boss every 5 floors). Rewards: Gold and XP every clear (reduced on retries), Gems on first clear, Stones on first clear of boss floors, materials as loot. Heroes below 30% HP at the end get a timed injury.
 
-### Tower difficulty: tiers of 5 floors and the Guardian Trial
-Owner decision (2026-11-05, issue #13): climbing must be **very hard**, and difficulty must jump every 5 floors with a special mission.
-- The Tower is split into **tiers of 5 floors** (1–5, 6–10, …). Enemy strength = `TOWER_TIER_POWER[tier] × (1 + 0.03 × floor-in-tier)` (`game_state.gd`): almost flat inside a tier, a clear **step up at every new tier** (+84% after floor 5, then +10–23% per tier up to floor 50, +5% per tier after that). Life grows as strength^0.85, attack as strength, defense as strength^0.5, so timed missions stay possible while the danger for heroes keeps rising.
-- The 5th floor of every tier is the **Guardian Trial** (Prova del Guardiano), a special mission: a named guardian that **enrages at half life** (+30% attack, faster attacks and ground slams), **elite champions** (brutes with ×2.4 life, ×1.35 attack, bigger) arriving after 30 s (1 at tiers 1–2, then one more every two tiers, max 5), and **special rules** drawn from the world seed: 1 rule in tiers 1–2, 2 up to tier 6, then 3. Rules: Furia (+25% enemy attack), Corazza (+60% enemy defense), Orda (+50% enemies per wave), Passo rapido (faster enemies, faster attacks), Carne del Rift (enemies regenerate 1% life/s), Nebbia (−15 hero accuracy), Ferite profonde (heals halved). Because of all this the base strength of a Trial is scaled by `TOWER_TRIAL_POWER[tier]` (1.02 → 0.46).
-- Trial rewards: Gold and XP ×1.6, Gems ×2 on first clear, Stones as before.
-- The map's **Threat** follows the enemy strength; a Trial shows a higher Threat than the floors before it.
-- Floor 1 is the gentlest fight (3 raiders, 2 hounds): an untrained starting squad wins it, usually without losses.
-- Saves from before this change: 5th floors not yet cleared become Trials on load.
+### Difficoltà della Torre: scaglioni di 5 piani e Prova del Guardiano
+Decisione del proprietario (2026-11-05, issue #13): salire deve essere **molto difficile**, e ogni 5 piani la difficoltà deve salire con una missione speciale.
+- La Torre è divisa in **scaglioni di 5 piani** (1–5, 6–10, …). Forza dei nemici = `TOWER_TIER_POWER[scaglione] × (1 + 0,03 × piano dentro lo scaglione)` (`game_state.gd`): quasi piatta dentro lo scaglione, con un **gradino netto a ogni nuovo scaglione** (+84% dopo il Piano 5, poi +10–23% a scaglione fino al Piano 50, +5% a scaglione dopo). La vita cresce come forza^0,85, l'attacco come la forza, la difesa come forza^0,5: le missioni a tempo restano fattibili, mentre il pericolo per gli eroi continua a salire.
+- Il 5° piano di ogni scaglione è la **Prova del Guardiano**, una missione speciale:
+  - un guardiano con un nome proprio che **si infuria a metà vita** (+30% attacco, attacchi e colpi a terra più frequenti);
+  - **campioni d'élite** (bruti con vita ×2,4, attacco ×1,35, più grandi) che arrivano dopo 30 secondi: 1 negli scaglioni 1–2, poi uno in più ogni due scaglioni, massimo 5;
+  - **regole speciali** pescate dal seme del mondo: 1 regola negli scaglioni 1–2, 2 fino allo scaglione 6, poi 3. Regole: Furia (+25% attacco dei nemici), Corazza (+60% difesa dei nemici), Orda (+50% nemici per ondata), Passo rapido (nemici più veloci, attacchi più frequenti), Carne del Rift (i nemici rigenerano l'1% di vita al secondo), Nebbia (−15 precisione degli eroi), Ferite profonde (cure dimezzate).
+  - Per tutto questo la forza di base di una prova è moltiplicata per `TOWER_TRIAL_POWER[scaglione]` (da 1,02 a 0,46).
+- Ricompense della prova: Oro ed esperienza ×1,6, Gemme ×2 al primo completamento, Pietre come prima.
+- La **Minaccia** della mappa segue la forza dei nemici; una prova mostra una Minaccia più alta dei piani prima.
+- Il Piano 1 è lo scontro più leggero (3 predoni, 2 segugi): la squadra di partenza lo vince anche senza allenamento, di solito senza caduti.
+- Salvataggi precedenti a questa modifica: i quinti piani non ancora superati diventano prove al caricamento.
 
-**Reference squad** (what a player usually has when reaching the first floor of a tier; `tests/tower_curve_runner.gd` simulates it to tune the two tables):
+**Squadra di riferimento** (quella che un giocatore ha di solito quando arriva al primo piano di uno scaglione; `tests/tower_curve_runner.gd` la simula per tarare le due tabelle):
 
-| Tier (floors) | Squad | Level | Gear |
+| Scaglione (piani) | Squadra | Livello | Equipaggiamento |
 |---|---|---|---|
 | 1 (1–5) | 4×1★, 1×2★ | 5 | D |
 | 2 (6–10) | 1★–2★ | 14 | D |
@@ -69,7 +73,7 @@ Owner decision (2026-11-05, issue #13): climbing must be **very hard**, and diff
 | 10–13 (46–65) | 5★–6★ | 74–92 | S |
 | 14–20 (66–100) | 6★–7★ | 98–120 | S |
 
-Measured with the simulation (6 battles per floor, 2026-11-05): with the reference squad the normal floors of a tier are won from 0 to 6 times out of 6 depending on the mission type, almost always with heroes lost; the Trial is won 0–2 times out of 6 by the reference squad and 3–5 times out of 6 by the squad of the **next** tier. The last floors (91–100) are hard even for a full 7★ Lv.120 squad.
+Misurato con la simulazione (6 battaglie per piano, 2026-11-05): con la squadra di riferimento i piani normali di uno scaglione si vincono da 0 a 6 volte su 6 a seconda del tipo di missione, quasi sempre con caduti; la prova la vince 0–2 volte su 6 la squadra di riferimento e 3–5 volte su 6 la squadra dello scaglione **successivo**. Gli ultimi piani (91–100) sono duri anche per una squadra completa di 7★ al Lv.120.
 
 These are the **currently implemented contents**, not the final scope of the game. Riftward is intended to continue expanding with more floors, mission types, systems and content while preserving the core identity and progression logic.
 
