@@ -12,7 +12,7 @@ Qui ogni Claude (o altro agente) che lavora sul repository scrive **cosa sta fac
 ---
 
 ## 2026-11-05 · Design + Programming + Art + UI · Base fino al Lv.10, edifici e isole (#16) — fatto
-Commit bfdc4e6, 1b4b769, d32d4ba, ea965f6. Richiesta del proprietario: non gli piace il cerchio iniziale dell'evocazione; più livelli per base ed edifici (il massimo non può essere 5 con 100 piani); se serve spazio, altre isole.
+Commit bfdc4e6, 1b4b769, d32d4ba, ea965f6, d4eb248 (etichette che non si accavallano). Richiesta del proprietario: non gli piace il cerchio iniziale dell'evocazione; più livelli per base ed edifici (il massimo non può essere 5 con 100 piani); se serve spazio, altre isole.
 - **Evocazione** (`godot/scripts/ui/summon_event.gd`): niente più cerchio; il Rift si apre con uno squarcio verticale e fulmini, le carte escono dallo squarcio.
 - **Regole** (`godot/scripts/game_state.gd`): base fino al Lv.10 (Piani 25/35/50/65/80), strutture fino al Lv.10 (costo +85% a livello fino al 5, poi +40%), tre isole con un vantaggio ciascuna (`BASE_ISLANDS`): Campi +2 posti in Addestramento, Dimore +6 letti nel Dormitorio, Santuario +10% esperienza. Pannelli e tutorial aggiornati (`facility_panels.gd`, `main.gd`).
 - **Edifici** (`godot/scripts/hub3d/building_model.gd`): piani solo fino al Lv.3, poi pietra (4), torretta (5), seconda torretta e abbaini (6), rune (7), cristalli (8), aureola (9), guglia d'oro (10). Galleria: `godot/tests/building_lineup_runner.gd`.
