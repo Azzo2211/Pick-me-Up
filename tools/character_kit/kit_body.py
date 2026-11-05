@@ -232,28 +232,38 @@ def neck(c, P):
     c.loft(rings, SKIN, w_torso)
 
 
-ARM_YS = [1.482, 1.47, 1.45, 1.42, 1.38, 1.32, 1.26, 1.2, 1.155, 1.11, 1.06, 1.0, 0.95, 0.915, 0.895]
+ARM_YS = [1.482, 1.47, 1.45, 1.42, 1.39, 1.355, 1.32, 1.285, 1.25, 1.215, 1.18, 1.155, 1.13, 1.1, 1.07, 1.035, 1.0, 0.97, 0.945, 0.925, 0.91, 0.895]
 
 
 def arm_shape(P, y):
     """(rx, rz, dx) del braccio all'altezza y: dx sposta il centro verso l'esterno."""
     d, a, e, f, w = P["delt"], P["arm"], P["elbow"], P["fore"], P["wrist"]
+    # braccio vero, non un tubo: cupola del deltoide, braccio che si stringe sotto la
+    # spalla, gomito stretto, avambraccio gonfio sotto il gomito che si assottiglia
+    # fino a un polso piatto (più largo davanti-dietro, come quando la mano pende)
     table = [
         (1.482, d * 0.3, d * 0.3, -0.012),
-        (1.47, d * 0.72, d * 0.68, -0.006),
-        (1.45, d * 0.97, d * 0.9, 0.0),
-        (1.42, d * 1.0, a * 1.06, 0.003),
-        (1.38, a * 1.08, a * 1.02, 0.002),
-        (1.32, a * 1.02, a * 0.98, 0.0),
-        (1.26, a * 0.95, a * 0.94, 0.0),
-        (1.2, (a + e) * 0.5, (a + e) * 0.5, 0.0),
-        (1.155, e, e * 1.02, 0.0),
-        (1.11, f * 1.02, f * 1.05, 0.0),
-        (1.06, f, f * 1.02, 0.0),
-        (1.0, f * 0.86, f * 0.9, 0.0),
-        (0.95, w * 1.08, w * 1.2, 0.0),
-        (0.915, w, w * 1.18, 0.0),
-        (0.895, w * 0.9, w * 1.08, 0.0),
+        (1.47, d * 0.74, d * 0.7, -0.006),
+        (1.45, d * 1.0, d * 0.92, 0.001),
+        (1.42, d * 1.06, d * 0.98, 0.005),
+        (1.39, d * 0.98, a * 1.08, 0.006),
+        (1.355, a * 1.0, a * 1.06, 0.003),
+        (1.32, a * 1.0, a * 1.05, 0.0),
+        (1.285, a * 0.97, a * 1.02, 0.0),
+        (1.25, a * 0.92, a * 0.96, 0.0),
+        (1.215, (a + e) * 0.5 * 0.98, (a + e) * 0.5, 0.0),
+        (1.18, e * 1.0, e * 0.98, 0.0),
+        (1.155, e * 0.96, e * 0.96, 0.0),
+        (1.13, f * 1.02, f * 1.0, 0.0),
+        (1.1, f * 1.08, f * 1.04, 0.0),
+        (1.07, f * 1.04, f * 1.0, 0.0),
+        (1.035, f * 0.94, f * 0.94, 0.0),
+        (1.0, f * 0.82, f * 0.88, 0.0),
+        (0.97, w * 1.02, w * 1.18, 0.0),
+        (0.945, w * 0.9, w * 1.2, 0.0),
+        (0.925, w * 0.86, w * 1.2, 0.0),
+        (0.91, w * 0.88, w * 1.16, 0.0),
+        (0.895, w * 0.9, w * 1.1, 0.0),
     ]
     for i in range(len(table) - 1):
         y0, y1 = table[i][0], table[i + 1][0]
@@ -273,25 +283,42 @@ def arms(c, P, slot_fn, extra_fn=None, n=12, ys=None, y_end=0.895):
             rx, rz, dx = arm_shape(P, y)
             add, dz = extra_fn(y) if extra_fn else (0.0, 0.0)
             cx = side * (P["sh"] + dx)
-            rings.append(ring((cx, y, dz), rx + add, rz + add, n=n))
+            # bicipite davanti, tricipite dietro più in alto; sotto le maniche larghe
+            # (add grande) la forma del muscolo non si vede
+            k = max(0.0, 1.0 - add / 0.012)
+            bi = P["arm"] * 0.12 * math.exp(-((y - 1.31) / 0.05) ** 2) * k
+            tri = P["arm"] * 0.1 * math.exp(-((y - 1.36) / 0.06) ** 2) * k
+            rings.append(ring((cx, y, dz), rx + add, rz + add + bi, rz + add + tri, n=n))
         c.loft(rings, LIGHT, w_arm, slot_fn=lambda k, i, m: slot_fn(m))
 
 
 def hands(c, P, slot, glove_cuff=0.0):
+    """Mano rilassata lungo il fianco: palmo verso la coscia, quattro dita separate e
+    un po' piegate, pollice in avanti. Il palmo è largo in z (davanti-dietro)."""
     hs = P["hand"]
     for side in (-1.0, 1.0):
         x0 = side * P["sh"]
+        # palmo, dal polso alle nocche
         rings = []
-        # dal polso alla punta delle dita, un po' piegate verso il palmo
-        for y, tx, tz, curl in ((0.912, 0.017, 0.027, 0.0), (0.885, 0.018, 0.033, 0.0), (0.855, 0.017, 0.036, 0.002),
-                                (0.83, 0.015, 0.034, 0.006), (0.805, 0.012, 0.03, 0.011), (0.788, 0.007, 0.018, 0.016)):
+        for y, tx, tz in ((0.912, 0.016, 0.026), (0.888, 0.017, 0.032), (0.862, 0.016, 0.036), (0.842, 0.014, 0.036),
+                          (0.832, 0.012, 0.033)):
             yy = 0.912 - (0.912 - y) * hs
-            rings.append(ring((x0 - side * curl * hs, yy, 0.002 + curl * 0.3), tx * hs, tz * hs, n=8, power=2.4))
+            rings.append(ring((x0, yy, 0.002), tx * hs, tz * hs, n=8, power=2.6))
         c.loft(rings, slot, w_hand)
-        # pollice
-        t = [ring((x0 - side * 0.006 * hs, 0.892, 0.022 * hs), 0.009 * hs, 0.008 * hs, n=6),
-             ring((x0 - side * 0.011 * hs, 0.866, 0.034 * hs), 0.0085 * hs, 0.008 * hs, n=6),
-             ring((x0 - side * 0.016 * hs, 0.848, 0.04 * hs), 0.006 * hs, 0.006 * hs, n=6)]
+        # dita: indice davanti (+z) fino al mignolo dietro; il medio è il più lungo
+        for zf, length, r in ((0.024, 0.056, 0.0062), (0.008, 0.062, 0.0064), (-0.008, 0.058, 0.006), (-0.023, 0.046, 0.0052)):
+            pts = []
+            for u, curl in ((0.0, 0.0), (0.35, 0.004), (0.7, 0.011), (1.0, 0.02)):
+                pts.append(Vector((x0 - side * curl * hs, 0.912 - (0.912 - 0.836) * hs - u * length * hs, (0.002 + zf) * hs)))
+            frings = []
+            for q, rr in zip(pts, (r, r * 0.95, r * 0.85, r * 0.6)):
+                frings.append(ring(q, rr * hs, rr * hs * 1.05, n=6))
+            c.loft(frings, slot, w_hand)
+        # pollice: parte dal lato del palmo e punta in avanti e in basso
+        t = [ring((x0 - side * 0.006 * hs, 0.896, 0.024 * hs), 0.0095 * hs, 0.0085 * hs, n=6),
+             ring((x0 - side * 0.01 * hs, 0.872, 0.036 * hs), 0.0085 * hs, 0.008 * hs, n=6),
+             ring((x0 - side * 0.014 * hs, 0.852, 0.043 * hs), 0.0068 * hs, 0.0065 * hs, n=6),
+             ring((x0 - side * 0.016 * hs, 0.84, 0.046 * hs), 0.004 * hs, 0.004 * hs, n=6)]
         c.loft(t, slot, w_hand)
         if glove_cuff > 0.0:
             cuff = [ring((x0, y, 0.0), P["wrist"] + glove_cuff + r, P["wrist"] * 1.18 + glove_cuff + r, n=10)
