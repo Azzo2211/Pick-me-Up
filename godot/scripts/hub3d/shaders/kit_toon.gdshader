@@ -21,17 +21,24 @@ uniform float sky_form : hint_range(0.0, 1.0) = 0.32;
 uniform float metal_contrast : hint_range(0.0, 1.5) = 1.0;
 
 uniform vec4 palette[16] : source_color;
+// stoffa e cuoio "dipinti": pieghe morbide, macchie di tono e trama, così i vestiti
+// non sembrano plastica a tinta unita
+uniform float cloth_detail : hint_range(0.0, 1.0) = 1.0;
+
+#include "res://scripts/hub3d/shaders/noise.gdshaderinc"
 
 varying vec3 slot_color;
 varying float slot_shine;
 varying float slot_kind; // 0 stoffa/cuoio, 1 pelle, 2 metallo
 varying float neck_shadow;
+varying vec3 obj_pos;
 
 void vertex() {
 	int s = clamp(int(UV2.x + 0.5), 0, 15);
 	slot_color = palette[s].rgb * UV2.y;
 	slot_shine = palette[s].a;
 	slot_kind = s == 0 ? 1.0 : (palette[s].a >= 0.4 ? 2.0 : 0.0);
+	obj_pos = VERTEX;
 	// ombra del mento sul collo (davanti, sotto la testa): stacca la testa dal corpo
 	neck_shadow = s == 0 ? smoothstep(1.38, 1.46, VERTEX.y) * (1.0 - step(1.53, VERTEX.y)) : 0.0;
 }
@@ -56,6 +63,23 @@ void fragment() {
 		col *= 1.0 - edge * 0.35;
 	}
 	col *= mix(vec3(1.0), vec3(0.66, 0.52, 0.56), neck_shadow);
+	if (slot_kind < 0.5 && cloth_detail > 0.0) {
+		vec2 cyl = vec2(atan(obj_pos.x, obj_pos.z + 0.0001) * 0.16, obj_pos.y);
+		float fw = length(fwidth(obj_pos.xy)) + 1e-5;
+		float leather = step(0.05, slot_shine);
+		// pieghe verticali che si allargano verso il basso (gravità della stoffa)
+		float wob = fbm(vec2(cyl.x * 9.0, obj_pos.y * 2.0)) * 2.0;
+		float fold = sin((cyl.x * 38.0 + wob) * (1.0 + 0.3 * (1.5 - obj_pos.y)));
+		float fold_shade = smoothstep(0.3, 1.0, fold) * 0.16 - smoothstep(0.45, 1.0, -fold) * 0.24;
+		fold_shade *= aa_keep(6.0, fw) * (1.0 - leather * 0.6);
+		// macchie di tono, come le pennellate di un disegno
+		float tone = (fbm(obj_pos.xy * 7.0 + obj_pos.zy * 3.0) - 0.5) * (0.2 + leather * 0.08);
+		// trama: fili incrociati per la stoffa, pori e graffi per il cuoio
+		float weave = (vnoise(obj_pos.xy * 260.0) + vnoise(obj_pos.zy * 260.0) - 1.0) * 0.05 * aa_keep(260.0, fw);
+		float wear = smoothstep(0.72, 0.8, vnoise(obj_pos.xy * 40.0 + 3.0)) * 0.12 * leather * aa_keep(40.0, fw);
+		col *= 1.0 + (fold_shade + tone + weave * (1.0 - leather)) * cloth_detail;
+		col = mix(col, col * 1.25 + vec3(0.03), wear * cloth_detail);
+	}
 	ALBEDO = col * sky;
 	ROUGHNESS = 1.0;
 	AO = toon_ambient;
