@@ -68,7 +68,7 @@ var _fade_t := 1.0
 var outline_px := 1.3
 var _face_mat: ShaderMaterial
 var _head_kit: Node3D
-const KIT_HEAD_SCALE := 0.9
+const KIT_HEAD_SCALE := 1.0
 ## Corpo del kit (tools/character_kit): scheletro mosso dalle articolazioni del rig.
 var _skel: Skeleton3D
 var _bone_ids := PackedInt32Array()

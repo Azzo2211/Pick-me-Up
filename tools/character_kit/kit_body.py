@@ -785,7 +785,7 @@ def outfit_guard(P):
             slot_fn=tabard_slots(8, 7, cross=False))
     # spallacci, bracciali, gomiti, ginocchiere, schinieri
     for side in (-1.0, 1.0):
-        pauldron(c, P, side, METAL, lames=3, trim=GOLD)
+        pauldron(c, P, side, METAL, lames=3, size=0.82, trim=GOLD)  # più piccoli: prima coprivano mezzo busto
         x = side * P["sh"]
         lathe(c, (x, 1.36, 0.0), [(0.0, P["arm"] + 0.013), (-0.1, P["arm"] * 0.96 + 0.012), (-0.13, P["elbow"] + 0.014),
                                   (-0.14, P["elbow"] + 0.012)], METAL, w_arm, n=12, thick=0.005)

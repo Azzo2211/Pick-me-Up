@@ -89,9 +89,13 @@ def head_push(p, min_lift):
 
 # Volume e larghezza delle ciocche rispetto ai numeri dei tagli: i capelli degli
 # anime sono molto più gonfi del cranio.
-VOL = 1.5
-WIDTH = 1.3
-THICK = 1.25
+VOL = 1.8
+WIDTH = 1.0
+THICK = 1.3
+# Più ciocche e più sottili: i capelli del foglio sono fatti di tante punte a strati,
+# non di poche lingue larghe (che sembravano un casco).
+DENSITY = 1.7
+BANG_DENSITY = 1.4
 
 
 class Hair:
@@ -210,6 +214,8 @@ class Hair:
               vol=0.017, width=0.026, jitter=0.012, root_span=0.35, part=None, flick=0.0, tip_a_scale=1.0):
         """Frangia: dalle radici in cima scendono sulla fronte. Punte sopra le sopracciglia;
         la ciocca centrale può scendere di più (tra gli occhi)."""
+        count = max(1, int(round(count * BANG_DENSITY)))
+        width *= 1.0 / BANG_DENSITY ** 0.35
         for i in range(count):
             u = lerp(-1.0, 1.0, i / max(count - 1, 1)) if count > 1 else 0.0
             a_mid = u * span
@@ -232,13 +238,20 @@ class Hair:
     def layer(self, a0, a1, count, root_y, tip_y, vol, width, swirl=0.0, free=None, tip_lift=0.008,
               jitter=0.01, a_jit=0.04, mid_t=0.45, root_lift=0.002, thick=0.42):
         """Strato di ciocche tra gli angoli a0 e a1 (giro della testa), dalla cima a tip_y."""
+        count = max(1, int(round(count * DENSITY)))
+        width *= 1.0 / DENSITY ** 0.4
         for i in range(count):
             u = (i + 0.5) / count
             a = lerp(a0, a1, u) + self.j(a_jit)
+            # due strati: le ciocche dispari stanno un po' più fuori e più corte
+            outer = i % 2 == 1
             ty = tip_y + self.j(jitter)
             my = lerp(root_y, ty, mid_t)
-            ctrl = [(root_y, a * 0.55 if abs(wrap(a)) < 2.0 else a, root_lift), (my, a + swirl * 0.5, vol),
-                    (ty, a + swirl, tip_lift)]
+            v = vol * (1.25 if outer else 1.0)
+            if outer:
+                ty = ty + (root_y - ty) * 0.12
+            ctrl = [(root_y, a * 0.55 if abs(wrap(a)) < 2.0 else a, root_lift), (my, a + swirl * 0.5, v),
+                    (ty, a + swirl, tip_lift * (1.4 if outer else 1.0))]
             fr = None
             if free:
                 fr = dict(free)
@@ -247,6 +260,7 @@ class Hair:
 
     def crown(self, count, vol, width, length=0.06, spread=0.5):
         """Ciuffi corti in cima per dare volume e qualche punta."""
+        count = max(1, int(round(count * DENSITY)))
         for i in range(count):
             a = 2 * math.pi * i / count + self.j(0.3)
             y0 = 0.262
