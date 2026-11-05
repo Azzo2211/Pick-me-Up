@@ -81,12 +81,31 @@ var beacon_node: Node3D
 ## Regole della Prova del Guardiano in corso (vuoto sui piani normali).
 var trial_rules: Array = []
 
+# --- Effetti visivi dei colpi e delle uccisioni ---------------------------------
+# Solo aspetto: usano un generatore casuale loro, così la battaglia (rng) resta
+# identica con o senza effetti. Il rallentatore rallenta tutto allo stesso modo.
+var fx_rng := RandomNumberGenerator.new()
+## Particelle nel mondo 3D, disegnate sull'overlay: schegge, braci, scintille, anime.
+var sparks: Array = []
+## Corpi dei nemici che si dissolvono in cenere.
+var dissolving: Array = []
+## Fonti che emettono particelle per un po' (anima di un eroe caduto).
+var emitters: Array = []
+## Scritte grandi nel mondo ("CAMPIONE ABBATTUTO", "CADUTO").
+var callouts: Array = []
+var shake := 0.0
+var slowmo := 0.0
+var vignette := 0.0
+var vignette_color := Color("#ff2a3a")
+var screen_flash := 0.0
+
 func setup(stage_data: Dictionary, source_party: Array, mission_attempt: int) -> void:
 	stage = stage_data
 	trial_rules = stage.get("trial", {}).get("rules", [])
 	party_source = source_party
 	attempt = mission_attempt
 	rng.seed = abs((str(stage.seed) + ":" + str(attempt)).hash())
+	fx_rng.seed = abs((str(stage.seed) + ":fx:" + str(attempt)).hash())
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -639,6 +658,14 @@ func _find(entity_id: int) -> Dictionary:
 # =============================================================================
 
 func _process(delta: float) -> void:
+	# rallentatore sulle uccisioni importanti: rallenta simulazione e animazioni insieme
+	var real_delta := delta
+	if slowmo > 0.0:
+		slowmo = maxf(0.0, slowmo - real_delta)
+		delta *= 0.3
+	shake = maxf(0.0, shake - real_delta * 2.2)
+	vignette = maxf(0.0, vignette - real_delta * 0.7)
+	screen_flash = maxf(0.0, screen_flash - real_delta * 2.5)
 	if running and not completed:
 		accumulator += minf(delta, 0.1) * speed_scale
 		while accumulator >= TICK and not completed:
@@ -660,7 +687,8 @@ func _process(delta: float) -> void:
 			u.flash = maxf(0.0, flash - delta * 5.0)
 			model.flash(u.flash * 0.9)
 	_update_effects(delta)
-	_follow_action(delta)
+	_update_fx(delta)
+	_follow_action(real_delta)
 	overlay.queue_redraw()
 
 ## La camera segue dolcemente il baricentro dello scontro.
@@ -679,6 +707,9 @@ func _follow_action(delta: float) -> void:
 	var desired := focus + offset
 	camera.position = camera.position.lerp(desired, clampf(delta * 1.5, 0.0, 1.0))
 	camera.look_at(camera.position - offset, Vector3.UP)
+	# scossa: sposta l'inquadratura senza muovere la camera (niente deriva)
+	camera.h_offset = fx_rng.randf_range(-1.0, 1.0) * shake * 0.22
+	camera.v_offset = fx_rng.randf_range(-1.0, 1.0) * shake * 0.16
 
 func _tick(delta: float) -> void:
 	elapsed += delta
@@ -942,7 +973,8 @@ func _deal_damage(attacker: Dictionary, target: Dictionary, coefficient: float) 
 	target.hp = maxf(0.0, float(target.hp) - damage)
 	target.flash = 1.0
 	attacker.damage = int(attacker.get("damage", 0)) + damage
-	_float_text(target.pos, ("%d!" % damage) if crit else str(damage), Color("#ff6a78") if target.hero else (Color("#ffd27a") if crit else Color("#f4ece0")))
+	_float_text(target.pos, ("%d!" % damage) if crit else str(damage), Color("#ff6a78") if target.hero else (Color("#ffd27a") if crit else Color("#f4ece0")), crit)
+	_hit_fx(attacker, target, crit)
 	if target.hero and float(target.hp) > 0.0:
 		var ratio := float(target.hp) / float(target.max_hp)
 		if ratio < 0.25 and int(target.courage) < 45 and float(target.fear) <= 0.0 and command_state.posture != "ADVANCE":
@@ -954,10 +986,7 @@ func _kill(target: Dictionary, attacker: Dictionary) -> void:
 	if not target.alive: return
 	target.alive = false
 	(target.model as CharacterModel).play("dead")
-	if not target.hero:
-		var tween := create_tween()
-		tween.tween_interval(1.8)
-		tween.tween_property(target.model, "position:y", -1.2 * UNIT_SCALE, 1.4)
+	_kill_fx(target)
 	if attacker.get("hero", false): attacker.kills = int(attacker.kills) + 1
 	if target.hero:
 		_log("%s è caduto. Non tornerà." % target.name, "danger")
@@ -1168,8 +1197,13 @@ func _projectile(from: Dictionary, to: Dictionary) -> void:
 	node.rotate_object_local(Vector3.UP, PI)
 	effects.append({"node": node, "life": 0.28, "max": 0.28, "from": start, "to": finish})
 
-func _float_text(pos: Vector2, text: String, color: Color) -> void:
-	floaters.append({"pos": Vector3(pos.x + rng.randf_range(-0.3, 0.3), 1.9, pos.y), "text": text, "color": color, "life": 0.95})
+func _float_text(pos: Vector2, text: String, color: Color, big: bool = false) -> void:
+	# numeri vicini e recenti si impilano invece di sovrapporsi ("96" + "53" ≠ "9653")
+	var lift := 0.0
+	for f in floaters:
+		var p: Vector3 = f.pos
+		if float(f.life) > 0.6 and Vector2(p.x, p.z).distance_to(pos) < 0.8: lift += 0.32
+	floaters.append({"pos": Vector3(pos.x + rng.randf_range(-0.3, 0.3), 1.9 + minf(lift, 1.3), pos.y), "text": text, "color": color, "life": 0.95, "big": big})
 
 func _update_effects(delta: float) -> void:
 	for e in effects:
@@ -1180,6 +1214,9 @@ func _update_effects(delta: float) -> void:
 		if e.has("grow"):
 			node.scale = Vector3.ONE * (1.0 + k * 2.5)
 			(node as GeometryInstance3D).transparency = k
+		elif e.has("fade"):
+			(node as GeometryInstance3D).transparency = k
+			node.scale = Vector3(1.0 - k * 0.6, 1.0 + k * 0.3, 1.0 - k * 0.6)
 		elif e.has("from"):
 			node.position = (e.from as Vector3).lerp(e.to, k) + Vector3(0, sin(k * PI) * 0.5, 0)
 	for e in effects.filter(func(x): return float(x.life) <= 0.0):
@@ -1189,6 +1226,183 @@ func _update_effects(delta: float) -> void:
 		f.life = float(f.life) - delta
 		f.pos = (f.pos as Vector3) + Vector3(0, delta * 1.1, 0)
 	floaters = floaters.filter(func(x): return float(x.life) > 0.0)
+
+# =============================================================================
+# Effetti dei colpi e delle uccisioni (solo aspetto, vedi fx_rng)
+# =============================================================================
+
+const SPARK_LIMIT := 700
+
+func _spark(p: Vector3, v: Vector3, life: float, color: Color, size: float, kind: String, gravity: float = 0.0, drag: float = 1.5) -> void:
+	if sparks.size() >= SPARK_LIMIT: sparks.pop_front()
+	sparks.append({"p": p, "v": v, "life": life, "max": life, "color": color, "size": size, "kind": kind, "gravity": gravity, "drag": drag})
+
+## Esplosione di particelle da un punto del campo (pos sul terreno, height in metri).
+func _burst3(pos: Vector2, height: float, color: Color, amount: int, speed: float, kind: String, gravity: float = 9.0) -> void:
+	for k in amount:
+		var dir := Vector3(fx_rng.randf_range(-1.0, 1.0), fx_rng.randf_range(-0.15, 1.0), fx_rng.randf_range(-1.0, 1.0)).normalized()
+		var tint := color.lerp(Color.WHITE, fx_rng.randf() * 0.35)
+		_spark(Vector3(pos.x, height, pos.y), dir * speed * fx_rng.randf_range(0.45, 1.2), fx_rng.randf_range(0.35, 0.85), tint, fx_rng.randf_range(1.5, 3.5), kind, gravity, 1.8)
+
+## Altezza del busto per tipo di creatura (dove nascono scintille e schegge).
+func _body_height(u: Dictionary) -> float:
+	return {"boss": 2.6, "brute": 1.6, "hound": 0.55}.get(str(u.get("kind", "")), 1.05)
+
+## Scintille sul bersaglio colpito; il critico fa anche un lampo a stella.
+func _hit_fx(attacker: Dictionary, target: Dictionary, crit: bool) -> void:
+	var color := Color("#ff6a5a") if target.hero else Color("#ffe2a0")
+	var role := str(attacker.get("role", ""))
+	if role == "Mage": color = Color("#ff9a4d")
+	elif role == "Support": color = Color("#7fe8a8")
+	var h := _body_height(target)
+	_burst3(target.pos, h, color, 10 if crit else 4, 4.5 if crit else 2.8, "spark", 6.0)
+	if crit: _spark(Vector3(target.pos.x, h, target.pos.y), Vector3.ZERO, 0.28, Color("#fff4d6"), 16.0, "flare")
+
+## Uccisione: schegge del Rift e cenere per i nemici (di più per campioni e
+## Guardiano, con rallentatore e scossa); per un eroe rallentatore, bordo rosso,
+## luce che sale dal corpo e scritta "CADUTO".
+func _kill_fx(target: Dictionary) -> void:
+	var pos: Vector2 = target.pos
+	var h := _body_height(target)
+	if target.hero:
+		shake = maxf(shake, 0.9)
+		slowmo = maxf(slowmo, 0.8)
+		vignette = 1.0
+		vignette_color = Color("#ff2a3a")
+		_burst3(pos, h, Color("#ff5a6a"), 16, 3.0, "spark", 5.0)
+		emitters.append({"pos": pos, "life": 2.6, "max": 2.6})
+		_soul_pillar(pos)
+		callouts.append({"pos": Vector3(pos.x, 2.7, pos.y), "text": "CADUTO", "color": Color("#ff6a78"), "life": 2.3, "max": 2.3, "size": 34})
+		return
+	var kind := str(target.get("kind", ""))
+	var elite := bool(target.get("elite", false))
+	var tint: Color = ENEMY_TEMPLATES.get(kind, {}).get("tint", Color("#9b5cff"))
+	var rift := Color("#9b5cff")
+	var big := 3.0 if kind == "boss" else 1.8 if elite else 1.0
+	_burst3(pos, h, tint.lerp(rift, 0.35), int(18 * big), 4.2 * sqrt(big), "shard", 9.0)
+	_burst3(pos, h, rift.lightened(0.35), int(8 * big), 1.6, "ember", -1.2)
+	_ring(pos, tint.lerp(rift, 0.5), 1.3 * big)
+	dissolving.append({"model": target.model, "t": 0.0, "pos": pos, "height": h, "big": big})
+	if kind == "boss":
+		shake = maxf(shake, 1.5)
+		slowmo = maxf(slowmo, 1.1)
+		screen_flash = 0.8
+		vignette = 0.8
+		vignette_color = UIKit.GOLD
+		callouts.append({"pos": Vector3(pos.x, 3.4, pos.y), "text": "GUARDIANO ABBATTUTO", "color": UIKit.GOLD, "life": 2.8, "max": 2.8, "size": 40})
+	elif elite:
+		shake = maxf(shake, 0.6)
+		slowmo = maxf(slowmo, 0.35)
+		callouts.append({"pos": Vector3(pos.x, 3.0, pos.y), "text": "CAMPIONE ABBATTUTO", "color": UIKit.GOLD, "life": 1.9, "max": 1.9, "size": 26})
+	else:
+		shake = maxf(shake, 0.18)
+
+## Colonna di luce pallida che sale dal corpo di un eroe caduto e svanisce.
+func _soul_pillar(pos: Vector2) -> void:
+	var b := MeshBuilder.new()
+	b.material("soul", WorldMaterials.transparent(Color(0.8, 0.92, 1.0, 0.2), true, 1.4))
+	b.cylinder("soul", 0.08, 0.3, 7.0, Vector3(0, 3.5, 0), Color.WHITE, 18)
+	var node := b.instance(world, false)
+	node.position = Vector3(pos.x, 0.0, pos.y)
+	effects.append({"node": node, "life": 2.4, "max": 2.4, "fade": true})
+
+func _update_fx(delta: float) -> void:
+	for p in sparks:
+		p.life = float(p.life) - delta
+		var v: Vector3 = p.v
+		v.y -= float(p.gravity) * delta
+		v *= maxf(0.0, 1.0 - float(p.drag) * delta)
+		var pos: Vector3 = (p.p as Vector3) + v * delta
+		# le schegge rimbalzano piano sul terreno
+		if pos.y < 0.03 and float(p.gravity) > 0.0:
+			pos.y = 0.03
+			v = Vector3(v.x * 0.5, absf(v.y) * 0.25, v.z * 0.5)
+		p.v = v
+		p.p = pos
+	sparks = sparks.filter(func(p): return float(p.life) > 0.0)
+	# i corpi dei nemici restano un attimo, poi sprofondano disfacendosi in cenere
+	for d in dissolving:
+		d.t = float(d.t) + delta
+		var model: Node3D = d.model
+		if not is_instance_valid(model): continue
+		var k := clampf((float(d.t) - 0.9) / 1.4, 0.0, 1.0)
+		if k <= 0.0: continue
+		model.position.y = -1.2 * UNIT_SCALE * k * k
+		var pos: Vector2 = d.pos
+		var big := float(d.big)
+		if fx_rng.randf() < 0.9 * (1.0 - k * 0.5):
+			for q in int(1 + big):
+				var off := Vector3(fx_rng.randf_range(-0.5, 0.5) * big, fx_rng.randf_range(0.0, float(d.height)), fx_rng.randf_range(-0.5, 0.5) * big)
+				var ash := Color("#2a2030") if fx_rng.randf() < 0.5 else Color("#b48cff")
+				_spark(Vector3(pos.x, 0.0, pos.y) + off, Vector3(fx_rng.randf_range(-0.3, 0.3), fx_rng.randf_range(0.8, 1.8), fx_rng.randf_range(-0.3, 0.3)), fx_rng.randf_range(0.6, 1.2), ash, fx_rng.randf_range(1.5, 3.0), "ember", -0.4, 0.6)
+		if k >= 1.0: model.visible = false
+	dissolving = dissolving.filter(func(d): return float(d.t) < 2.5)
+	# anima dell'eroe caduto: luci che salgono lente
+	for e in emitters:
+		e.life = float(e.life) - delta
+		var pos: Vector2 = e.pos
+		if fx_rng.randf() < 0.7:
+			var col := Color("#d6ecff") if fx_rng.randf() < 0.7 else Color("#ffffff")
+			_spark(Vector3(pos.x + fx_rng.randf_range(-0.35, 0.35), fx_rng.randf_range(0.2, 1.2), pos.y + fx_rng.randf_range(-0.35, 0.35)), Vector3(0, fx_rng.randf_range(1.2, 2.4), 0), fx_rng.randf_range(1.0, 1.6), col, fx_rng.randf_range(1.5, 2.8), "soul", -0.2, 0.2)
+	emitters = emitters.filter(func(e): return float(e.life) > 0.0)
+	for c in callouts:
+		c.life = float(c.life) - delta
+		c.pos = (c.pos as Vector3) + Vector3(0, delta * 0.3, 0)
+	callouts = callouts.filter(func(c): return float(c.life) > 0.0)
+
+## Particelle, scritte, bordo e lampo sopra la scena 3D.
+func _draw_fx() -> void:
+	for p in sparks:
+		var pos: Vector3 = p.p
+		if camera.is_position_behind(pos): continue
+		var sp := camera.unproject_position(pos)
+		var k := clampf(float(p.life) / float(p.max), 0.0, 1.0)
+		var col: Color = p.color
+		var sz := float(p.size)
+		match str(p.kind):
+			"spark", "shard":
+				col.a = k
+				var tail := camera.unproject_position(pos - (p.v as Vector3) * (0.03 if p.kind == "spark" else 0.045))
+				overlay.draw_line(tail, sp, col, sz * (0.7 if p.kind == "spark" else 1.1), true)
+			"flare":
+				col.a = k
+				var r := sz * (0.6 + k)
+				overlay.draw_line(sp - Vector2(r, 0), sp + Vector2(r, 0), col, 2.0, true)
+				overlay.draw_line(sp - Vector2(0, r * 0.7), sp + Vector2(0, r * 0.7), col, 2.0, true)
+				overlay.draw_circle(sp, 3.0 * k, Color(1, 1, 1, k))
+			"soul":
+				col.a = sin(k * PI) * 0.9
+				overlay.draw_line(sp + Vector2(0, sz * 2.5), sp - Vector2(0, sz * 2.5), col, sz * 0.7, true)
+				overlay.draw_circle(sp, sz * 0.6, col)
+			_:
+				col.a = sin(k * PI) * 0.85
+				overlay.draw_circle(sp, sz * (0.5 + 0.5 * k), col)
+	var font := UIKit.title_font()
+	for c in callouts:
+		var pos: Vector3 = c.pos
+		if camera.is_position_behind(pos): continue
+		var age := float(c.max) - float(c.life)
+		var pop := 1.0 + 0.6 * maxf(0.0, 1.0 - age / 0.18)
+		var fs := int(float(c.size) * pop)
+		var alpha := clampf(float(c.life) / 0.5, 0.0, 1.0)
+		var col: Color = c.color
+		col.a = alpha
+		var sp := camera.unproject_position(pos)
+		var tw := font.get_string_size(str(c.text), HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		# sempre dentro lo schermo, anche se il bersaglio è sul bordo
+		sp.x = clampf(sp.x, tw * 0.5 + 24.0, overlay.size.x - tw * 0.5 - 24.0)
+		sp.y = clampf(sp.y, 130.0 + fs, overlay.size.y - 140.0)
+		overlay.draw_string_outline(font, sp - Vector2(tw * 0.5, 0), str(c.text), HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 8, Color(0.03, 0.02, 0.04, alpha * 0.9))
+		overlay.draw_string(font, sp - Vector2(tw * 0.5, 0), str(c.text), HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)
+	if vignette > 0.0:
+		var s := overlay.size
+		for i in 12:
+			var inset := float(i) * 9.0
+			var col := vignette_color
+			col.a = vignette * 0.075 * (1.0 - float(i) / 12.0)
+			overlay.draw_rect(Rect2(Vector2(inset, inset), s - Vector2(inset, inset) * 2.0), col, false, 9.0)
+	if screen_flash > 0.0:
+		overlay.draw_rect(Rect2(Vector2.ZERO, overlay.size), Color(1.0, 0.95, 0.85, screen_flash * 0.45))
 
 func _draw_overlay() -> void:
 	if camera == null: return
@@ -1213,13 +1427,18 @@ func _draw_overlay() -> void:
 			var size := body.get_string_size(name_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 13)
 			overlay.draw_string_outline(body, p + Vector2(-size.x * 0.5, -6), name_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, 5, Color(0.04, 0.03, 0.05, 0.9))
 			overlay.draw_string(body, p + Vector2(-size.x * 0.5, -6), name_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, UIKit.INK)
+	_draw_fx()
 	for f in floaters:
 		if camera.is_position_behind(f.pos): continue
 		var p := camera.unproject_position(f.pos)
 		var alpha := clampf(float(f.life) / 0.4, 0.0, 1.0)
 		var col: Color = f.color
 		col.a = alpha
-		var fs := 22 if str(f.text).length() < 6 else 17
+		# il numero nasce grande e si assesta; i critici sono più grossi e tremano
+		var age := 0.95 - float(f.life)
+		var pop := 1.0 + (0.9 if f.get("big", false) else 0.45) * maxf(0.0, 1.0 - age / 0.16)
+		var fs := int((28.0 if f.get("big", false) else 22.0 if str(f.text).length() < 6 else 17.0) * pop)
+		if f.get("big", false) and age < 0.25: p += Vector2(fx_rng.randf_range(-2.0, 2.0), fx_rng.randf_range(-2.0, 2.0))
 		var size := font.get_string_size(str(f.text), HORIZONTAL_ALIGNMENT_LEFT, -1, fs)
 		overlay.draw_string_outline(font, p - Vector2(size.x * 0.5, 0), str(f.text), HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 6, Color(0.04, 0.03, 0.05, alpha * 0.9))
 		overlay.draw_string(font, p - Vector2(size.x * 0.5, 0), str(f.text), HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)

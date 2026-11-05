@@ -6,7 +6,9 @@ class_name HeroCard
 ## La cornice cresce con la rarità: 1★–2★ una linea, 3★ doppia, 4★–5★ con
 ## staffe agli angoli e alone, 6★ alone pulsante e braci che salgono,
 ## 7★ cornice iridescente che scorre e scintille. 6★ e 7★ si riconoscono
-## in mezzo secondo anche senza leggere le stelle.
+## in mezzo secondo anche senza leggere le stelle. Anche 4★ e 5★ si animano,
+## più piano: un riflesso che attraversa la carta ogni tanto, bagliori agli
+## angoli (4★) e polvere d'oro che sale (5★).
 ## Per i caduti la carta si spegne e riporta la causa della morte.
 
 signal pressed(hero_id: String)
@@ -67,12 +69,12 @@ func _ready() -> void:
 	_layout()
 
 func _animated() -> bool:
-	return rarity >= 6 and not dead
+	return rarity >= 4 and not dead
 
 func _process(delta: float) -> void:
 	_time += delta
 	# 6★ e 7★ "respirano" anche da ferme
-	if not hovered and _animated(): _tilt_target = Vector2(sin(_time * 0.7), cos(_time * 0.53)) * 0.18
+	if not hovered and _animated(): _tilt_target = Vector2(sin(_time * 0.7), cos(_time * 0.53)) * (0.18 if rarity >= 6 else 0.07)
 	_tilt = _tilt.lerp(_tilt_target, 1.0 - exp(-delta * 9.0))
 	_lift = move_toward(_lift, 1.0 if hovered and not dead else 0.0, delta * 5.0)
 	if portrait != null:
@@ -146,6 +148,7 @@ func _draw() -> void:
 	var halo := 0.0
 	if not dead:
 		if rarity >= 6: halo = 0.55 + 0.25 * sin(_time * 3.2)
+		elif rarity == 5: halo = 0.38 + 0.1 * sin(_time * 2.0)
 		elif rarity >= 4: halo = 0.35
 		if hovered: halo = maxf(halo, 0.6) + 0.2
 	if halo > 0.0 and not face_down:
@@ -295,7 +298,14 @@ func _draw_window_frame(o: Control, color: Color) -> void:
 		o.draw_polyline(PackedVector2Array([p + Vector2(d.x * l, 0), p, p + Vector2(0, d.y * l)]), c, 2.2, true)
 
 func _draw_sheen(o: Control, inner: Rect2, cut: float) -> void:
-	var strength := maxf(_lift, 0.35 if _animated() else 0.0)
+	var strength := maxf(_lift, 0.35 if rarity >= 6 and not dead else 0.0)
+	# 4★ e 5★: un riflesso attraversa la carta ogni pochi secondi
+	var sweep := -1.0
+	if rarity in [4, 5] and not dead and _lift < 0.5:
+		var cycle := fmod(_time + float(hash(hero_id) % 7), 4.2 if rarity == 4 else 3.4)
+		if cycle < 0.9:
+			sweep = cycle / 0.9
+			strength = maxf(strength, 0.75 * sin(sweep * PI))
 	if strength <= 0.01: return
 	var art_rect := Rect2(inner.position, Vector2(inner.size.x, inner.size.y * 0.8))
 	var clip := OrnateStyle.octagon(art_rect, cut * 0.8)
@@ -303,6 +313,7 @@ func _draw_sheen(o: Control, inner: Rect2, cut: float) -> void:
 		art_rect = _window_rect()
 		clip = PackedVector2Array([art_rect.position, Vector2(art_rect.end.x, art_rect.position.y), art_rect.end, Vector2(art_rect.position.x, art_rect.end.y)])
 	var cx := art_rect.position.x + art_rect.size.x * (0.5 + _tilt.x * 0.55)
+	if sweep >= 0.0: cx = art_rect.position.x + art_rect.size.x * lerpf(-0.45, 1.45, sweep)
 	var skew := art_rect.size.y * 0.45
 	var bands := [[art_rect.size.x * 0.34, 0.07], [art_rect.size.x * 0.12, 0.10]]
 	for band in bands:
@@ -318,8 +329,32 @@ func _draw_sheen(o: Control, inner: Rect2, cut: float) -> void:
 	var lit_x := art_rect.position.x if _tilt.x < 0.0 else art_rect.end.x
 	o.draw_line(Vector2(lit_x, art_rect.position.y + cut), Vector2(lit_x, art_rect.end.y - cut), rim, 2.0, true)
 
+## 4★: bagliori che si accendono a turno sugli angoli. 5★: polvere d'oro che sale.
 ## 6★: braci che salgono. 7★: scintille a stella che brillano e scorrono.
 func _draw_particles(o: Control, inner: Rect2) -> void:
+	if rarity == 4:
+		var corners := [inner.position, Vector2(inner.end.x, inner.position.y), inner.end, Vector2(inner.position.x, inner.end.y)]
+		for k in 4:
+			var tw := sin(_time * 1.6 - k * 1.57)
+			if tw <= 0.55: continue
+			var a := (tw - 0.55) / 0.45
+			var c := UIKit.rarity_color(4).lightened(0.5)
+			var p: Vector2 = corners[k]
+			var r := 3.0 + 5.0 * a
+			o.draw_line(p - Vector2(r, 0), p + Vector2(r, 0), Color(c, a), 1.3, true)
+			o.draw_line(p - Vector2(0, r), p + Vector2(0, r), Color(c, a), 1.3, true)
+			o.draw_circle(p, 1.2, Color(1, 1, 1, a))
+		return
+	if rarity == 5:
+		for i in 9:
+			var spark := float(i) * 0.6180339
+			var phase := fmod(_time * (0.12 + fmod(spark * 7.3, 1.0) * 0.1) + spark, 1.0)
+			var x := inner.position.x + fmod(spark * 13.7, 1.0) * inner.size.x + sin(_time + i) * inner.size.x * 0.02
+			var y := inner.end.y - phase * inner.size.y * 0.9
+			var c := UIKit.GOLD.lightened(fmod(spark * 2.3, 0.5))
+			c.a = sin(phase * PI) * 0.75
+			o.draw_circle(Vector2(x, y), 0.9 + fmod(spark * 5.0, 1.0) * 1.1, c)
+		return
 	var count := 14 if rarity == 6 else 18
 	for i in count:
 		var spark := float(i) * 0.6180339

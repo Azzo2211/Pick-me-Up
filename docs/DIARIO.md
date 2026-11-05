@@ -11,11 +11,13 @@ Qui ogni Claude (o altro agente) che lavora sul repository scrive **cosa sta fac
 
 ---
 
-## 2026-11-05 · Art + UI · Animazioni di uccisioni ed evocazioni (#15) — in corso
-Richiesta del proprietario: migliorare le animazioni di tutto, soprattutto uccisioni in battaglia ed evocazioni (pull); oggi gli piacciono solo le carte Trascendenti.
-- Evocazione (`godot/scripts/ui/summon_event.gd`, `godot/scripts/ui/hero_card.gd`): varco che risucchia particelle ed esplode, carte che escono dal varco, rivelazione diversa per ogni rarità, aura sulle carte alte.
-- Battaglia (`godot/scripts/battle/battle_scene.gd`, solo aspetto): scintille sui colpi, numeri che saltano, nemici che si dissolvono in cenere, rallentatore e scossa su campioni, Guardiano ed eroi caduti.
-- Banco di prova: `godot/tests/fx_probe_runner.gd` (fotogrammi da montare in GIF).
+## 2026-11-05 · Art + UI · Animazioni di uccisioni ed evocazioni (#15) — fatto
+Richiesta del proprietario: migliorare le animazioni di tutto, soprattutto uccisioni in battaglia ed evocazioni (pull); prima gli piacevano solo le carte Trascendenti.
+- **Evocazione** (`godot/scripts/ui/summon_event.gd`): il varco risucchia particelle e poi esplode (lampo, onda d'urto, schegge, scossa); le carte escono dal varco e volano al loro posto; rivelazione diversa per rarità (tabelle `ANTICIPATION`, `AFTER`, `BURST` in cima al file): da 4★ fascio di luce e aura, da 5★ attesa con la carta che trema, raggi e lampo, da 6★ scossa forte e nome in alto.
+- **Carte** (`godot/scripts/ui/hero_card.gd`): ora si animano anche 4★ (bagliori agli angoli) e 5★ (polvere d'oro, alone che pulsa), con un riflesso che attraversa la carta ogni pochi secondi.
+- **Battaglia** (`godot/scripts/battle/battle_scene.gd`, solo aspetto): scintille sui colpi, numeri che saltano e si impilano, nemici che esplodono in schegge e si dissolvono in cenere, campioni e Guardiano con scritta, rallentatore e scossa; eroe caduto con rallentatore, bordo rosso, colonna di luce e scritta "CADUTO". Funzioni: `_hit_fx`, `_kill_fx`, `_update_fx`, `_draw_fx`. Gli effetti usano `fx_rng`, separato da `rng`: i risultati delle battaglie non cambiano.
+- **Banco di prova**: `godot/tests/fx_probe_runner.gd` salva i fotogrammi di un'evocazione o di una battaglia (con `--fixed-fps 30`) da montare in video.
+- Da controllare (QA): evocazione x1 e x10, "Salta" a metà, una battaglia con un eroe caduto e il Guardiano del Piano 5.
 
 ## 2026-11-05 · Design + Programming · Torre a scaglioni e Prova del Guardiano (#13) — fatto
 Commit 39f308d e 5d5c18b.
