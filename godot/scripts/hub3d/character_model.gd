@@ -709,6 +709,8 @@ func _kit_piece(name: String, material: Material) -> MeshInstance3D:
 		_head_kit = Node3D.new()
 		_head_kit.name = "KitHead"
 		_head_kit.scale = Vector3.ONE * KIT_HEAD_SCALE
+		# testa un filo più bassa: il collo del kit sembrava lungo e sottile
+		_head_kit.position = Vector3(0.0, -0.022, 0.004)
 		head.add_child(_head_kit)
 	_head_kit.add_child(mi)
 	_meshes.append(mi)

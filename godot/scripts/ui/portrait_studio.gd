@@ -7,7 +7,7 @@ extends Node
 ## cambia l'aspetto (classe scelta, rarità, versione dello studio).
 ## Senza schermo (test headless) non fotografa: la carta usa il disegno di riserva.
 
-const VERSION := 4
+const VERSION := 5
 const SIZE := Vector2i(384, 480)
 const CACHE_DIR := "user://portraits3d"
 
@@ -121,11 +121,11 @@ func _shoot() -> void:
 	model.play("idle")
 	model.update_animation(0.0)
 	model.rotation.y = 0.3
-	# mezzo busto: dalla cima dei capelli al petto, la testa occupa quasi metà carta
+	# primo piano: dalla cima dei capelli alle spalle, la testa occupa più di metà carta
 	var s: float = model.rig.scale.y if model.rig != null else 0.5
 	var head_y: float = model.head.global_position.y
-	var top := head_y + 0.29 * s
-	var bottom := head_y - 0.25 * s
+	var top := head_y + 0.27 * s
+	var bottom := head_y - 0.2 * s
 	var mid := (top + bottom) * 0.5
 	var dist := (top - bottom) * 0.5 / tan(deg_to_rad(_cam.fov * 0.5))
 	_cam.position = Vector3(0.0, mid + 0.012, dist)

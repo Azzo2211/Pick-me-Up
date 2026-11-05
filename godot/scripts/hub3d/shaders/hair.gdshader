@@ -35,6 +35,14 @@ void fragment() {
 	float strands = smoothstep(0.1, 0.5, sin(ang * 31.0) * 0.5 + 0.5);
 	float hl = band * facing * up * strands * ring_strength * step(shade.x, 1.5);
 	col = mix(col, col * 1.55 + vec3(0.07), hl);
+	// ciocche disegnate: righe scure sottili che scendono lungo i capelli, più fitte
+	// in basso e sulle punte, come il tratteggio dei capelli nel foglio
+	float sw = sin(ang * 19.0 + local_pos.y * 6.0 + sin(ang * 5.0) * 1.2);
+	float strand_line = 1.0 - smoothstep(0.02, 0.2, abs(sw));
+	float lower = 1.0 - smoothstep(ring_y - 0.03, ring_y + 0.02, local_pos.y);
+	col *= 1.0 - strand_line * (0.16 + 0.12 * lower) * step(shade.x, 1.5);
+	// punte e bordi più scuri: le ciocche si staccano dal viso
+	col *= mix(0.82, 1.0, smoothstep(0.06, 0.16, local_pos.y));
 	ALBEDO = col;
 	ROUGHNESS = 1.0;
 	AO = toon_ambient;

@@ -161,6 +161,9 @@ void fragment() {
 	float px = max(fwidth(fp.x), fwidth(fp.y)) * 0.9;
 	float f = smoothstep(0.25, 0.55, front);
 	float feature = 0.0;
+	// ombra portata dei capelli sulla fronte e sulle tempie, come nel cel shading
+	float hair_sh = smoothstep(0.34, 0.5, fp.y + 0.12 * abs(fp.x)) * smoothstep(0.1, 0.4, front + 0.2);
+	col = mix(col, col * vec3(0.84, 0.74, 0.76), hair_sh * 0.6);
 	if (f > 0.0) {
 		// rossore sulle guance
 		for (int i = 0; i < 2; i++) {
