@@ -33,7 +33,7 @@ void vertex() {
 	slot_shine = palette[s].a;
 	slot_kind = s == 0 ? 1.0 : (palette[s].a >= 0.4 ? 2.0 : 0.0);
 	// ombra del mento sul collo (davanti, sotto la testa): stacca la testa dal corpo
-	neck_shadow = s == 0 ? smoothstep(1.4, 1.47, VERTEX.y) * smoothstep(-0.02, 0.03, VERTEX.z) : 0.0;
+	neck_shadow = s == 0 ? smoothstep(1.38, 1.46, VERTEX.y) * (1.0 - step(1.53, VERTEX.y)) : 0.0;
 }
 
 void fragment() {
@@ -55,7 +55,7 @@ void fragment() {
 		float edge = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 2.0);
 		col *= 1.0 - edge * 0.35;
 	}
-	col *= mix(vec3(1.0), vec3(0.78, 0.64, 0.66), neck_shadow);
+	col *= mix(vec3(1.0), vec3(0.66, 0.52, 0.56), neck_shadow);
 	ALBEDO = col * sky;
 	ROUGHNESS = 1.0;
 	AO = toon_ambient;

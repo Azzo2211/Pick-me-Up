@@ -23,21 +23,23 @@ HEAD_TABLE = [
     (0.172, 0.102, 0.097, 0.113, 2.45, 2.1),
     (0.148, 0.101, 0.098, 0.111, 2.7, 2.15),
     (0.126, 0.098, 0.096, 0.104, 2.6, 2.2),
-    (0.106, 0.093, 0.093, 0.093, 2.3, 2.3),
-    (0.089, 0.085, 0.09, 0.078, 2.0, 2.5),
-    (0.073, 0.073, 0.087, 0.06, 1.72, 2.6),
-    (0.059, 0.059, 0.083, 0.048, 1.52, 2.5),
-    (0.046, 0.043, 0.077, 0.043, 1.42, 2.3),
-    (0.036, 0.029, 0.066, 0.04, 1.5, 2.2),
-    (0.028, 0.03, 0.035, 0.038, 2.0, 2.0),
+    # mascella adulta: resta larga fino all'angolo (y 0.07), poi una linea dritta verso
+    # un mento vero, che sporge in avanti, con il piano sotto il mento che torna al collo
+    (0.106, 0.094, 0.094, 0.093, 2.3, 2.3),
+    (0.089, 0.09, 0.092, 0.078, 2.1, 2.5),
+    (0.073, 0.084, 0.09, 0.06, 1.9, 2.6),
+    (0.059, 0.07, 0.089, 0.048, 1.7, 2.5),
+    (0.046, 0.056, 0.09, 0.043, 1.6, 2.3),
+    (0.036, 0.04, 0.09, 0.04, 2.1, 2.2),
+    (0.028, 0.03, 0.05, 0.038, 2.0, 2.0),
     (0.012, 0.031, 0.03, 0.036, 2.0, 2.0),
 ]
 
 
 # Viso degli anime: la parte sotto gli occhi è più corta del vero, la mascella più
 # piena. Le altezze sotto gli occhi della tabella si accorciano di questo fattore.
-LOWER_FACE = 0.94
-JAW_FILL = 1.02
+LOWER_FACE = 1.03
+JAW_FILL = 1.0
 
 
 def squash(y):

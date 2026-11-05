@@ -51,7 +51,8 @@ void vertex() {
 	front = UV2.y;
 	// ombre morbide come negli anime: la normale si piega verso quella di una sfera
 	vec3 ball = normalize(VERTEX - vec3(0.0, 0.15, -0.02));
-	NORMAL = normalize(mix(NORMAL, ball, 0.65));
+	// (poco: con 0.65 la mascella si illuminava come una palla e il viso sembrava un Mii)
+	NORMAL = normalize(mix(NORMAL, ball, 0.3));
 }
 
 float cover(float d, float px) {
@@ -164,7 +165,16 @@ void fragment() {
 	// ombra portata dei capelli sulla fronte e sulle tempie, come nel cel shading
 	float hair_sh = smoothstep(0.34, 0.5, fp.y + 0.12 * abs(fp.x)) * smoothstep(0.1, 0.4, front + 0.2);
 	col = mix(col, col * vec3(0.84, 0.74, 0.76), hair_sh * 0.6);
+	// piani del viso come nel disegno: lati della mascella in ombra morbida, il mento
+	// staccato da un'ombra sotto il labbro e da una linea corta in fondo
+	float jaw_side = smoothstep(0.92, 0.55, front) * smoothstep(-0.05, -0.45, fp.y);
+	col = mix(col, col * vec3(0.86, 0.76, 0.78), jaw_side * 0.7);
 	if (f > 0.0) {
+		float chin_d = seg(fp, vec2(-0.07, mouth_y - 0.2), vec2(0.07, mouth_y - 0.2)) - 0.006;
+		float chin_sh = 1.0 - smoothstep(0.0, 0.05, abs(fp.y - (mouth_y - 0.14 - 0.25 * fp.x * fp.x))) ;
+		chin_sh *= 1.0 - smoothstep(0.08, 0.16, abs(fp.x));
+		col = mix(col, col * vec3(0.88, 0.8, 0.8), chin_sh * 0.45 * f);
+		col = mix(col, skin * 0.7, cover(chin_d, px) * 0.35 * f);
 		// rossore sulle guance
 		for (int i = 0; i < 2; i++) {
 			float s = i == 0 ? -1.0 : 1.0;
