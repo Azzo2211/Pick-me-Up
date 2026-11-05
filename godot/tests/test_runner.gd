@@ -539,6 +539,9 @@ func _test_character_kit() -> Array:
 		guard.build_hero(hero, look)
 		valid = valid and guard._skel != null and guard._bone_fix.size() == CharacterModel.JOINT_NAMES.size()
 		valid = valid and not guard._bone_ids.has(-1) and guard._skel.find_children("Hold_*", "", true, false).size() >= 1
+		# Avanguardia e Lanciere col Guerriero del foglio "turntable", se c'è
+		if kit.has_user_body("warrior"):
+			valid = valid and CharacterModel._user_model("guard", "Vanguard") == "warrior" and CharacterModel._user_model("guard", "Guardian") == "guard"
 		# con i capelli dell'eroe sulla testa calva del modello
 		valid = valid and (str(look.get("hair_kind", "short")) == "none" or guard._skel.find_children("UserHair", "", true, false).size() == 1)
 		guard.free()

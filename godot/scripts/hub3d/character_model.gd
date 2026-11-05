@@ -652,7 +652,8 @@ func _build_anime(look_in: Dictionary, role: String, rarity: int, outfit: String
 func _build_kit(look: Dictionary, role: String, rarity: int, outfit: String, prop: String) -> void:
 	var fem: bool = look.get("fem", false)
 	# il modello dell'utente è un uomo: le donne con lo stesso vestito restano dal kit
-	if not fem and CharacterKitScript.has_user_body(outfit) and _build_user_body(look, role, rarity, outfit, prop): return
+	var model := _user_model(outfit, role)
+	if not fem and not model.is_empty() and _build_user_body(look, role, rarity, outfit, model, prop): return
 	var height := clampf(float(look.get("height", 1.0)), 0.93, 1.07)
 	if int(look.get("age", 28)) < 18: height *= 0.97
 	# le articolazioni restano quelle del kit: le corporature sono chiavi di forma
@@ -694,8 +695,8 @@ func _build_kit(look: Dictionary, role: String, rarity: int, outfit: String, pro
 ## tools/character_kit/import_user_model.py): colori dipinti nella texture e scheletro
 ## con gli stessi nomi del kit, ma in posa a T. Le animazioni restano quelle di tutti:
 ## ogni osso riceve la rotazione del suo perno corretta da _bone_fix.
-func _build_user_body(look: Dictionary, role: String, rarity: int, outfit: String, prop: String) -> bool:
-	var inst := CharacterKitScript.user_body(outfit)
+func _build_user_body(look: Dictionary, role: String, rarity: int, outfit: String, model: String, prop: String) -> bool:
+	var inst := CharacterKitScript.user_body(model)
 	if inst == null: return false
 	var found := inst.find_children("*", "Skeleton3D", true, false)
 	if found.is_empty():
@@ -713,13 +714,20 @@ func _build_user_body(look: Dictionary, role: String, rarity: int, outfit: Strin
 	_bone_ids = PackedInt32Array()
 	for j in JOINT_NAMES: _bone_ids.append(skel.find_bone(j))
 	_user_rest_fix()
+	var fit: Dictionary = user_hair_fit.get(model, {})
 	for node in skel.find_children("*", "MeshInstance3D", true, false):
 		var mi := node as MeshInstance3D
 		for s in mi.mesh.get_surface_count():
-			mi.set_surface_override_material(s, _painted_material(mi.mesh.surface_get_material(s)))
+			var mat := _painted_material(mi.mesh.surface_get_material(s))
+			if fit.get("recolor", false) and mat is ShaderMaterial:
+				# capelli dipinti col colore dell'eroe: materiale suo (la texture resta condivisa)
+				mat = mat.duplicate()
+				mat.set_shader_parameter("hair_recolor", 1.0)
+				mat.set_shader_parameter("hair_color", look.get("hair", Color("#3a2a20")))
+			mi.set_surface_override_material(s, mat)
 		mi.material_overlay = _flash()
 		_meshes.append(mi)
-	_user_hair(look, outfit, CharacterKitScript.palette(look, outfit, rarity))
+	_user_hair(look, model, CharacterKitScript.palette(look, outfit, rarity))
 	if role == "Villager":
 		attack_style = "melee"
 	elif not prop.is_empty():
@@ -729,16 +737,30 @@ func _build_user_body(look: Dictionary, role: String, rarity: int, outfit: Strin
 	_finish()
 	return true
 
-## Come mettere i capelli del kit sulla testa calva del modello dell'utente, nello
-## spazio dell'osso della testa: la sua testa è più piccola di quella del kit e,
-## come tutto il modello, schiacciata davanti-dietro.
-static var user_hair_fit := {"guard": {"pos": Vector3(0.0, 0.001, 0.01), "scale": Vector3(0.84, 0.9, 0.68)}}
+## Modelli dell'utente per vestito e classe: la Guardia col tabarro bianco va al
+## Guardiano (scudo) e alle guardie cittadine, il Guerriero (foglio "turntable") ad
+## Avanguardia e Lanciere. Se un modello manca si usa quello del vestito, poi il kit.
+const USER_MODELS := {"guard": {"Vanguard": "warrior", "Lancer": "warrior"}}
+
+static func _user_model(outfit: String, role: String) -> String:
+	var name: String = USER_MODELS.get(outfit, {}).get(role, outfit)
+	if CharacterKitScript.has_user_body(name): return name
+	return outfit if CharacterKitScript.has_user_body(outfit) else ""
+
+## Capelli dei modelli dell'utente. La Guardia è calva: si mettono i capelli del kit
+## (taglio e colore dell'eroe) nello spazio dell'osso della testa, adattati alla sua
+## testa più piccola e schiacciata davanti-dietro. Il Guerriero ha i capelli dipinti
+## come nel foglio: si tingono col colore dell'eroe ("recolor"), il taglio resta il suo.
+static var user_hair_fit := {
+	"guard": {"pos": Vector3(0.0, 0.001, 0.01), "scale": Vector3(0.84, 0.9, 0.68)},
+	"warrior": {"recolor": true},
+}
 
 ## Capelli dell'eroe (stesso taglio e colore di sempre) sul modello dell'utente.
-func _user_hair(look: Dictionary, outfit: String, pal: Array) -> void:
+func _user_hair(look: Dictionary, model: String, pal: Array) -> void:
 	var kind := str(look.get("hair_kind", "short"))
-	var fit: Dictionary = user_hair_fit.get(outfit, {})
-	if kind == "none" or fit.is_empty(): return
+	var fit: Dictionary = user_hair_fit.get(model, {})
+	if kind == "none" or not fit.has("scale"): return
 	var mesh := CharacterKitScript.part("hair_" + kind)
 	var holder := _bone_holder("head")
 	if mesh == null or holder == null: return

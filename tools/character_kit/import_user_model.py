@@ -46,7 +46,20 @@ PRESETS = {
         hips=0.9, hip_x=0.11, knee=0.48, ankle=0.105, ankle_x=0.235, leg_r=0.065,
         spine=0.96,
     ),
+    # Guerriero dal foglio "Turntable game-ready" (tools/character_kit/sheet_to_model.py):
+    # braccia un po' in giù verso le mani (arm_drop = discesa per unità di x)
+    "warrior": dict(
+        neck=1.53,
+        shoulder_x=0.19, arm_y=1.404, elbow_x=0.47, wrist_x=0.71, arm_half=0.068, arm_drop=0.1,
+        hips=0.92, hip_x=0.1, knee=0.49, ankle=0.11, ankle_x=0.18, leg_r=0.06,
+        spine=0.98,
+    ),
 }
+
+
+def arm_line(J, ax):
+    """Altezza della linea del braccio a distanza ax dal centro."""
+    return J["arm_y"] - max(0.0, ax - J["shoulder_x"]) * J.get("arm_drop", 0.0)
 
 
 def load(path):
@@ -103,8 +116,8 @@ def joints(J):
     }
     for side, s in (("l", -1.0), ("r", 1.0)):
         out["arm_" + side] = (s * sx, ay, 0.0)
-        out["fore_" + side] = (s * J["elbow_x"], ay, 0.0)
-        out["hand_" + side] = (s * J["wrist_x"], ay, 0.0)
+        out["fore_" + side] = (s * J["elbow_x"], arm_line(J, J["elbow_x"]), 0.0)
+        out["hand_" + side] = (s * J["wrist_x"], arm_line(J, J["wrist_x"]), 0.0)
         out["leg_" + side] = (s * J["hip_x"], J["hips"], 0.0)
         out["shin_" + side] = (s * leg_x(J, J["knee"]), J["knee"], 0.0)
     return out
@@ -126,7 +139,7 @@ def weights(p, J):
     t = smooth((p.y - (J["hips"] - 0.02)) / 0.16)
     torso = {"hips": 1.0 - t, "spine": t}
     # braccio: fascia orizzontale fuori dalla spalla; vicino alla spalla si sfuma
-    dy = p.y - ay
+    dy = p.y - arm_line(J, ax)
     if dy > 0.0:
         # sopra il braccio ci sono solo gli spallacci: vanno col braccio (niente "ali")
         band = 1.0

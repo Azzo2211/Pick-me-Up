@@ -1,7 +1,7 @@
 shader_type spatial;
 render_mode cull_disabled, diffuse_lambert, specular_disabled;
 
-// Modelli 3D fatti dall'utente con il colore dipinto nella texture (per ora la Guardia,
+// Modelli 3D dell'utente con il colore dipinto nella texture (la Guardia, il Guerriero:
 // assets/characters/user/): la luce e le ombre sono già nel disegno, quindi qui la luce
 // vera conta poco. Banda morbida (niente gradino netto come nel toon: sul disegno
 // farebbe macchie) e poca luce ambiente (quella azzurra del cielo sbiadiva il disegno), così il modello
@@ -25,6 +25,11 @@ uniform float contrast : hint_range(0.5, 2.0) = 1.15;
 // schermo, ma davanti al mantello. Solo guardando il personaggio da davanti: da
 // dietro il mantello lo copre.
 uniform float arm_front : hint_range(0.0, 0.5) = 0.3;
+// Capelli dipinti (alfa sotto 1 nella texture, vedi tools/character_kit/sheet_to_model.py)
+// tinti col colore di capelli dell'eroe, tenendo luci e ombre del disegno.
+uniform float hair_recolor : hint_range(0.0, 1.0) = 0.0;
+uniform vec3 hair_color : source_color = vec3(0.23, 0.16, 0.12);
+uniform float hair_ref = 0.19; // luminanza media dei capelli dipinti (come li legge il renderer Compatibility)
 
 void vertex() {
 	vec4 view = MODELVIEW_MATRIX * vec4(VERTEX, 1.0);
@@ -40,8 +45,14 @@ void vertex() {
 
 void fragment() {
 	vec4 tex = texture(albedo_tex, UV);
-	float l = dot(tex.rgb, vec3(0.299, 0.587, 0.114));
-	ALBEDO = pow(clamp(mix(vec3(l), tex.rgb, saturation), 0.0, 1.0), vec3(contrast));
+	vec3 col = tex.rgb;
+	float hair = clamp((1.0 - tex.a) / 0.784, 0.0, 1.0) * hair_recolor;
+	if (hair > 0.0) {
+		float lum = dot(col, vec3(0.299, 0.587, 0.114));
+		col = mix(col, clamp(hair_color * (lum / hair_ref), 0.0, 1.0), hair);
+	}
+	float l = dot(col, vec3(0.299, 0.587, 0.114));
+	ALBEDO = pow(clamp(mix(vec3(l), col, saturation), 0.0, 1.0), vec3(contrast));
 	ROUGHNESS = 1.0;
 	AO = ambient;
 	AO_LIGHT_AFFECT = 0.0;
