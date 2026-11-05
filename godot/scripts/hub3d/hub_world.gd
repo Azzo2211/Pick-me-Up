@@ -1284,17 +1284,20 @@ func _refresh_sublabels() -> void:
 func _declutter_labels() -> void:
 	var cam := get_viewport().get_camera_3d() if is_inside_tree() else null
 	if cam == null: return
+	# pixel dello schermo per pixel dell'etichetta (Label3D a dimensione fissa):
+	# cresce con la risoluzione, a 1080p è circa 1,4
+	var k := 0.0007 * get_viewport().get_visible_rect().size.y / (2.0 * tan(deg_to_rad(cam.fov) * 0.5))
 	var items := []
 	for id in labels:
 		var l: Label3D = labels[id]
 		if not l.visible or cam.is_position_behind(l.global_position): continue
 		var w := UIKit.title_font().get_string_size(l.text, HORIZONTAL_ALIGNMENT_LEFT, -1, l.font_size).x
 		var extra := 22.0 if sublabels[id].visible else 0.0
-		items.append({"id": id, "pos": cam.unproject_position(l.global_position), "w": w + 8.0, "h": 26.0 + extra})
+		items.append({"id": id, "pos": cam.unproject_position(l.global_position), "w": (w + 8.0) * k, "h": (26.0 + extra) * k})
 	items.sort_custom(func(a, b): return a.pos.y > b.pos.y)
 	var placed: Array[Rect2] = []
 	for item in items:
-		var rect := Rect2(item.pos + Vector2(-item.w * 0.5, -26.0), Vector2(item.w, item.h))
+		var rect := Rect2(item.pos + Vector2(-item.w * 0.5, -26.0 * k), Vector2(item.w, item.h))
 		var lift := 0.0
 		for attempt in 6:
 			var hit := false
@@ -1308,6 +1311,7 @@ func _declutter_labels() -> void:
 			if not hit: break
 		placed.append(rect)
 		var id: String = item.id
+		lift /= k
 		labels[id].offset = Vector2(0, lift)
 		sublabels[id].offset = Vector2(0, lift)
 		badges[id].offset.y = 18.0 + lift / 0.0005 * 0.0007
