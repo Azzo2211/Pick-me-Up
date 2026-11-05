@@ -119,7 +119,7 @@ const MATERIALS := {
 
 # --- Torre -------------------------------------------------------------------
 const STAGES := {
-	1: {"type": "Subjugation", "name": "La strada spezzata", "biome": "Bosco cinereo", "objective": "Elimina tutte le minacce", "duration": 60.0, "color": "#3c7968", "description": "Predoni del Rift hanno chiuso l'unica via verso la torre.", "waves": [[0.0, "raider", 4], [10.0, "hound", 2]]},
+	1: {"type": "Subjugation", "name": "La strada spezzata", "biome": "Bosco cinereo", "objective": "Elimina tutte le minacce", "duration": 60.0, "color": "#3c7968", "description": "Predoni del Rift hanno chiuso l'unica via verso la torre.", "waves": [[0.0, "raider", 3], [10.0, "hound", 2]]},
 	2: {"type": "Survival", "name": "Campana nella nebbia", "biome": "Borgo evacuato", "objective": "Sopravvivi per 45 secondi", "duration": 45.0, "color": "#346b86", "description": "La campana attira sciami dalle case vuote. Munizioni e disciplina decidono la sopravvivenza.", "waves": [[0.0, "raider", 3], [9.0, "archer", 2], [20.0, "hound", 4], [31.0, "brute", 2]]},
 	3: {"type": "Exploration", "name": "Osservatorio sommerso", "biome": "Rovine allagate", "objective": "Metti in sicurezza 3 punti d'interesse", "duration": 70.0, "color": "#365c8c", "description": "Le rovine nascondono informazioni persistenti sul climax dello Stream.", "waves": [[0.0, "hound", 3], [15.0, "raider", 3], [30.0, "archer", 2]]},
 	4: {"type": "Defense", "name": "L'ultima lanterna", "biome": "Santuario in rovina", "objective": "Proteggi il faro del Rift", "duration": 50.0, "color": "#94713c", "description": "Il faro deve restare integro mentre l'Archivio decodifica le coordinate.", "waves": [[0.0, "raider", 4], [12.0, "archer", 2], [25.0, "brute", 2], [37.0, "hound", 4]]},
@@ -137,6 +137,37 @@ const STAGE_OBJECTIVES := {
 	"Subjugation": "Elimina tutte le minacce", "Survival": "Sopravvivi fino al termine", "Exploration": "Metti in sicurezza 3 punti d'interesse",
 	"Defense": "Proteggi il faro del Rift", "Boss": "Abbatti il guardiano del piano",
 }
+
+# --- Difficoltà della Torre ----------------------------------------------------
+# La Torre è divisa in scaglioni di 5 piani (1–5, 6–10, ...). Dentro uno scaglione
+# ogni piano è un po' più duro del precedente; il 5° è la Prova del Guardiano, una
+# missione speciale con regole in più (vedi TOWER_TRIALS). Superata la prova, lo
+# scaglione successivo riparte da un gradino più alto. Numeri di Game Design:
+# vedi docs/GAME_SYSTEMS.md e tests/tower_curve_runner.gd per la verifica.
+const TOWER_TIER_FLOORS := 5
+## Forza dei nemici al primo piano di ogni scaglione (moltiplica vita e attacco
+## dei modelli in battle_scene.ENEMY_TEMPLATES). Oltre la tabella cresce del 5%.
+const TOWER_TIER_POWER := [2.0, 3.69, 4.39, 5.14, 6.15, 7.59, 8.96, 9.85, 10.84, 11.92, 12.5, 13.1, 13.8, 14.5, 15.2, 16.0, 16.8, 17.6, 18.5, 19.4]
+## +% a ogni piano dentro lo scaglione: il grosso del salto arriva a ogni nuovo scaglione.
+const TOWER_STEP_GROWTH := 0.03
+## Prova del Guardiano: le regole, i campioni e il guardiano infuriato la rendono già il
+## muro dello scaglione, quindi la forza di base dei nemici è ridotta di questo fattore
+## (tarato perché la squadra dello scaglione successivo la passi circa 2 volte su 3).
+const TOWER_TRIAL_POWER := [1.02, 0.83, 0.81, 0.8, 0.79, 0.76, 0.68, 0.64, 0.6, 0.59, 0.58, 0.575, 0.565, 0.56, 0.545, 0.535, 0.525, 0.5, 0.49, 0.46]
+## Campioni: nemici d'élite delle prove (e dei piani alti).
+const ELITE_HP := 2.4
+const ELITE_ATTACK := 1.35
+## Regole della Prova del Guardiano. Ogni prova ne pesca alcune (di più negli scaglioni alti).
+const TOWER_TRIALS := {
+	"furia": {"name": "Furia", "text": "i nemici colpiscono più forte (+25% attacco)"},
+	"corazza": {"name": "Corazza", "text": "i nemici sono corazzati (+60% difesa)"},
+	"orda": {"name": "Orda", "text": "ondate più numerose (+50% nemici)"},
+	"rapidi": {"name": "Passo rapido", "text": "i nemici corrono e attaccano più spesso"},
+	"rigenerazione": {"name": "Carne del Rift", "text": "i nemici rigenerano l'1% della vita al secondo"},
+	"nebbia": {"name": "Nebbia", "text": "gli eroi mirano peggio (−15 precisione)"},
+	"ferite": {"name": "Ferite profonde", "text": "le cure valgono la metà"},
+}
+const GUARDIAN_TITLES := ["Custode delle radici", "Colosso di cenere", "Sentinella di vetro", "Signore del guado", "Il Senza Volto", "Araldo del Rift", "Gigante delle lanterne", "Cuore di ferro", "Il Giuramento infranto", "Re delle ceneri"]
 
 var data: Dictionary = {}
 var is_test_mode := OS.get_cmdline_user_args().has("--test-mode")
@@ -272,7 +303,12 @@ func _migrate() -> void:
 		var stage_record: Dictionary = data.stages[stage_key]
 		if not stage_record.has("descriptor"): continue
 		var descriptor: Dictionary = stage_record.descriptor
-		var normalized_threat: int = int(descriptor.get("threat_budget", descriptor.get("threat", 100)))
+		var stage_floor := int(descriptor.get("floor", int(stage_key)))
+		# Prove del Guardiano (novembre 2026): i quinti piani non ancora superati diventano prove
+		if is_trial_floor(stage_floor) and not descriptor.has("trial") and not bool(stage_record.get("cleared", false)):
+			_add_trial(descriptor, stage_floor, str(data.world.seed) + ":floor:" + str(stage_floor))
+		descriptor["tier"] = tower_tier(stage_floor) + 1
+		var normalized_threat: int = tower_threat(stage_floor, descriptor)
 		descriptor["threat_budget"] = normalized_threat
 		descriptor["threat"] = normalized_threat
 		stage_record.get_or_add("attempts", 0)
@@ -1298,10 +1334,73 @@ func _materialize_stage(floor_index: int) -> Dictionary:
 	else: template = _procedural_stage(floor_index, seed_text)
 	template["floor"] = floor_index
 	template["seed"] = "%08X" % abs(seed_text.hash())
-	template["threat_budget"] = 100 + floor_index * 36 + abs(seed_text.hash()) % 28
+	template["tier"] = tower_tier(floor_index) + 1
+	if is_trial_floor(floor_index): _add_trial(template, floor_index, seed_text)
+	template["threat_budget"] = tower_threat(floor_index, template)
 	template["threat"] = template.threat_budget
 	data.stages[key] = {"descriptor": template, "attempts": 0, "cleared": false, "best_time": 0.0}
 	return data.stages[key]
+
+## Scaglione (0 = piani 1–5, 1 = piani 6–10, ...).
+static func tower_tier(floor_index: int) -> int:
+	return (maxi(1, floor_index) - 1) / TOWER_TIER_FLOORS
+
+## Il 5° piano di ogni scaglione è la Prova del Guardiano.
+static func is_trial_floor(floor_index: int) -> bool:
+	return floor_index > 0 and floor_index % TOWER_TIER_FLOORS == 0
+
+## Solo per i banchi di prova del bilanciamento: moltiplica la forza dei nemici.
+var debug_enemy_scale := 1.0
+
+## Forza "di scaglione" di un piano, prima dello sconto delle prove.
+static func floor_power(floor_index: int) -> float:
+	var tier := tower_tier(floor_index)
+	var step := (maxi(1, floor_index) - 1) % TOWER_TIER_FLOORS
+	var last := TOWER_TIER_POWER.size() - 1
+	var base: float = TOWER_TIER_POWER[mini(tier, last)] * pow(1.05, maxi(0, tier - last))
+	return base * (1.0 + TOWER_STEP_GROWTH * step)
+
+## Forza dei nemici di un piano: moltiplicatori per vita, attacco e difesa.
+func enemy_scaling(floor_index: int) -> Dictionary:
+	var tier := tower_tier(floor_index)
+	var power := floor_power(floor_index) * debug_enemy_scale
+	if is_trial_floor(floor_index): power *= float(TOWER_TRIAL_POWER[mini(tier, TOWER_TRIAL_POWER.size() - 1)])
+	# la vita cresce un po' meno dell'attacco (i piani a tempo restano fattibili, il pericolo
+	# per gli eroi no); la difesa ancora meno: con 100/(100+difesa) una difesa enorme
+	# renderebbe i nemici intoccabili
+	return {"power": power, "hp": pow(power, 0.85), "attack": power, "defense": pow(power, 0.5)}
+
+## Minaccia mostrata sulla mappa: segue la forza dei nemici. Una prova conta più dei piani
+## normali dello scaglione (regole, campioni e guardiano valgono più dello sconto di forza).
+func tower_threat(floor_index: int, descriptor: Dictionary = {}) -> int:
+	var power := floor_power(floor_index)
+	var trial: Dictionary = descriptor.get("trial", {})
+	if not trial.is_empty(): power *= 1.2 + 0.06 * trial.get("rules", []).size()
+	return roundi(120.0 * pow(power, 0.85))
+
+## Prova del Guardiano: regole speciali, campioni di scorta e guardiano che si infuria.
+func _add_trial(template: Dictionary, floor_index: int, seed_text: String) -> void:
+	var rng := rng_for(seed_text + ":trial")
+	var tier := tower_tier(floor_index)
+	var count := 1 if tier < 2 else 2 if tier < 6 else 3
+	var pool: Array = TOWER_TRIALS.keys()
+	var rules: Array = []
+	while rules.size() < count and not pool.is_empty():
+		var pick: String = pool[rng.randi_range(0, pool.size() - 1)]
+		pool.erase(pick)
+		rules.append(pick)
+	var elites := mini(1 + tier / 2, 5)
+	var guardian: String = GUARDIAN_TITLES[tier % GUARDIAN_TITLES.size()]
+	template["type"] = "Boss"
+	template["trial"] = {"rules": rules, "elites": elites, "guardian": guardian}
+	# i campioni arrivano a metà prova, insieme ai rinforzi
+	var waves: Array = template.get("waves", []).duplicate(true)
+	waves.append([30.0, "brute", elites, "elite"])
+	template["waves"] = waves
+	template["duration"] = maxf(float(template.get("duration", 90.0)), 100.0)
+	var names: Array = rules.map(func(id): return "%s: %s" % [TOWER_TRIALS[id].name, TOWER_TRIALS[id].text])
+	template["objective"] = "Abbatti %s. A metà vita si infuria." % guardian
+	template["description"] = "Prova del Guardiano · fine dello scaglione %d. Regole: %s. Arrivano %d campioni. Superata la prova, i piani successivi sono più duri." % [tier + 1, "; ".join(names), elites]
 
 func _procedural_stage(floor_index: int, seed_text: String) -> Dictionary:
 	var rng := rng_for(seed_text + ":template")
@@ -1331,10 +1430,12 @@ func get_stage(floor_index: int) -> Dictionary:
 
 func floor_rewards(floor_index: int, attempt: int, first_clear: bool) -> Dictionary:
 	var retry_multiplier: float = max(0.35, 1.0 - max(0, attempt - 1) * 0.12)
-	var rewards := {"gold": roundi((7200 + floor_index * 2600) * retry_multiplier), "xp": roundi((95 + floor_index * 34) * retry_multiplier)}
+	# la Prova del Guardiano paga di più: è il muro di ogni scaglione
+	var trial_bonus := 1.6 if is_trial_floor(floor_index) else 1.0
+	var rewards := {"gold": roundi((7200 + floor_index * 2600) * retry_multiplier * trial_bonus), "xp": roundi((95 + floor_index * 34) * retry_multiplier * trial_bonus)}
 	if first_clear:
-		rewards.gems = 120 + floor_index * 10
-		if floor_index % 5 == 0: rewards.stones = 1 + floor_index / 20
+		rewards.gems = (120 + floor_index * 10) * (2 if is_trial_floor(floor_index) else 1)
+		if is_trial_floor(floor_index): rewards.stones = 1 + floor_index / 20
 	return rewards
 
 func begin_mission(floor_index: int) -> Dictionary:

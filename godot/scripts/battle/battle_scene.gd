@@ -78,8 +78,12 @@ var boss_label: Label
 var poi_nodes: Array[Node3D] = []
 var beacon_node: Node3D
 
+## Regole della Prova del Guardiano in corso (vuoto sui piani normali).
+var trial_rules: Array = []
+
 func setup(stage_data: Dictionary, source_party: Array, mission_attempt: int) -> void:
 	stage = stage_data
+	trial_rules = stage.get("trial", {}).get("rules", [])
 	party_source = source_party
 	attempt = mission_attempt
 	rng.seed = abs((str(stage.seed) + ":" + str(attempt)).hash())
@@ -92,6 +96,9 @@ func _ready() -> void:
 	_create_heroes()
 	running = true
 	_log("La squadra attraversa il Portale. Da qui in avanti decidono loro.", "good")
+	if stage.has("trial"):
+		var names: Array = trial_rules.map(func(id): return str(RiftwardState.TOWER_TRIALS.get(id, {}).get("name", id)))
+		_log("Prova del Guardiano · regole: %s." % ", ".join(names), "danger")
 
 # =============================================================================
 # Scena 3D
@@ -522,7 +529,7 @@ func _create_heroes() -> void:
 			"entity_id": next_id, "hero": true, "id": source.id, "name": str(source.name), "role": role, "source": source,
 			"pos": FORMATION[i], "anchor": FORMATION[i], "hp": float(d.max_hp), "max_hp": float(d.max_hp),
 			"attack": float(max(d.attack * 0.75, d.magic) if role in ["Mage", "Support"] else d.attack), "defense": float(d.defense),
-			"accuracy": float(d.accuracy), "evasion": float(d.evasion), "crit": float(d.crit), "block": float(d.block),
+			"accuracy": float(d.accuracy) - (15.0 if trial_rules.has("nebbia") else 0.0), "evasion": float(d.evasion), "crit": float(d.crit), "block": float(d.block),
 			"range": 7.0 if role in ["Ranger", "Mage"] else 6.0 if role == "Support" else 2.0 if role == "Lancer" else 1.25,
 			"speed": 3.0 if role == "Ranger" else 2.6, "cooldown": rng.randf_range(0.2, 0.8), "skill_cd": rng.randf_range(2.0, 4.0),
 			"cadence": 1.35 if role in ["Mage", "Support"] else 1.0, "target": -1, "action": "hold", "alive": true,
@@ -576,25 +583,34 @@ func _make_party_card(unit: Dictionary) -> void:
 	party_box.add_child(card)
 	party_cards[unit.entity_id] = {"card": card, "hp": hp, "hp_text": hp_text, "status": status, "portrait": p}
 
-func _spawn_enemy(kind: String, wave: int, index: int) -> void:
+func _spawn_enemy(kind: String, wave: int, index: int, elite: bool = false) -> void:
 	var t: Dictionary = ENEMY_TEMPLATES[kind]
 	var floor_index := int(stage.floor)
 	var boss := kind == "boss"
-	# crescita più dolce dopo i primi piani; il guardiano scala meno dei gregari
-	var hp_scale := (0.8 + floor_index * 0.12) if boss else (0.8 + floor_index * 0.18)
-	var atk_scale := (0.85 + floor_index * 0.08) if boss else (0.85 + floor_index * 0.13)
-	var def_scale := (0.8 + floor_index * 0.12) if boss else (0.8 + floor_index * 0.18)
+	# forza del piano: scaglioni di 5 piani, vedi GameState.enemy_scaling
+	var scaling: Dictionary = GameState.enemy_scaling(floor_index)
+	var hp_scale := float(scaling.hp)
+	var atk_scale := float(scaling.attack)
+	var def_scale := float(scaling.defense)
+	if elite:
+		hp_scale *= RiftwardState.ELITE_HP
+		atk_scale *= RiftwardState.ELITE_ATTACK
+		def_scale *= 1.3
+	if trial_rules.has("furia"): atk_scale *= 1.25
+	if trial_rules.has("corazza"): def_scale *= 1.6
+	var speed := float(t.speed) * (1.25 if trial_rules.has("rapidi") else 1.0)
+	var cadence := float(t.cadence) * (0.85 if trial_rules.has("rapidi") else 1.0)
 	var pos := Vector2(ARENA_X - 0.5 + rng.randf_range(0.0, 1.5), clampf(-ARENA_Z + 1.0 + fmod(float(wave * 3 + index * 2), 6.0) * 2.1 + rng.randf_range(-0.5, 0.5), -ARENA_Z + 0.8, ARENA_Z - 0.8))
 	var unit := {
-		"entity_id": next_id, "hero": false, "kind": kind, "name": str(t.name), "pos": pos, "hp": float(t.hp) * hp_scale, "max_hp": float(t.hp) * hp_scale,
-		"attack": float(t.attack) * atk_scale, "defense": float(t.defense) * def_scale, "speed": float(t.speed), "cooldown": rng.randf_range(0.2, 0.9),
-		"cadence": float(t.cadence), "threat": int(t.threat), "range": float(t.range), "target": -1, "alive": true, "slam_cd": 6.0,
+		"entity_id": next_id, "hero": false, "kind": kind, "name": (str(t.name) + " campione") if elite else str(t.name), "pos": pos, "hp": float(t.hp) * hp_scale, "max_hp": float(t.hp) * hp_scale,
+		"attack": float(t.attack) * atk_scale, "defense": float(t.defense) * def_scale, "speed": speed, "cooldown": rng.randf_range(0.2, 0.9),
+		"cadence": cadence, "threat": int(t.threat) + (2 if elite else 0), "range": float(t.range), "target": -1, "alive": true, "slam_cd": 6.0, "elite": elite, "enraged": false,
 		"accuracy": 82.0, "evasion": 4.0, "crit": 4.0, "block": 0.0, "ranged": kind == "archer",
 	}
 	var model := CharacterModel.new()
 	world.add_child(model)
 	model.build_monster(kind, t.tint)
-	model.scale = Vector3.ONE * UNIT_SCALE
+	model.scale = Vector3.ONE * UNIT_SCALE * (1.22 if elite else 1.0)
 	model.position = Vector3(pos.x, 0, pos.y)
 	model.rotation.y = -PI / 2
 	model.phase = rng.randf() * 5.0
@@ -602,7 +618,8 @@ func _spawn_enemy(kind: String, wave: int, index: int) -> void:
 	units.append(unit)
 	next_id += 1
 	if boss:
-		boss_label.text = ("%s · Guardiano del Piano %d" % [str(stage.get("name", "")), floor_index]).to_upper()
+		var title := str(stage.get("trial", {}).get("guardian", stage.get("name", "")))
+		boss_label.text = ("%s · Guardiano del Piano %d" % [title, floor_index]).to_upper()
 		boss_panel.visible = true
 		boss_panel.set_meta("boss_id", unit.entity_id)
 
@@ -675,6 +692,8 @@ func _tick(delta: float) -> void:
 		_decide()
 	for u in units:
 		if u.alive: _update_unit(u, delta)
+	if trial_rules.has("rigenerazione"):
+		for e in _enemies(): e.hp = minf(float(e.max_hp), float(e.hp) + float(e.max_hp) * 0.01 * delta)
 	_update_objective(delta)
 	_check_end()
 
@@ -684,8 +703,12 @@ func _spawn_waves() -> void:
 		var wave: Array = stage.waves[index]
 		if elapsed < float(wave[0]): continue
 		spawned_waves.append(index)
-		for i in int(wave[2]): _spawn_enemy(str(wave[1]), index, i)
-		_log("%s: %d × %s in arrivo." % ["Contatto" if index == 0 else "Rinforzi", int(wave[2]), ENEMY_TEMPLATES[str(wave[1])].name], "warn" if index > 0 else "")
+		var elite := wave.size() > 3 and str(wave[3]) == "elite"
+		var amount := int(wave[2])
+		if trial_rules.has("orda") and str(wave[1]) != "boss" and not elite: amount = ceili(amount * 1.5)
+		for i in amount: _spawn_enemy(str(wave[1]), index, i, elite)
+		if elite: _log("%d × %s campione: i campioni del Guardiano entrano in campo!" % [amount, ENEMY_TEMPLATES[str(wave[1])].name], "danger")
+		else: _log("%s: %d × %s in arrivo." % ["Contatto" if index == 0 else "Rinforzi", amount, ENEMY_TEMPLATES[str(wave[1])].name], "warn" if index > 0 else "")
 
 func _score_target(hero: Dictionary, enemy: Dictionary) -> float:
 	var distance: float = hero.pos.distance_to(enemy.pos)
@@ -816,7 +839,7 @@ func _update_hero(hero: Dictionary, delta: float) -> void:
 				_move_towards(hero, ally.pos, delta, speed_mult)
 				return
 			_face(hero, ally.pos)
-			var amount: float = 35.0 + float(hero.source.stats.int) * 1.7
+			var amount: float = (35.0 + float(hero.source.stats.int) * 1.7) * (0.5 if trial_rules.has("ferite") else 1.0)
 			ally.hp = minf(float(ally.max_hp), float(ally.hp) + amount)
 			hero.healing = int(hero.healing) + roundi(amount)
 			hero.skill_cd = 8.5
@@ -866,9 +889,15 @@ func _update_hero(hero: Dictionary, delta: float) -> void:
 
 func _update_enemy(enemy: Dictionary, delta: float) -> void:
 	if enemy.kind == "boss":
+		if not bool(enemy.get("enraged", false)) and float(enemy.hp) < float(enemy.max_hp) * 0.5:
+			enemy.enraged = true
+			enemy.attack = float(enemy.attack) * 1.3
+			enemy.cadence = float(enemy.cadence) * 0.8
+			_ring(enemy.pos, UIKit.ROSE, 3.2)
+			_log("Il Guardiano si infuria: colpisce più forte e più spesso!", "danger")
 		enemy.slam_cd = float(enemy.slam_cd) - delta
 		if float(enemy.slam_cd) <= 0.0:
-			enemy.slam_cd = 7.5
+			enemy.slam_cd = 5.0 if bool(enemy.get("enraged", false)) else 7.5
 			enemy.model.play("attack")
 			_ring(enemy.pos, UIKit.ROSE, 2.6)
 			_log("Il Guardiano colpisce il terreno!", "danger")

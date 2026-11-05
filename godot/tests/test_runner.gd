@@ -24,6 +24,7 @@ func _initialize() -> void:
 	_test("espansione base e cantieri", _test_base_upgrade)
 	_test("livello strutture limitato dal livello base", _test_facility_cap)
 	_test("descriptor persistente e piani procedurali", _test_stage_persistence)
+	_test("torre: scaglioni di 5 piani e Prova del Guardiano", _test_tower_tiers)
 	_test("migrazione salvataggi v2", _test_legacy_migration)
 	_test("permadeath e tombstone", _test_permadeath)
 	_test("clear, sblocco piano ed esperienza", _test_clear)
@@ -216,6 +217,37 @@ func _test_stage_persistence() -> Array:
 	var valid: bool = first.seed == second.seed and first == second and proc_a == proc_b and str(boss.type) == "Boss" and not proc_a.waves.is_empty()
 	game.free(); other.free()
 	return [valid, "Il descriptor è stato rigenerato o i piani procedurali non sono deterministici"]
+
+func _test_tower_tiers() -> Array:
+	var game := _fresh("tower-seed")
+	var p := func(f: int) -> float: return float(game.enemy_scaling(f).power)
+	# dentro lo scaglione cresce poco, al nuovo scaglione salta
+	var valid: bool = p.call(2) > p.call(1) and p.call(4) > p.call(3) and p.call(6) > p.call(4) * 1.15 and p.call(11) > p.call(9) and p.call(100) > p.call(50)
+	# il 5° piano di ogni scaglione è la prova: guardiano, regole e campioni
+	var trial_5: Dictionary = game.get_stage(5).descriptor
+	var trial_40: Dictionary = game.get_stage(40).descriptor
+	valid = valid and trial_5.type == "Boss" and trial_5.trial.rules.size() == 1 and int(trial_5.trial.elites) == 1
+	valid = valid and trial_40.trial.rules.size() == 3 and trial_40.waves.any(func(w): return w.size() > 3 and w[3] == "elite")
+	valid = valid and not game.get_stage(7).descriptor.has("trial") and int(trial_40.tier) == 8
+	for id in trial_40.trial.rules: valid = valid and game.TOWER_TRIALS.has(id)
+	# stesso seme, stessa prova; la minaccia della prova supera quella dei piani prima
+	var other := _fresh("tower-seed")
+	valid = valid and other.get_stage(40).descriptor.trial == trial_40.trial
+	valid = valid and int(trial_40.threat_budget) > int(game.get_stage(39).descriptor.threat_budget)
+	# ricompense della prova: gemme doppie al primo completamento e Pietre
+	var normal := game.floor_rewards(9, 1, true)
+	var trial := game.floor_rewards(10, 1, true)
+	valid = valid and int(trial.gems) == (120 + 100) * 2 and trial.has("stones") and not normal.has("stones") and int(trial.gold) > int(normal.gold)
+	# salvataggi vecchi: il 5° piano non superato diventa prova, quello superato no
+	game.get_stage(15)
+	game.get_stage(20)
+	game.data.stages["15"].descriptor.erase("trial")
+	game.data.stages["20"].descriptor.erase("trial")
+	game.data.stages["20"].cleared = true
+	game._migrate()
+	valid = valid and game.data.stages["15"].descriptor.has("trial") and not game.data.stages["20"].descriptor.has("trial")
+	game.free(); other.free()
+	return [valid, "Scaglioni, prove o ricompense della Torre non conformi"]
 
 func _test_legacy_migration() -> Array:
 	var game := _fresh("legacy-seed")
