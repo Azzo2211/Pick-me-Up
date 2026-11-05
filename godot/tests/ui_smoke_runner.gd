@@ -142,6 +142,16 @@ func _run() -> void:
 	if result_screen != null and result_screen.has_method("skip_to_summary"): result_screen.call("skip_to_summary")
 	_check(state.data.active_mission.is_empty() and int(state.data.stages["1"].attempts) == 1, "missione registrata nel salvataggio")
 	print("Piano 1 %s · piani sbloccati %d → %d" % ["completato" if state.data.stages["1"].cleared else "fallito", max_floor_before, int(state.data.world.max_floor)])
+	# Base Lv.10: edifici al massimo, tre isole collegate da ponti e raggiungibili a piedi
+	main.close_all_modals()
+	state.dev_max_base()
+	main.hub.refresh(state)
+	await _frames(4)
+	_check(world.buildings.training.level == 10 and world.buildings.training.top_height > 9.0, "edifici al Lv.10 con torri e guglia")
+	_check(world.islands.ids.size() == 3 and world.islands.bridges.size() == 3, "Base Lv.10: tre isole con i loro ponti")
+	_check(world.site_nodes.training.spots.size() > world.buildings.training.spots_local.size(), "l'arena dell'Isola dei Campi aggiunge posti all'Addestramento")
+	var walk := world.nav.get_point_path(world.plaza_nodes[0], world.nav_points["isle_santuario_t_0"])
+	_check(walk.size() > 10 and walk[walk.size() - 1].y > 4.0, "dalla piazza si arriva a piedi al Santuario del Nexus")
 	main.queue_free()
 	await process_frame
 	print("\nRisultato: %d controlli, %d falliti" % [checks, failures])

@@ -52,11 +52,13 @@ func build(id: String, building_level: int, base_lv: int = 1) -> void:
 		"workshop": _build_workshop()
 		"alchemy": _build_alchemy()
 		"plot": _build_plot()
+		"house": _build_house()
 	_mesh = b.instance(self)
 	_highlight = WorldMaterials.highlight()
 	_mesh.material_overlay = _highlight
 	for m in _extra_meshes: m.material_overlay = _highlight
-	_add_pick_body()
+	# le case delle isole sono scenografia: non si cliccano
+	if id != "house": _add_pick_body()
 
 func set_highlight(amount: float) -> void:
 	if _highlight != null: _highlight.set_shader_parameter("intensity", amount * 3.5)
@@ -77,6 +79,8 @@ func _new_builder() -> MeshBuilder:
 	mb.material("paving", WorldMaterials.stone("paving"))
 	mb.material("plaster", WorldMaterials.plaster("warm"))
 	mb.material("plaster_white", WorldMaterials.plaster("white"))
+	mb.material("plaster_ochre", WorldMaterials.plaster("ochre"))
+	mb.material("plaster_grey", WorldMaterials.plaster("grey"))
 	mb.material("timber", WorldMaterials.wood("timber"))
 	mb.material("planks", WorldMaterials.wood("planks"))
 	mb.material("light_wood", WorldMaterials.wood("light"))
@@ -1274,6 +1278,42 @@ func _build_alchemy() -> void:
 	if level >= 9: _halo(tower)
 	if level >= 10: _crown_crystal(tower)
 	door_local = Vector3(0, 0, r + 1.0)
+
+## Casa del villaggio sulle isole: uno o due piani, intonaco e misure che
+## cambiano con "level" usato come variante (0-9). Porta verso +Z.
+func _build_house() -> void:
+	var v := level
+	var w := 2.7 + float(v % 3) * 0.3
+	var d := 2.2 + float((v / 3) % 2) * 0.3
+	var storeys := 1 + (v % 2)
+	var plinth := 0.25
+	var plaster: String = ["plaster", "plaster_white", "plaster_ochre", "plaster_grey"][v % 4]
+	footprint = Vector3(w + 0.8, 0, d + 1.2)
+	b.box("stone", Vector3(w + 0.2, plinth, d + 0.2), Vector3(0, plinth * 0.5, 0))
+	var y := plinth
+	for f in storeys:
+		var stone := f == 0 and v % 3 == 2
+		if stone: _stone_storey(w, d, y)
+		else: _timber_storey(w, d, y, plaster, 0.1 if f > 0 else 0.0)
+		var jetty := 0.1 if f > 0 else 0.0
+		var frame := "stone_dark" if stone else "timber"
+		_window(Vector3(w * 0.22, y + FLOOR_H * 0.55, d * 0.5 + jetty + 0.05), 0.0, Vector2(0.34, 0.46), _hash(f * 3 + 1) < 0.75, frame, stone)
+		if f > 0: _window(Vector3(-w * 0.22, y + FLOOR_H * 0.55, d * 0.5 + jetty + 0.05), 0.0, Vector2(0.34, 0.46), _hash(f * 3 + 2) < 0.75, frame, stone)
+		_window(Vector3(w * 0.5 + jetty + 0.05, y + FLOOR_H * 0.55, 0), PI / 2, Vector2(0.32, 0.44), _hash(f * 3 + 3) < 0.5, frame, stone)
+		_window(Vector3(-w * 0.5 - jetty - 0.05, y + FLOOR_H * 0.55, 0), -PI / 2, Vector2(0.32, 0.44), _hash(f * 3 + 4) < 0.5, frame, stone)
+		y += FLOOR_H
+	_door(Vector3(-w * 0.22, plinth, d * 0.5 + 0.04), 0.5, 1.0)
+	var rise := 1.15 + 0.1 * float(v % 2)
+	_roof(w + 0.2, d + 0.2, rise, y, "roof", plaster, 0.28)
+	_chimney(Vector3(w * 0.3, y + rise * 0.4, -d * 0.15), 0.9, v % 2 == 0)
+	# fioriera sotto la finestra e un barile o una panca accanto alla porta
+	b.box("planks", Vector3(0.5, 0.12, 0.16), Vector3(w * 0.22, plinth + FLOOR_H * 0.55 - 0.36, d * 0.5 + 0.13))
+	for k in 4: b.sphere("cloth", 0.05, Vector3(w * 0.22 - 0.18 + k * 0.12, plinth + FLOOR_H * 0.55 - 0.27, d * 0.5 + 0.13), [Color("#b8475a"), Color("#d9b04a"), Color("#e8e0d0"), Color("#8b5fbf")][(k + v) % 4], Vector3.ONE, 5, 3)
+	if v % 2 == 0: _barrel(Vector3(-w * 0.5 - 0.1, 0, d * 0.5 + 0.25), 0.85)
+	else: _bench(Vector3(w * 0.22, 0, d * 0.5 + 0.45))
+	if base_level >= 2: _wall_lantern(Vector3(-w * 0.22 + 0.45, plinth + 1.1, d * 0.5 + 0.05), 0.0, false)
+	top_height = y + rise + 0.2
+	door_local = Vector3(-w * 0.22, 0, d * 0.5 + 0.7)
 
 ## Cantiere: fondamenta tracciate, ponteggio, pile di legname e pietre.
 func _build_plot() -> void:

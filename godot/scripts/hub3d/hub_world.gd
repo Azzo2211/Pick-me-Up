@@ -13,6 +13,7 @@ signal hero_clicked(hero_id: String)
 const BuildingModelScript := preload("res://scripts/hub3d/building_model.gd")
 const WaterShader := preload("res://scripts/hub3d/water.gdshader")
 const HubAgentScript := preload("res://scripts/hub3d/hub_agent.gd")
+const HubIslandsScript := preload("res://scripts/hub3d/hub_islands.gd")
 
 const PLAZA_RADIUS := 4.4
 const RING_RADIUS := 7.2
@@ -77,11 +78,18 @@ var selected_id := ""
 var time := 0.0
 var floaters: Array[Node3D] = []
 var road_segments: Array = []
+## Tratti di strada per tipo (spoke, gate, ring, apron, outer), per non scorrerli tutti.
+var _road_index: Dictionary = {}
 var _terrain_mesh: MeshInstance3D
 var active_sites: Dictionary = {}
 var _label_timer := 0.0
 var _decor_holder: Node3D
 var _wall_holder: Node3D
+## Isole della base (Lv.6, 8, 10) con i loro ponti.
+var islands: HubIslands
+var gate_road_nodes: Array[int] = []
+var _training_main_spots := 0
+var _decor_spinners: Array[Node3D] = []
 
 func _ready() -> void:
 	rng.seed = 424242
@@ -95,6 +103,9 @@ func _ready() -> void:
 	agent_root = _group("Agents")
 	fx_root = _group("Fx")
 	sky_root = _group("Sky")
+	islands = HubIslandsScript.new()
+	islands.setup(self)
+	add_child(islands)
 	_define_roads()
 	_build_cliffs()
 	_build_gate_platform()
@@ -157,6 +168,7 @@ func ground_height(p: Vector2) -> float:
 	if outside > 0.0:
 		hills = (noise.get_noise_2d(p.x, p.y) * 0.5 + 0.5) * 1.1 * outside
 		hills *= smoothstep(0.8, 2.6, _road_distance(p, "gate"))
+		if islands != null and not islands.ids.is_empty(): hills *= smoothstep(0.8, 2.6, _road_distance(p, "outer"))
 	var rim := -pow(clampf((r - (edge - 2.4)) / 2.4, 0.0, 1.0), 2.0) * 0.7
 	return hills + rim
 
@@ -192,11 +204,34 @@ func _define_roads() -> void:
 		var s: Vector2 = SITES[id]
 		var dir := polar(s.x, 1.0)
 		road_segments.append([dir * RING_RADIUS, dir * (s.y - 2.2), 1.0 if narrow else 1.3, "apron:" + id])
+	# sentiero esterno verso le isole: gira fuori dalle mura dalla strada del Portale
+	if islands != null:
+		for arc in islands.outer_arcs():
+			var a0: float = arc[0]
+			var a1: float = arc[1]
+			var arc_steps := maxi(1, int(ceil((a1 - a0) / 6.0)))
+			for i in arc_steps:
+				road_segments.append([polar(lerpf(a0, a1, float(i) / arc_steps), HubIslands.OUTER_PATH_RADIUS), polar(lerpf(a0, a1, float(i + 1) / arc_steps), HubIslands.OUTER_PATH_RADIUS), 1.2, "outer"])
+		for id in islands.ids:
+			var a := float(HubIslands.LAYOUT[id].angle)
+			road_segments.append([polar(a, HubIslands.OUTER_PATH_RADIUS), polar(a, island_radius(deg_to_rad(a)) - 1.2), 1.3, "outer"])
+	# centro e raggio di ogni tratto: servono a scartare in fretta quelli lontani
+	_road_index.clear()
+	for seg in road_segments:
+		var a2: Vector2 = seg[0]
+		var b2: Vector2 = seg[1]
+		seg.append((a2 + b2) * 0.5)
+		seg.append(a2.distance_to(b2) * 0.5 + float(seg[2]) * 0.5)
+		var group := str(seg[3]).get_slice(":", 0)
+		if not _road_index.has(group): _road_index[group] = []
+		_road_index[group].append(seg)
 
 func _road_distance(p: Vector2, kinds: String = "") -> float:
 	var best := 99.0
-	for seg in road_segments:
-		if not kinds.is_empty() and not str(seg[3]).begins_with(kinds): continue
+	var list: Array = road_segments if kinds.is_empty() else _road_index.get(kinds, [])
+	for seg in list:
+		# limite inferiore della distanza: se è già peggio del migliore, salta il tratto
+		if p.distance_to(seg[4]) - float(seg[5]) > best: continue
 		var d := Geometry2D.get_closest_point_to_segment(p, seg[0], seg[1]).distance_to(p) - float(seg[2]) * 0.5
 		best = minf(best, d)
 	return best
@@ -275,6 +310,7 @@ func _terrain_mask(p: Vector2, base_level: int) -> Color:
 		paved = maxf(paved, smoothstep(2.6, 2.2, r))
 	# strade
 	for seg in road_segments:
+		if p.distance_to(seg[4]) - float(seg[5]) > 0.3: continue
 		var kind := str(seg[3])
 		var d := Geometry2D.get_closest_point_to_segment(p, seg[0], seg[1]).distance_to(p)
 		var w := float(seg[2]) * 0.5
@@ -285,6 +321,7 @@ func _terrain_mask(p: Vector2, base_level: int) -> Color:
 			"spoke": stone = base_level >= 2
 			"gate": stone = base_level >= 2 and r < WALL_RADIUS + 0.5 or base_level >= 4
 			"ring": stone = base_level >= 3
+			"outer": stone = base_level >= 9
 			_: stone = base_level >= 3
 		if stone: paved = maxf(paved, m)
 		else: dirt = maxf(dirt, m)
@@ -648,6 +685,7 @@ func _blocked(p: Vector2, clearance: float) -> bool:
 	if p.distance_to(polar(FOUNTAIN.x, FOUNTAIN.y)) < 1.6 + clearance: return true
 	var edge_dir := pond.normalized()
 	if Geometry2D.get_closest_point_to_segment(p, pond, edge_dir * island_radius(POND_ANGLE)).distance_to(p) < 0.8 + clearance: return true
+	if islands != null and islands.blocks_main(p, clearance): return true
 	return false
 
 func _build_vegetation() -> void:
@@ -756,6 +794,7 @@ func _build_sky_dressing() -> void:
 				trees.append(NatureKit.placement(Vector3(r.randf_range(-1.2, 1.2) * s, 0.25 * s, r.randf_range(-1.2, 1.2) * s), s * 0.55, r.randf() * TAU))
 			NatureKit.scatter(islet, "conifer", i % 4, trees, false)
 		islet.set_meta("bob", islet.position.y)
+		islet.set_meta("islet", true)
 		floaters.append(islet)
 
 # =============================================================================
@@ -844,6 +883,11 @@ func _build_walls(base_level: int) -> void:
 			b.cone_roof("roof", 1.4, 1.9, 3.75, Color.WHITE, 12, tpos)
 			b.box("rune", Vector3(0.08, 0.6, 0.02), tpos + Vector3(0, 2.2, 0) - Vector3(tp.x, 0, tp.y).normalized() * 1.0, Color.WHITE, Vector3(0, atan2(tp.x, tp.y), 0))
 			if base_level >= 5: b.box("cloth", Vector3(0.05, 1.1, 0.55), tpos + Vector3(0, 2.4, 0) - Vector3(tp.x, 0, tp.y).normalized() * 1.08 + Vector3(-tp.y, 0, tp.x).normalized() * 0.5, Color("#7a5a20"), Vector3(0, atan2(tp.x, tp.y), 0))
+			# fuochi azzurri sopra le torri (Lv.9+)
+			if base_level >= 9:
+				b.cylinder("metal", 0.06, 0.06, 0.5, tpos + Vector3(0, 5.85, 0), Color("#2b2a28"), 6)
+				b.cylinder("metal", 0.26, 0.14, 0.16, tpos + Vector3(0, 6.15, 0), Color("#2b2a28"), 10)
+				b.sphere("rune", 0.22, tpos + Vector3(0, 6.32, 0), Color.WHITE, Vector3(1.0, 1.4, 1.0), 8, 5)
 	b.instance(_wall_holder)
 
 func _build_decor(base_level: int) -> void:
@@ -851,6 +895,7 @@ func _build_decor(base_level: int) -> void:
 	for f in floaters.duplicate():
 		if f.has_meta("decor"):
 			floaters.erase(f)
+	_decor_spinners.clear()
 	_decor_holder = Node3D.new()
 	_decor_holder.name = "TownDecor"
 	decor_root.add_child(_decor_holder)
@@ -922,6 +967,8 @@ func _build_decor(base_level: int) -> void:
 			b.cone("metal", 0.14, 0.12, spot + Vector3(0, 2.0, 0), Color("#2b2a28"), 4)
 			if base_level >= 3 and lamp_count % 3 == 0:
 				b.box("cloth", Vector3(0.03, 0.55, 0.28), spot + Vector3(0, 1.35, 0.15), Color("#6e2a2a") if base_level < 5 else Color("#7a5a20"))
+			# lampioni a rune (Lv.7+): un piccolo cristallo azzurro sopra ogni lampione
+			if base_level >= 7: b.sphere("rune", 0.06, spot + Vector3(0, 2.13, 0), Color.WHITE, Vector3(0.7, 1.6, 0.7), 4, 2)
 		_light_pool(spot + Vector3(0, 0.04, 0), Color("#ffae5a"), 1.6, 0.32, _decor_holder)
 		lamp_count += 1
 	# panchine attorno alla piazza
@@ -995,6 +1042,24 @@ func _build_decor(base_level: int) -> void:
 			mi.set_meta("bob", mi.position.y)
 			mi.set_meta("decor", true)
 			floaters.append(mi)
+	# anelli di pietra sospesi attorno al Cristallo (Lv.7+)
+	if base_level >= 7:
+		for i in 3:
+			var rb := MeshBuilder.new()
+			rb.material("stone", WorldMaterials.stone("pale"))
+			rb.material("rune", WorldMaterials.glow(Color("#7fd2ff"), 2.4))
+			var radius := 1.6 + i * 0.32
+			var pieces := 10 + i * 2
+			for k in pieces:
+				if k % 5 == 4: continue
+				var a := TAU * (k + 0.5) / pieces
+				rb.box("stone", Vector3(0.2, 0.13, TAU * radius / pieces * 0.82), Vector3(cos(a), 0, sin(a)) * radius, Color.WHITE, Vector3(0, -a, 0))
+				if k % 2 == 0: rb.box("rune", Vector3(0.03, 0.05, 0.14), Vector3(cos(a), 0, sin(a)) * (radius + 0.105), Color.WHITE, Vector3(0, -a, 0))
+			var ring := rb.instance(_decor_holder, false)
+			ring.position = Vector3(0, 2.65, 0)
+			ring.rotation = Vector3(0.32 * (i - 1), 0, 0.22 * (1 - i) + 0.12)
+			ring.set_meta("spin", (0.18 + i * 0.07) * (-1.0 if i % 2 == 1 else 1.0))
+			_decor_spinners.append(ring)
 	if look.has("sky"): (look.sky as ShaderMaterial).set_shader_parameter("aurora", 1.0 if base_level >= 5 else 0.0)
 
 # =============================================================================
@@ -1006,6 +1071,10 @@ func refresh(state: RiftwardState) -> void:
 	var base_level := state.base_level()
 	var signature := ""
 	var level_changed := base_level != current_base_level
+	var island_ids := []
+	for island in state.base_islands(): island_ids.append(str(island.id))
+	var islands_changed := island_ids != islands.ids or (level_changed and not island_ids.is_empty())
+	if islands_changed: islands.ids = island_ids.duplicate()
 	var sites_now := {}
 	for id in SITES:
 		var status := ""
@@ -1020,14 +1089,17 @@ func refresh(state: RiftwardState) -> void:
 	active_sites = sites_now
 	if level_changed:
 		current_base_level = base_level
-	if level_changed or layout_changed:
+	if level_changed or layout_changed or islands_changed:
 		_define_roads()
 		_build_terrain(base_level)
 		_build_vegetation()
+	if islands_changed:
+		islands.rebuild(island_ids, base_level)
+		_update_island_labels()
 	if level_changed:
 		_build_walls(base_level)
 		_build_decor(base_level)
-	if signature != occupied_signature or level_changed:
+	if signature != occupied_signature or level_changed or islands_changed:
 		occupied_signature = signature
 		_build_navigation()
 		for agent in agents.values(): agent.reset_route()
@@ -1065,6 +1137,22 @@ func _place_building(id: String, status: String, base_level: int) -> void:
 # =============================================================================
 # Etichette e segnalazioni
 # =============================================================================
+
+## Nomi delle isole (non si cliccano: sono luoghi, non strutture).
+func _update_island_labels() -> void:
+	for id in HubIslands.LAYOUT:
+		var key := "isola:" + str(id)
+		var shown := islands.ids.has(id)
+		if shown and not labels.has(key):
+			_make_label(key, Vector3.ZERO, str(HubIslands.NAMES[id]))
+			labels[key].font_size = 17
+			labels[key].modulate = Color("#d9cbb0")
+		if not labels.has(key): continue
+		if shown:
+			labels[key].position = islands.label_position(id)
+			sublabels[key].position = labels[key].position
+			badges[key].position = labels[key].position
+		_set_label_visible(key, shown)
 
 func _make_label(id: String, pos: Vector3, text: String) -> void:
 	var label := Label3D.new()
@@ -1288,6 +1376,7 @@ func _build_navigation() -> void:
 	ring_nodes.clear()
 	wander_nodes.clear()
 	site_nodes.clear()
+	gate_road_nodes.clear()
 	# piazza: due anelli attorno al piedistallo
 	for i in 12:
 		var a := TAU * i / 12.0
@@ -1342,6 +1431,7 @@ func _build_navigation() -> void:
 		var node := _nav_add("gate_road_%d" % k, road_pts[k])
 		_nav_link(prev_gate, node)
 		prev_gate = node
+		gate_road_nodes.append(node)
 	# ingressi e posti di ogni struttura
 	for id in buildings:
 		var model: BuildingModel = buildings[id]
@@ -1370,6 +1460,52 @@ func _build_navigation() -> void:
 		var node := _nav_add("garden_%d" % int(g.x), Vector3(gp.x, 0, gp.y))
 		_nav_link(node, _nearest_of(ring_nodes, Vector3(gp.x, 0, gp.y).normalized() * RING_RADIUS))
 		wander_nodes.append(node)
+	_training_main_spots = site_nodes.get("training", {}).get("spots", []).size()
+	_build_island_navigation()
+
+## Sentiero esterno, ponti e isole. L'arena dei Campi aggiunge posti all'Addestramento,
+## le panchine delle Dimore posti per chi si riprende.
+func _build_island_navigation() -> void:
+	if islands == null or islands.ids.is_empty() or gate_road_nodes.is_empty(): return
+	var arc_nodes: Array[int] = []
+	for arc in islands.outer_arcs():
+		var a0: float = arc[0]
+		var a1: float = arc[1]
+		var steps := maxi(1, int(ceil((a1 - a0) / 5.0)))
+		var prev := -1
+		for i in steps + 1:
+			var a := lerpf(a0, a1, float(i) / steps)
+			var p := polar(a, HubIslands.OUTER_PATH_RADIUS)
+			var node := _nav_add("outer_%d" % int(round(fposmod(a, 360.0) * 10.0)), Vector3(p.x, ground_height(p), p.y))
+			_nav_link(prev, node)
+			prev = node
+			arc_nodes.append(node)
+	var join := polar(rad_to_deg(GATE_ANGLE), HubIslands.OUTER_PATH_RADIUS)
+	var join3 := Vector3(join.x, 0, join.y)
+	_nav_link(_nearest_of(gate_road_nodes, join3), _nearest_of(arc_nodes, join3))
+	for id in islands.ids:
+		var a := float(HubIslands.LAYOUT[id].angle)
+		var foot := polar(a, HubIslands.OUTER_PATH_RADIUS)
+		var prev := _nearest_of(arc_nodes, Vector3(foot.x, 0, foot.y))
+		var bridge: Dictionary = islands.bridges[id]
+		var start: Vector3 = bridge.start
+		var mid := (foot + Vector2(start.x, start.z)) * 0.5
+		var chain: Array[Vector3] = [Vector3(mid.x, ground_height(mid), mid.y), start + Vector3(0, 0.05, 0)]
+		for q in bridge.points: chain.append(q)
+		for k in chain.size():
+			var node := _nav_add("isle_%s_way_%d" % [id, k], chain[k])
+			_nav_link(prev, node)
+			prev = node
+		var nodes := islands.nav_nodes(id)
+		for name in nodes: _nav_add("isle_%s_%s" % [id, name], nodes[name])
+		_nav_link(prev, nav_points["isle_%s_entry" % id])
+		var plan: Dictionary = islands.plans[id]
+		for link in plan.links: _nav_link(nav_points["isle_%s_%s" % [id, link[0]]], nav_points["isle_%s_%s" % [id, link[1]]])
+		for name in plan.wander: wander_nodes.append(nav_points["isle_%s_%s" % [id, name]])
+		if site_nodes.has("training"):
+			for name in plan.train: site_nodes.training.spots.append(nav_points["isle_%s_%s" % [id, name]])
+		if site_nodes.has("dormitory"):
+			for name in plan.rest: site_nodes.dormitory.spots.append(nav_points["isle_%s_%s" % [id, name]])
 
 func _nearest_of(nodes: Array[int], pos: Vector3) -> int:
 	var best := -1
@@ -1398,6 +1534,10 @@ func node_position(node: int) -> Vector3:
 func facing_target_for(id: String, spot_index: int) -> Vector3:
 	var model: BuildingModel = buildings.get(id)
 	if model == null: return Vector3.ZERO
+	if id == "training" and islands != null and islands.ids.has("campi"):
+		# chi si allena nell'arena dell'Isola dei Campi guarda il centro dell'arena
+		var total: int = site_nodes.get("training", {}).get("spots", []).size()
+		if total > _training_main_spots and spot_index % total >= _training_main_spots: return islands.focus("campi") + Vector3(0, 1.0, 0)
 	if id == "training":
 		var dummies: Array = model.get_meta("dummies", [])
 		if spot_index < dummies.size(): return _to_world(model, dummies[spot_index] + Vector3(0, 0.5, 0))
@@ -1439,7 +1579,7 @@ func _sync_agents(state: RiftwardState) -> void:
 
 ## Pochi abitanti che animano il borgo: crescono con il livello della base.
 func _sync_villagers(base_level: int) -> void:
-	var wanted := 2 + base_level
+	var wanted := 2 + base_level + (islands.ids.size() * 2 if islands != null else 0)
 	while villagers.size() > wanted:
 		villagers.pop_back().queue_free()
 	while villagers.size() < wanted:
@@ -1450,6 +1590,30 @@ func _sync_villagers(base_level: int) -> void:
 		v.position = node_position(node) if node >= 0 else Vector3(0, 0, 4)
 		villagers.append(v)
 	for v in villagers: v.reset_route()
+
+## Verso dove guarda un eroe seduto a riprendersi: sulle panchine delle Dimore
+## verso la fontana, davanti al Dormitorio verso la strada.
+func rest_facing(pos: Vector3) -> Vector3:
+	if islands != null and islands.ids.has("dimore"):
+		var f := islands.focus("dimore")
+		if Vector2(pos.x - f.x, pos.z - f.z).length() < 3.5: return Vector3(f.x - pos.x, 0, f.z - pos.z)
+	if buildings.has("dormitory"):
+		var d: Vector3 = buildings.dormitory.position
+		return Vector3(pos.x - d.x, 0, pos.z - d.z)
+	return Vector3.FORWARD
+
+## Inquadratura iniziale: con le isole la camera si allontana per vederle tutte.
+func home_view() -> Dictionary:
+	var count := 0 if islands == null else islands.ids.size()
+	match count:
+		0: return {"target": Vector3(2.6, 0.0, -6.2), "distance": 80.0}
+		1: return {"target": Vector3(11.0, 0.0, -2.0), "distance": 86.0}
+		2: return {"target": Vector3(6.0, 0.0, 3.0), "distance": 94.0}
+	return {"target": Vector3(0.0, 0.0, -8.0), "distance": 118.0}
+
+## Fin dove si può spostare la camera.
+func view_radius() -> float:
+	return 26.0 if islands == null or islands.ids.is_empty() else 46.0
 
 func agent_for(hero_id: String) -> HubAgent:
 	return agents.get(hero_id)
@@ -1504,6 +1668,7 @@ func set_hovered(id: String) -> void:
 	_refresh_sublabels()
 
 func _label_color(id: String) -> Color:
+	if id.begins_with("isola:"): return Color("#d9cbb0")
 	return Color("#c9b99a") if building_states.get(id, "") == "plot" else Color("#f1e6cf")
 
 func set_selected(id: String) -> void:
@@ -1514,6 +1679,7 @@ func set_selected(id: String) -> void:
 
 func focus_position(id: String) -> Vector3:
 	if id == "crystal": return Vector3(0, 1.2, 0)
+	if id.begins_with("isola:") and islands != null and islands.ids.has(id.trim_prefix("isola:")): return islands.focus(id.trim_prefix("isola:")) + Vector3(0, 1.5, 0)
 	if id == "gate" and buildings.has(id): return buildings[id].position + Vector3(0, 3.6, 0)
 	if buildings.has(id): return buildings[id].position + Vector3(0, 1.4, 0)
 	return Vector3.ZERO
@@ -1530,6 +1696,8 @@ func _process(delta: float) -> void:
 				child.rotation.y = -a
 	for n in floaters:
 		if is_instance_valid(n): n.position.y = float(n.get_meta("bob")) + sin(time * 0.6 + n.position.x * 0.3) * 0.3
+	for n in _decor_spinners:
+		if is_instance_valid(n): n.rotation.y = time * float(n.get_meta("spin"))
 	for agent in agents.values():
 		agent.tick(delta)
 	for v in villagers:

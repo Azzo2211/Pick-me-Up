@@ -12,7 +12,7 @@ const HubWorldScript := preload("res://scripts/hub3d/hub_world.gd")
 const PITCH := deg_to_rad(42.0)
 const YAW := deg_to_rad(18.0)
 const MIN_DISTANCE := 9.0
-const MAX_DISTANCE := 105.0
+const MAX_DISTANCE := 130.0
 const HOME_TARGET := Vector3(2.6, 0.0, -6.2)
 const HOME_DISTANCE := 80.0
 
@@ -32,6 +32,10 @@ var hover_timer := 0.0
 var last_mouse := Vector2.ZERO
 var hovered_hero := ""
 var panel_width := 0.0
+## Inquadratura iniziale: cambia quando la base aggiunge isole (vedi HubWorld.home_view).
+var home_target := HOME_TARGET
+var home_distance := HOME_DISTANCE
+var _home_key := ""
 
 func _ready() -> void:
 	stretch = true
@@ -54,6 +58,20 @@ func _ready() -> void:
 
 func refresh(state: RiftwardState) -> void:
 	world.refresh(state)
+	var hv := world.home_view()
+	var key := "%s|%s" % [hv.target, hv.distance]
+	if key == _home_key: return
+	var first := _home_key.is_empty()
+	var at_home := target.distance_to(home_target) < 0.6 and absf(distance - home_distance) < 0.6
+	_home_key = key
+	home_target = hv.target
+	home_distance = hv.distance
+	if first:
+		target = home_target
+		distance = home_distance
+		_apply_camera()
+	elif at_home and world.selected_id.is_empty():
+		_animate_camera(home_target, home_distance)
 
 func _apply_camera() -> void:
 	var offset := Vector3(sin(YAW) * cos(PITCH), sin(PITCH), cos(YAW) * cos(PITCH)) * distance
@@ -62,7 +80,8 @@ func _apply_camera() -> void:
 
 func _clamp_target() -> void:
 	var flat := Vector2(target.x, target.z)
-	if flat.length() > 26.0: flat = flat.normalized() * 26.0
+	var limit := world.view_radius() if world != null else 26.0
+	if flat.length() > limit: flat = flat.normalized() * limit
 	target = Vector3(flat.x, target.y, flat.y)
 	distance = clampf(distance, MIN_DISTANCE, MAX_DISTANCE)
 
@@ -168,7 +187,7 @@ func focus_on(id: String, side_panel_px: float = 0.0) -> void:
 	world.set_selected(id)
 	panel_width = side_panel_px
 	var point := world.focus_position(id)
-	var focus_distance := 24.0 if id != "gate" else 34.0
+	var focus_distance := 34.0 if id == "gate" else 30.0 if id.begins_with("isola:") else 24.0
 	var right := Vector3(cos(YAW), 0, -sin(YAW))
 	var view_w := maxf(size.x, 1.0)
 	var half_width_world := focus_distance * tan(deg_to_rad(camera.fov) * 0.5) * (view_w / maxf(size.y, 1.0))
@@ -177,7 +196,7 @@ func focus_on(id: String, side_panel_px: float = 0.0) -> void:
 
 func reset_view() -> void:
 	world.set_selected("")
-	_animate_camera(HOME_TARGET, HOME_DISTANCE)
+	_animate_camera(home_target, home_distance)
 
 func _animate_camera(new_target: Vector3, new_distance: float) -> void:
 	_kill_tween()

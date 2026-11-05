@@ -15,7 +15,7 @@ The 3D world stays fantasy; the interface is the System that summoned the Master
 - Near-black blue panels, thin neon borders, cut corners and technical corner brackets. Accent colour by system: cyan for base/system windows, magenta for summoning, amber for resources and key actions, red for danger.
 - Fonts: Oxanium for titles and headings, Exo 2 for text (both SIL OFL, licences in `godot/assets/fonts`). Cinzel/Alegreya files are kept but no longer used by the UI.
 - Hero cards: neon frame in the rarity colour, rarity tag on top (COMMON, TRAINED, RARE, ELITE, EPIC, LEGEND, TRANSCEND), portrait, stars and name plate. The frame grows with rarity: 1★–2★ single line, 3★ double, 4★–5★ corner brackets and halo, 6★ pulsing halo with rising embers, 7★ animated iridescent frame with sparkles. 6★ and 7★ must be recognisable in half a second. Fallen heroes keep a grey card with "Caduto al Piano N".
-- Summoning is a full-screen event: the System opens a rift (spinning rings), the scene colour shifts toward the best rarity before any hero is shown (6★/7★ also get a System notice), a flash, then the cards flip one by one. "Salta" reveals everything at once.
+- L'evocazione è un evento a schermo intero: il Sistema strappa il Rift con uno squarcio verticale e fulmini (niente cerchi, decisione del proprietario 2026-11-05, #16), il colore della scena vira verso la rarità migliore prima che compaia un eroe (6★/7★ con un avviso del Sistema), un lampo, poi le carte escono dallo squarcio e si girano una alla volta. "Salta" rivela tutto subito.
 - **Animazioni di evocazione e uccisioni (2026-11-05, #15).** Evocazione: durante la carica il varco risucchia particelle; poi esplode con lampo, onda d'urto, schegge e scossa, e le carte escono dal varco volando al loro posto. Ogni carta si rivela in modo diverso per rarità: 1★–3★ veloci con poche scintille; 4★ attesa breve, fascio di luce verticale e aura; 5★ attesa più lunga (la carta trema e si carica), raggi, lampo dorato e stelline; 6★–7★ lampo forte e scossa, e il nome compare in alto. Le carte da 4★ in su restano circondate da un'aura. Sulle carte anche 4★ e 5★ si animano piano: riflesso che passa ogni pochi secondi, bagliori agli angoli (4★), polvere d'oro (5★). Battaglia: scintille sui colpi, numeri che nascono grandi e si assestano (i critici tremano), nemici uccisi che esplodono in schegge del Rift e poi si dissolvono in cenere; campioni e Guardiano con scritta, rallentatore e scossa; eroe caduto con rallentatore, bordo rosso, colonna di luce, particelle che salgono e scritta "CADUTO". Gli effetti non toccano la simulazione (generatore casuale separato).
 - Portraits are drawn in code as adult manhwa-style busts; colours come from the same deterministic appearance as the 3D model.
 
@@ -25,7 +25,8 @@ The base is a walled hamlet on a floating island in the Rift:
 - a ring street around the plaza, buildings facing the street, short paved aprons to each door;
 - a town wall that grows with the base, forest and meadows between the wall and the cliff edge, a pond whose stream falls off the island;
 - the Mission Gate on its own floating rock, a monumental stone arch with a dark swirling rift, reached by a chained stone bridge;
-- heroes and a few villagers visibly living there.
+- heroes and a few villagers visibly living there;
+- **isole della base** (Base Lv.6, 8 e 10; `godot/scripts/hub3d/hub_islands.gd`): zolle sospese ai lati e dietro l'isola principale (Campi a est, Dimore a ovest, Santuario a nord-ovest e più in alto), ognuna con la sua scogliera e un ponte di pietra (per il Santuario una scalinata). Dalla strada del Portale un sentiero gira fuori dalle mura fino ai ponti. La disposizione del borgo resta quella di sempre: le isole si aggiungono. Quando ci sono isole la camera iniziale si allontana per inquadrarle tutte.
 
 Avoid:
 - chibi heroes, pastel candy palettes, cartoon outlines;
@@ -35,8 +36,14 @@ Avoid:
 - copying exact compositions, architecture, UI, symbols, names or assets from reference IP.
 
 ## Facility progression
-- Building level N = N storeys (or an equivalent growth: the training yard's barracks, the rotunda's drums, the gate's rings and floating stones).
-- Level 1 buildings are modest; higher levels add floors, chimneys, jetties, lamps and magical details.
+Decisione del proprietario (2026-11-05, #16): gli edifici arrivano al Lv.10 senza diventare torri di piani impilati.
+- **Lv.1–3**: ogni livello aggiunge un piano (o l'equivalente: le baracche del cortile, i tamburi della rotonda, gli anelli e le pietre del Portale). Il Lv.1 è modesto.
+- **Lv.4**: il pianterreno viene rifatto in pietra con i cantonali chiari; lanterne alla porta. Addestramento: parapetto merlato; Fusione: peristilio di colonne attorno alla rotonda; Alchimia: contrafforti e ballatoio di legno; Armeria: scudi in facciata; Portale: obelischi con rune.
+- **Lv.5**: una torretta su un angolo posteriore, più alta del colmo. Laboratorio: torre dell'orologio; Magazzino: silo; Addestramento e Armeria: torri quadrate; Fusione: pinnacoli con la punta luminosa; Alchimia: torretta addossata; Portale: secondo anello che gira al contrario.
+- **Lv.6**: seconda torretta, abbaini, cresta di ferro sul colmo, pinnacoli dorati. Fusione: costoloni d'oro sulla cupola; Portale: due guardiani di pietra.
+- **Lv.7**: rune azzurre attorno all'edificio, sulle torri e ai lati della porta. Addestramento e Portale: cerchio di rune a terra.
+- **Lv.8**: cristalli del Nexus sospesi attorno alla torre. **Lv.9**: aureola di luce che gira attorno al tetto della torre. **Lv.10**: il tetto della torre diventa una guglia con anelli d'oro, con un grande cristallo sospeso sopra e stendardi d'oro.
+- Per controllare un edificio a tutti i livelli: `godot/tests/building_lineup_runner.gd` (un'immagine per livello).
 
 ## Base level progression (whole area)
 | Base | Streets | Wall | Details |
@@ -46,6 +53,11 @@ Avoid:
 | 3 | every street cobbled | low stone curtain wall | banners, three stalls, fountain, slate roofs |
 | 4 | — | corner towers with blue rune lights | statues along the gate road |
 | 5 | — | gilded banners | floating lanterns, aurora in the sky |
+| 6 | sentiero fuori dalle mura fino al ponte | — | Isola dei Campi: arena all'aperto, campi di grano, mulino a vento, fienile |
+| 7 | lampioni a rune (cristallo azzurro in cima) | — | anelli di pietra sospesi attorno al Cristallo |
+| 8 | — | — | Isola delle Dimore: case degli eroi, piazzetta con fontana e panchine, campanile |
+| 9 | sentiero esterno lastricato | fuochi azzurri sopra le torri | lanterne sospese sopra i ponti e le isole |
+| 10 | scalinata sospesa fino al Santuario | — | Santuario del Nexus: tempio rotondo a cielo aperto con un frammento gigante del Nexus |
 
 ## Specific Level 1 notes
 - Training Center: raised stone yard with stairs, dummies, weapon racks, target and a small barracks.

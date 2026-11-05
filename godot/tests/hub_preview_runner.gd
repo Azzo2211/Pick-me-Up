@@ -53,18 +53,14 @@ func _run() -> void:
 	if args.has("--overview-only"):
 		quit(0)
 		return
-	view.focus_on("training", 0)
-	await create_timer(1.0).timeout
-	_capture("res://tests/captures/preview_%s_training.png" % tag)
-	view.focus_on("merging", 0)
-	await create_timer(1.0).timeout
-	_capture("res://tests/captures/preview_%s_merging.png" % tag)
-	view.focus_on("gate", 0)
-	await create_timer(1.0).timeout
-	_capture("res://tests/captures/preview_%s_gate.png" % tag)
-	view.focus_on("dormitory", 0)
-	await create_timer(1.0).timeout
-	_capture("res://tests/captures/preview_%s_dormitory.png" % tag)
+	# --shots=a,b,c: inquadrature da salvare (strutture o isole, es. isola:campi)
+	var shots := "training,merging,gate,dormitory"
+	for arg in args:
+		if arg.begins_with("--shots="): shots = arg.trim_prefix("--shots=")
+	for id in shots.split(","):
+		view.focus_on(id, 0)
+		await create_timer(1.0).timeout
+		_capture("res://tests/captures/preview_%s_%s.png" % [tag, id.replace("isola:", "isola_")])
 	quit(0)
 
 func _capture(path: String) -> void:

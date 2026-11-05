@@ -205,7 +205,7 @@ func tick(delta: float) -> void:
 			var flat := Vector3(focus.x - position.x, 0, focus.z - position.z)
 			if flat.length() > 0.05: _face(flat, delta)
 		elif goal_anim == "rest":
-			var away := Vector3(position.x, 0, position.z) - Vector3(world.buildings.dormitory.position.x, 0, world.buildings.dormitory.position.z) if world.buildings.has("dormitory") else Vector3.FORWARD
+			var away := world.rest_facing(position)
 			if away.length() > 0.05: _face(away, delta)
 		elif not forced and activity in ["idle", "party", ""]:
 			wait -= delta

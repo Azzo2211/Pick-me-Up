@@ -87,10 +87,14 @@ Locked reference values:
 - Shop (`GameState.SHOP_OFFERS`): only Gold and Gems, prices and quantities always shown, daily purchase limits (reset at midnight UTC). Purchases are refused when the Warehouse cap for that material is full. No item may undo risk (no revive, no death protection).
 
 ## Base, time and progression
-- Base level 1–5 (Nexus crystal). Requirements: Lv.2 Floor 3 + 40k Gold, Lv.3 Floor 6 + 120k, Lv.4 Floor 10 + 300k, Lv.5 Floor 15 + 700k.
-- Facility level ≤ base level. Upgrading a facility adds one storey.
-- Training: slots = 2 + level; XP accrues over real time (offline capped at 8 h); fatigue grows; stops at level cap or fatigue 90.
-- Dormitory: beds = 5 + 2 × (level − 1); restores fatigue and morale, heals injuries over time; heroes leave when fully recovered.
+- **Livelli della base 1–10** (Cristallo del Nexus). Decisione del proprietario (2026-11-05, #16): con 100 piani nella Torre il massimo non può essere 5. Requisiti: Lv.2 Piano 3 + 40k Oro, Lv.3 Piano 6 + 120k, Lv.4 Piano 10 + 300k, Lv.5 Piano 15 + 700k, Lv.6 Piano 25 + 1,2M, Lv.7 Piano 35 + 1,9M, Lv.8 Piano 50 + 3M, Lv.9 Piano 65 + 4,5M, Lv.10 Piano 80 + 6,5M (`GameState.BASE_LEVELS`, con una riga "look" che il pannello del Cristallo mostra come anteprima).
+- **Strutture fino al Lv.10**, sempre entro il livello della base (`FACILITY_MAX_LEVEL`). Costo del potenziamento: costo di partenza × 1,85 a livello fino al Lv.5, poi × 1,4 a livello. I livelli 1–3 aggiungono un piano; dal Lv.4 l'edificio cresce in altri modi (vedi `ART_DIRECTION.md`).
+- **Isole della base** (`GameState.BASE_ISLANDS`): dal Lv.6 la base aggiunge isole collegate da ponti, ognuna con un vantaggio:
+  - Isola dei Campi (Base Lv.6): +2 posti al Centro di Addestramento (chi è in più si allena nell'arena dell'isola);
+  - Isola delle Dimore (Base Lv.8): +6 letti nel Dormitorio (le panchine della piazzetta accolgono chi si riprende);
+  - Santuario del Nexus (Base Lv.10): +10% esperienza dalle missioni.
+- Training: slots = 2 + level (+2 con l'Isola dei Campi); XP accrues over real time (offline capped at 8 h); fatigue grows; stops at level cap or fatigue 90.
+- Dormitory: beds = 5 + 2 × (level − 1) (+6 con l'Isola delle Dimore); restores fatigue and morale, heals injuries over time; heroes leave when fully recovered.
 - XP curve: `30 + 14 × level^1.45`; level-ups add stats from the hidden growth value.
 - Fusion: three heroes of the same rarity, 1★–4★ → the core gains one star (so fusion reaches 5★ at most). 6★/7★ only through Transcendent summon or promotion.
 - Promotion at level cap with Stones: 1★→2★ 1, 2★→3★ 2, 3★→4★ 3, 4★→5★ 5, 5★→6★ 12 (Floor 30), 6★→7★ 30 (Floor 60).
