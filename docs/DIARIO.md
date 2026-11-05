@@ -11,10 +11,14 @@ Qui ogni Claude (o altro agente) che lavora sul repository scrive **cosa sta fac
 
 ---
 
-## 2026-11-05 · Design + Programming + Art + UI · Base fino al Lv.10, edifici e isole (#16) — in corso
-Richiesta del proprietario: non gli piace il cerchio iniziale dell'evocazione; più livelli per base ed edifici (il massimo non può essere 5 con 100 piani); se serve spazio, altre isole.
-- Sto toccando: `godot/scripts/ui/summon_event.gd` (inizio dell'evocazione), `godot/scripts/game_state.gd` (livelli base e strutture, isole), `godot/scripts/hub3d/building_model.gd` (livelli degli edifici), `godot/scripts/hub3d/hub_world.gd` e `hub_view.gd` (isole, camera), `godot/scripts/ui/facility_panels.gd` (solo testi e righe), test e documenti.
-- Per favore non modificate questi file finché la voce non passa a "fatto".
+## 2026-11-05 · Design + Programming + Art + UI · Base fino al Lv.10, edifici e isole (#16) — fatto
+Commit bfdc4e6, 1b4b769, d32d4ba, ea965f6. Richiesta del proprietario: non gli piace il cerchio iniziale dell'evocazione; più livelli per base ed edifici (il massimo non può essere 5 con 100 piani); se serve spazio, altre isole.
+- **Evocazione** (`godot/scripts/ui/summon_event.gd`): niente più cerchio; il Rift si apre con uno squarcio verticale e fulmini, le carte escono dallo squarcio.
+- **Regole** (`godot/scripts/game_state.gd`): base fino al Lv.10 (Piani 25/35/50/65/80), strutture fino al Lv.10 (costo +85% a livello fino al 5, poi +40%), tre isole con un vantaggio ciascuna (`BASE_ISLANDS`): Campi +2 posti in Addestramento, Dimore +6 letti nel Dormitorio, Santuario +10% esperienza. Pannelli e tutorial aggiornati (`facility_panels.gd`, `main.gd`).
+- **Edifici** (`godot/scripts/hub3d/building_model.gd`): piani solo fino al Lv.3, poi pietra (4), torretta (5), seconda torretta e abbaini (6), rune (7), cristalli (8), aureola (9), guglia d'oro (10). Galleria: `godot/tests/building_lineup_runner.gd`.
+- **Isole** (`godot/scripts/hub3d/hub_islands.gd`, agganci in `hub_world.gd`, `hub_view.gd`, `hub_agent.gd`): Campi (Lv.6), Dimore (Lv.8), Santuario (Lv.10) con ponti e sentiero fuori dalle mura; eroi e abitanti ci camminano. Base Lv.7 e Lv.9 con nuovi dettagli in piazza e sulle torri.
+- Test: 34 + 33 passati. Documenti: `GAME_SYSTEMS.md`, `ART_DIRECTION.md`.
+- Da controllare (QA): potenziare la base dal Lv.5 al Lv.10 con le Impostazioni di sviluppo e guardare che le isole compaiano e che la camera le inquadri; un eroe in allenamento oltre i posti del cortile deve andare nell'arena dei Campi.
 
 ## 2026-11-05 · Art + UI · Animazioni di uccisioni ed evocazioni (#15) — fatto
 Commit 0c48a8c. Richiesta del proprietario: migliorare le animazioni di tutto, soprattutto uccisioni in battaglia ed evocazioni (pull); prima gli piacevano solo le carte Trascendenti.
