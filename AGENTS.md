@@ -24,7 +24,8 @@ These are the shared engineering instructions for **Riftward: The Last Ascent**.
 - Work directly on `main`: no feature branches or pull requests unless the user asks for one.
 - Read `REPARTI.md` first and touch only the folders and files your department owns. Ask the owning department for changes elsewhere.
 - Always `git pull origin main` before committing, then commit and push. If a pull conflicts in a file you do not own, stop and ask instead of resolving it.
-- Before editing, inspect recent relevant files and recent commits on `main`.
+- Before editing, inspect recent relevant files and recent commits on `main`, and read `docs/DIARIO.md` (shared work journal, in Italian).
+- When you start and when you finish a piece of work, add or update your entry at the top of `docs/DIARIO.md` (owner request, 2026-11-05), so the other agents see what you are doing.
 - After implementation, summarize changed files, tests run, known risks, and follow-up work.
 - Never use destructive Git operations such as hard resets or cleaning untracked files unless the user explicitly authorizes them and the consequences are understood.
 
