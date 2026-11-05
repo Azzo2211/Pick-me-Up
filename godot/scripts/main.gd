@@ -593,7 +593,7 @@ func _show_onboarding() -> void:
 		["La base", "Tocca gli edifici per entrarci: Addestramento, Dormitorio, Fusione e il Portale delle Missioni."],
 		["La squadra", "Cinque eroi: due in prima linea, due al centro, uno in retroguardia. In missione decidono da soli; tu dai solo ordini generali."],
 		["Le perdite", "Un eroe che cade non torna. Allena, cura e fai riposare prima di salire la Torre."],
-		["La crescita", "Dal Cristallo del Nexus evochi nuovi eroi ed espandi la base: ogni livello aggiunge un piano agli edifici e apre nuovi cantieri."],
+		["La crescita", "Dal Cristallo del Nexus evochi nuovi eroi ed espandi la base: ogni livello permette di potenziare gli edifici, apre nuovi cantieri e dal Lv.6 aggiunge nuove isole."],
 	]
 	for step in steps:
 		var row := HBoxContainer.new()

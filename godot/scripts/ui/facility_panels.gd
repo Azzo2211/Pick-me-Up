@@ -295,17 +295,19 @@ func _picked(modal_ref: Array, callback: Callable, hero_id: String) -> void:
 func _build_upgrade_footer(id: String, footer: VBoxContainer) -> void:
 	var check := GS.can_upgrade_facility(id)
 	var level := GS.facility_level(id)
-	if level >= 5:
+	if level >= GS.FACILITY_MAX_LEVEL:
 		footer.add_child(UIKit.label("Livello massimo raggiunto.", 15, UIKit.MUTED, UIKit.body_bold()))
 		return
 	var cost := GS.facility_upgrade_cost(id)
-	var b := UIKit.button("Aggiungi un piano · Lv.%d  (%s Oro)" % [level + 1, GS.format_number(cost.gold)], _upgrade.bind(id), "gold", 0)
+	var b := UIKit.button("Potenzia · Lv.%d  (%s Oro)" % [level + 1, GS.format_number(cost.gold)], _upgrade.bind(id), "gold", 0)
 	b.disabled = not check.ok
 	footer.add_child(b)
 	if not check.ok: footer.add_child(UIKit.label(str(check.message), 14, UIKit.ROSE, UIKit.body_bold()))
 
 func _upgrade(id: String) -> void:
-	main.report(GS.upgrade_facility(id), "%s potenziato" % GS.FACILITIES[id].short, "La struttura cresce di un piano.")
+	var result := GS.upgrade_facility(id)
+	var text := "La struttura cresce di un piano." if int(result.get("level", 0)) <= 3 else "La struttura si fa più imponente."
+	main.report(result, "%s potenziato" % GS.FACILITIES[id].short, text)
 
 # =============================================================================
 # Addestramento
@@ -853,7 +855,12 @@ func _build_crystal(body: VBoxContainer) -> void:
 		body.add_child(eb)
 		if not emergency.ok: body.add_child(UIKit.label(str(emergency.message), 14, UIKit.MUTED, UIKit.body_bold()))
 	for pool in ["normal", "high", "transcendent"]: body.add_child(_pool_card(pool))
-	body.add_child(section("Espansione della base", "Base Lv.%d" % GS.base_level()))
+	body.add_child(section("Espansione della base", "Base Lv.%d di %d" % [GS.base_level(), GS.BASE_LEVELS.size()]))
+	var islands := GS.base_islands()
+	if not islands.is_empty():
+		var lines := []
+		for island in islands: lines.append("%s: %s" % [island.name, island.bonus])
+		body.add_child(info_card("Isole della base\n" + "\n".join(lines), "good"))
 	var next := GS.next_base_level()
 	if next.is_empty():
 		body.add_child(info_card("La base ha raggiunto il livello massimo.", "good"))
@@ -861,9 +868,13 @@ func _build_crystal(body: VBoxContainer) -> void:
 		var unlocks := []
 		for id in GS.FACILITY_ORDER:
 			if int(GS.FACILITIES[id].unlock) == int(next.level): unlocks.append(GS.FACILITIES[id].name)
-		var text := "Base Lv.%d: ogni struttura potrà crescere fino al Lv.%d (un piano in più)." % [int(next.level), int(next.level)]
+		var text := "Base Lv.%d: ogni struttura potrà salire fino al Lv.%d." % [int(next.level), mini(int(next.level), GS.FACILITY_MAX_LEVEL)]
 		if not unlocks.is_empty(): text += "\nNuovi cantieri: " + ", ".join(unlocks) + "."
-		text += "\nAnche il villaggio cresce: nuove case, strade lastricate, lampioni e stendardi."
+		var island := GS.next_island()
+		if not island.is_empty(): text += "\nNuova isola collegata da un ponte: %s. %s\nVantaggio: %s." % [island.name, island.description, island.bonus]
+		else:
+			var look := str(next.get("look", ""))
+			if not look.is_empty(): text += "\nIl borgo cambia: " + look.left(1).to_lower() + look.substr(1)
 		body.add_child(info_card(text))
 		body.add_child(UIKit.label("Requisiti: Piano %d completato · %s Oro" % [int(next.floor), GS.format_number(next.gold)], 15, UIKit.INK_SOFT, UIKit.body_bold()))
 		var check := GS.can_upgrade_base()
@@ -908,7 +919,10 @@ func _emergency() -> void:
 func _upgrade_base() -> void:
 	var result := GS.upgrade_base()
 	if result.ok:
-		main.toast("Base Lv.%d" % int(result.level), ("Nuovi cantieri: " + ", ".join(result.unlocked)) if not result.unlocked.is_empty() else "Gli edifici possono crescere di un piano.", "good")
+		var text := "Le strutture possono salire di un livello."
+		if not result.unlocked.is_empty(): text = "Nuovi cantieri: " + ", ".join(result.unlocked)
+		if not result.island.is_empty(): text = "Nuova isola: %s (%s)." % [result.island.name, result.island.bonus]
+		main.toast("Base Lv.%d" % int(result.level), text, "good")
 	else: main.toast("Non ancora", str(result.message), "warn")
 
 ## Evocazione: evento a schermo intero (vedi SummonEvent).

@@ -91,12 +91,28 @@ const TRAITS := ["Nervi saldi", "Istinto protettivo", "Passo leggero", "Tenace",
 
 # --- Base e strutture ---------------------------------------------------------
 ## Livelli della base. Ogni livello alza il livello massimo delle strutture e sblocca nuovi cantieri.
+## Con 100 piani nella Torre la base arriva al Lv.10 (decisione del proprietario, 2026-11-05):
+## dal Lv.6 si aggiungono isole collegate da ponti (vedi BASE_ISLANDS).
+## look = come cambia il borgo (testo per il pannello del Cristallo).
 const BASE_LEVELS := [
-	{"level": 1, "floor": 0, "gold": 0},
-	{"level": 2, "floor": 3, "gold": 40000},
-	{"level": 3, "floor": 6, "gold": 120000},
-	{"level": 4, "floor": 10, "gold": 300000},
-	{"level": 5, "floor": 15, "gold": 700000},
+	{"level": 1, "floor": 0, "gold": 0, "look": "Sentieri di terra, palizzata di legno e tetti di paglia."},
+	{"level": 2, "floor": 3, "gold": 40000, "look": "Piazza e strade principali lastricate, lampioni di ferro, una bancarella e una porta di pietra nella palizzata."},
+	{"level": 3, "floor": 6, "gold": 120000, "look": "Tutte le strade lastricate, mura di pietra, fontana, mercato e tetti di ardesia."},
+	{"level": 4, "floor": 10, "gold": 300000, "look": "Torri sulle mura con rune azzurre e statue lungo la strada del Portale."},
+	{"level": 5, "floor": 15, "gold": 700000, "look": "Stendardi dorati, lanterne che fluttuano sulla piazza e l'aurora nel cielo."},
+	{"level": 6, "floor": 25, "gold": 1200000, "look": "Prima isola nuova, collegata da un ponte."},
+	{"level": 7, "floor": 35, "gold": 1900000, "look": "Anelli di pietra sospesi attorno al Cristallo e lampioni a rune lungo le strade."},
+	{"level": 8, "floor": 50, "gold": 3000000, "look": "Seconda isola nuova, collegata da un ponte."},
+	{"level": 9, "floor": 65, "gold": 4500000, "look": "Lanterne sospese sopra i ponti e le isole, fuochi azzurri sulle torri."},
+	{"level": 10, "floor": 80, "gold": 6500000, "look": "Terza isola nuova, la più alta di tutte."},
+]
+## Livello massimo delle strutture (sempre entro il livello della base).
+const FACILITY_MAX_LEVEL := 10
+## Isole che la base aggiunge crescendo: livello della base che le porta e vantaggio.
+const BASE_ISLANDS := [
+	{"id": "campi", "level": 6, "name": "Isola dei Campi", "bonus": "+2 posti al Centro di Addestramento", "description": "Arena all'aperto, campi di grano e un mulino a vento."},
+	{"id": "dimore", "level": 8, "name": "Isola delle Dimore", "bonus": "+6 letti nel Dormitorio", "description": "Case degli eroi attorno a una piazzetta con il campanile."},
+	{"id": "santuario", "level": 10, "name": "Santuario del Nexus", "bonus": "+10% esperienza dalle missioni", "description": "Un tempio sospeso più in alto di tutto, con un frammento gigante del Nexus."},
 ]
 
 ## Catalogo strutture. unlock = livello base che rende disponibile il cantiere.
@@ -886,15 +902,34 @@ func facility_available(id: String) -> bool:
 	return not facility_built(id) and base_level() >= int(FACILITIES[id].unlock)
 
 func facility_max_level() -> int:
-	return base_level()
+	return mini(base_level(), FACILITY_MAX_LEVEL)
 
+## Costo del prossimo livello: cresce del 85% a livello fino al Lv.5, poi del 40%.
 func facility_upgrade_cost(id: String) -> Dictionary:
 	var level := facility_level(id)
-	return {"gold": roundi(float(FACILITIES[id].upgrade_cost) * pow(1.85, level - 1))}
+	var growth := pow(1.85, mini(level, 5) - 1) * pow(1.4, maxi(0, level - 5))
+	return {"gold": roundi(float(FACILITIES[id].upgrade_cost) * growth)}
+
+## Isole della base già aggiunte (in ordine).
+func base_islands() -> Array:
+	return BASE_ISLANDS.filter(func(island): return base_level() >= int(island.level))
+
+func has_island(id: String) -> bool:
+	for island in base_islands():
+		if str(island.id) == id: return true
+	return false
+
+## Isola che arriverà con il prossimo livello della base (vuoto se nessuna).
+func next_island() -> Dictionary:
+	var next := next_base_level()
+	if next.is_empty(): return {}
+	for island in BASE_ISLANDS:
+		if int(island.level) == int(next.level): return island
+	return {}
 
 func can_upgrade_facility(id: String) -> Dictionary:
 	if not facility_built(id): return {"ok": false, "message": "Struttura non costruita"}
-	if facility_level(id) >= 5: return {"ok": false, "message": "Livello massimo raggiunto"}
+	if facility_level(id) >= FACILITY_MAX_LEVEL: return {"ok": false, "message": "Livello massimo raggiunto"}
 	if facility_level(id) >= facility_max_level(): return {"ok": false, "message": "Serve la Base Lv.%d" % (facility_level(id) + 1)}
 	if not can_afford(facility_upgrade_cost(id)): return {"ok": false, "message": "Oro insufficiente"}
 	return {"ok": true, "message": ""}
@@ -904,7 +939,7 @@ func upgrade_facility(id: String) -> Dictionary:
 	if not check.ok: return check
 	pay(facility_upgrade_cost(id), "Potenziamento " + FACILITIES[id].name, "facility")
 	data.facilities[id].level = facility_level(id) + 1
-	add_event("BASE", "%s Lv.%d" % [FACILITIES[id].name, facility_level(id)], "La struttura cresce di un piano.", "good")
+	add_event("BASE", "%s Lv.%d" % [FACILITIES[id].name, facility_level(id)], "La struttura cresce di un piano." if facility_level(id) <= 3 else "La struttura si fa più imponente.", "good")
 	save_and_notify()
 	return {"ok": true, "level": facility_level(id)}
 
@@ -940,9 +975,15 @@ func upgrade_base() -> Dictionary:
 	var unlocked := []
 	for id in FACILITY_ORDER:
 		if int(FACILITIES[id].unlock) == int(next.level): unlocked.append(FACILITIES[id].name)
-	add_event("BASE", "Base Lv.%d" % int(next.level), ("Nuovi cantieri: " + ", ".join(unlocked)) if not unlocked.is_empty() else "Le strutture possono crescere di un piano.", "good")
+	var island := {}
+	for candidate in BASE_ISLANDS:
+		if int(candidate.level) == int(next.level): island = candidate
+	var text := "Le strutture possono crescere di un livello."
+	if not unlocked.is_empty(): text = "Nuovi cantieri: " + ", ".join(unlocked)
+	if not island.is_empty(): text = "Nuova isola collegata da un ponte: %s (%s)." % [str(island.name), str(island.bonus)]
+	add_event("BASE", "Base Lv.%d" % int(next.level), text, "good")
 	save_and_notify()
-	return {"ok": true, "level": int(next.level), "unlocked": unlocked}
+	return {"ok": true, "level": int(next.level), "unlocked": unlocked, "island": island}
 
 func cleared_floor_count() -> int:
 	var count := 0
@@ -960,10 +1001,10 @@ func material_cap() -> int:
 # --- Assegnazioni (addestramento e riposo) -----------------------------------
 
 func training_slots() -> int:
-	return 2 + facility_level("training")
+	return 2 + facility_level("training") + (2 if has_island("campi") else 0)
 
 func dormitory_slots() -> int:
-	return 5 + 2 * (facility_level("dormitory") - 1)
+	return 5 + 2 * (facility_level("dormitory") - 1) + (6 if has_island("dimore") else 0)
 
 func assigned_to(facility: String) -> Array:
 	var output := []
@@ -1432,7 +1473,9 @@ func floor_rewards(floor_index: int, attempt: int, first_clear: bool) -> Diction
 	var retry_multiplier: float = max(0.35, 1.0 - max(0, attempt - 1) * 0.12)
 	# la Prova del Guardiano paga di più: è il muro di ogni scaglione
 	var trial_bonus := 1.6 if is_trial_floor(floor_index) else 1.0
-	var rewards := {"gold": roundi((7200 + floor_index * 2600) * retry_multiplier * trial_bonus), "xp": roundi((95 + floor_index * 34) * retry_multiplier * trial_bonus)}
+	# Santuario del Nexus (isola della Base Lv.10): +10% esperienza
+	var xp_bonus := 1.1 if has_island("santuario") else 1.0
+	var rewards := {"gold": roundi((7200 + floor_index * 2600) * retry_multiplier * trial_bonus), "xp": roundi((95 + floor_index * 34) * retry_multiplier * trial_bonus * xp_bonus)}
 	if first_clear:
 		rewards.gems = (120 + floor_index * 10) * (2 if is_trial_floor(floor_index) else 1)
 		if is_trial_floor(floor_index): rewards.stones = 1 + floor_index / 20
@@ -1555,7 +1598,7 @@ func dev_max_base() -> void:
 	data.world.base_level = BASE_LEVELS.size()
 	for id in FACILITY_ORDER:
 		data.facilities.get_or_add(id, {"level": 0})
-		data.facilities[id].level = mini(5, facility_max_level())
+		data.facilities[id].level = mini(FACILITY_MAX_LEVEL, facility_max_level())
 	add_event("DEV", "Base al massimo", "Base Lv.%d, tutte le strutture costruite e potenziate." % base_level(), "warn")
 	save_and_notify()
 

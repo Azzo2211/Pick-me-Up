@@ -23,6 +23,7 @@ func _initialize() -> void:
 	_test("dormitorio: recupero e guarigione", _test_dormitory)
 	_test("espansione base e cantieri", _test_base_upgrade)
 	_test("livello strutture limitato dal livello base", _test_facility_cap)
+	_test("base fino al Lv.10, strutture fino al Lv.10, isole e vantaggi", _test_base_islands)
 	_test("descriptor persistente e piani procedurali", _test_stage_persistence)
 	_test("torre: scaglioni di 5 piani e Prova del Guardiano", _test_tower_tiers)
 	_test("migrazione salvataggi v2", _test_legacy_migration)
@@ -205,6 +206,36 @@ func _test_facility_cap() -> Array:
 	valid = valid and not game.upgrade_facility("training").ok
 	game.free()
 	return [valid, "Il livello struttura deve restare entro il livello base"]
+
+func _test_base_islands() -> Array:
+	var game := _fresh("islands-seed")
+	var valid: bool = game.BASE_LEVELS.size() == 10 and game.FACILITY_MAX_LEVEL == 10 and game.base_islands().is_empty()
+	# i livelli 6–10 chiedono piani sempre più alti e più oro
+	for i in range(1, game.BASE_LEVELS.size()):
+		valid = valid and int(game.BASE_LEVELS[i].floor) > int(game.BASE_LEVELS[i - 1].floor) and int(game.BASE_LEVELS[i].gold) > int(game.BASE_LEVELS[i - 1].gold)
+	var slots_before := game.training_slots()
+	var beds_before := game.dormitory_slots()
+	var xp_before := int(game.floor_rewards(30, 1, true).xp)
+	game.data.world.gold = 10000000
+	game.debug_clear_floors(25)
+	for k in 5: game.upgrade_base()
+	valid = valid and game.base_level() == 6 and game.has_island("campi") and not game.has_island("dimore")
+	valid = valid and game.training_slots() == slots_before + 2 and game.dormitory_slots() == beds_before
+	valid = valid and str(game.next_island().get("id", "")) == ""
+	# una struttura arriva al Lv.6 solo con la base al Lv.6, e mai oltre il 10
+	for k in 5: valid = valid and game.upgrade_facility("training").ok
+	valid = valid and game.facility_level("training") == 6 and not game.upgrade_facility("training").ok
+	var cost_5 := int(game.FACILITIES.training.upgrade_cost) * pow(1.85, 4)
+	game.data.world.base_level = 10
+	valid = valid and game.has_island("dimore") and game.has_island("santuario") and game.dormitory_slots() == beds_before + 6
+	valid = valid and int(game.floor_rewards(30, 1, true).xp) == roundi(xp_before * 1.1)
+	valid = valid and int(game.facility_upgrade_cost("training").gold) == roundi(cost_5 * 1.4)
+	for k in 4: valid = valid and game.upgrade_facility("training").ok
+	valid = valid and game.facility_level("training") == 10 and not game.upgrade_facility("training").ok
+	game.data.world.base_level = 7
+	valid = valid and str(game.next_island().get("id", "")) == "dimore"
+	game.free()
+	return [valid, "Livelli della base, strutture fino al 10 o isole non conformi"]
 
 func _test_stage_persistence() -> Array:
 	var game := _fresh("stage-seed")
@@ -432,7 +463,7 @@ func _test_dev_tools() -> Array:
 	valid = valid and game.cleared_floor_count() == game.MAX_FLOOR and game.summon_pool_unlocked("transcendent")
 	game.dev_max_base()
 	valid = valid and game.base_level() == game.BASE_LEVELS.size()
-	for id in game.FACILITY_ORDER: valid = valid and game.facility_level(id) == 5
+	for id in game.FACILITY_ORDER: valid = valid and game.facility_level(id) == game.FACILITY_MAX_LEVEL
 	var top := game.dev_spawn_hero(7)
 	game.dev_max_heroes()
 	valid = valid and int(top.current_rarity) == 7 and int(top.level) == game.level_cap(top)
