@@ -652,7 +652,7 @@ func _build_anime(look_in: Dictionary, role: String, rarity: int, outfit: String
 func _build_kit(look: Dictionary, role: String, rarity: int, outfit: String, prop: String) -> void:
 	var fem: bool = look.get("fem", false)
 	# il modello dell'utente è un uomo: le donne con lo stesso vestito restano dal kit
-	if not fem and CharacterKitScript.has_user_body(outfit) and _build_user_body(look, role, outfit, prop): return
+	if not fem and CharacterKitScript.has_user_body(outfit) and _build_user_body(look, role, rarity, outfit, prop): return
 	var height := clampf(float(look.get("height", 1.0)), 0.93, 1.07)
 	if int(look.get("age", 28)) < 18: height *= 0.97
 	# le articolazioni restano quelle del kit: le corporature sono chiavi di forma
@@ -694,7 +694,7 @@ func _build_kit(look: Dictionary, role: String, rarity: int, outfit: String, pro
 ## tools/character_kit/import_user_model.py): colori dipinti nella texture e scheletro
 ## con gli stessi nomi del kit, ma in posa a T. Le animazioni restano quelle di tutti:
 ## ogni osso riceve la rotazione del suo perno corretta da _bone_fix.
-func _build_user_body(look: Dictionary, role: String, outfit: String, prop: String) -> bool:
+func _build_user_body(look: Dictionary, role: String, rarity: int, outfit: String, prop: String) -> bool:
 	var inst := CharacterKitScript.user_body(outfit)
 	if inst == null: return false
 	var found := inst.find_children("*", "Skeleton3D", true, false)
@@ -719,6 +719,7 @@ func _build_user_body(look: Dictionary, role: String, outfit: String, prop: Stri
 			mi.set_surface_override_material(s, _painted_material(mi.mesh.surface_get_material(s)))
 		mi.material_overlay = _flash()
 		_meshes.append(mi)
+	_user_hair(look, outfit, CharacterKitScript.palette(look, outfit, rarity))
 	if role == "Villager":
 		attack_style = "melee"
 	elif not prop.is_empty():
@@ -727,6 +728,38 @@ func _build_user_body(look: Dictionary, role: String, outfit: String, prop: Stri
 		_class_weapon(role, look)
 	_finish()
 	return true
+
+## Come mettere i capelli del kit sulla testa calva del modello dell'utente, nello
+## spazio dell'osso della testa: la sua testa è più piccola di quella del kit e,
+## come tutto il modello, schiacciata davanti-dietro.
+static var user_hair_fit := {"guard": {"pos": Vector3(0.0, 0.001, 0.01), "scale": Vector3(0.84, 0.9, 0.68)}}
+
+## Capelli dell'eroe (stesso taglio e colore di sempre) sul modello dell'utente.
+func _user_hair(look: Dictionary, outfit: String, pal: Array) -> void:
+	var kind := str(look.get("hair_kind", "short"))
+	var fit: Dictionary = user_hair_fit.get(outfit, {})
+	if kind == "none" or fit.is_empty(): return
+	var mesh := CharacterKitScript.part("hair_" + kind)
+	var holder := _bone_holder("head")
+	if mesh == null or holder == null: return
+	var place := Node3D.new()
+	place.name = "UserHair"
+	place.position = fit.pos
+	place.scale = fit.scale
+	holder.add_child(place)
+	var hair_col: Color = look.get("hair", Color("#3a2a20"))
+	var hm := ShaderMaterial.new()
+	hm.shader = HairShader
+	hm.set_shader_parameter("hair_color", hair_col)
+	hm.set_shader_parameter("tie_color", pal[CharacterKitScript.ACCENT] as Color)
+	hm.next_pass = _kit_line(hair_col)
+	var mi := MeshInstance3D.new()
+	mi.name = "Hair"
+	mi.mesh = mesh
+	mi.material_override = hm
+	mi.material_overlay = _flash()
+	place.add_child(mi)
+	_meshes.append(mi)
 
 ## Dalla posa a T alla posa del rig: braccia giù (aperte di USER_ARM_OPEN), la mano
 ## segue l'avambraccio (non ha figli). Le gambe restano come nel modello (un po'
