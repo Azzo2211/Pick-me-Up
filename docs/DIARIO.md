@@ -11,6 +11,11 @@ Qui ogni Claude (o altro agente) che lavora sul repository scrive **cosa sta fac
 
 ---
 
+## 2026-11-05 · Design + Programming + Art + UI · Base fino al Lv.10, edifici e isole (#16) — in corso
+Richiesta del proprietario: non gli piace il cerchio iniziale dell'evocazione; più livelli per base ed edifici (il massimo non può essere 5 con 100 piani); se serve spazio, altre isole.
+- Sto toccando: `godot/scripts/ui/summon_event.gd` (inizio dell'evocazione), `godot/scripts/game_state.gd` (livelli base e strutture, isole), `godot/scripts/hub3d/building_model.gd` (livelli degli edifici), `godot/scripts/hub3d/hub_world.gd` e `hub_view.gd` (isole, camera), `godot/scripts/ui/facility_panels.gd` (solo testi e righe), test e documenti.
+- Per favore non modificate questi file finché la voce non passa a "fatto".
+
 ## 2026-11-05 · Art + UI · Animazioni di uccisioni ed evocazioni (#15) — fatto
 Commit 0c48a8c. Richiesta del proprietario: migliorare le animazioni di tutto, soprattutto uccisioni in battaglia ed evocazioni (pull); prima gli piacevano solo le carte Trascendenti.
 - **Evocazione** (`godot/scripts/ui/summon_event.gd`): il varco risucchia particelle e poi esplode (lampo, onda d'urto, schegge, scossa); le carte escono dal varco e volano al loro posto; rivelazione diversa per rarità (tabelle `ANTICIPATION`, `AFTER`, `BURST` in cima al file): da 4★ fascio di luce e aura, da 5★ attesa con la carta che trema, raggi e lampo, da 6★ scossa forte e nome in alto.
