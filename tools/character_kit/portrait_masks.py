@@ -1,4 +1,6 @@
-"""Maschere dei ritratti dipinti: capelli (rosso) e iridi (verde), più la luminosità dipinta.
+"""Maschere dei ritratti dipinti: capelli (rosso), iridi (verde) e distanza dal centro
+dell'iride (blu: 1 al centro, 0 al bordo; serve allo shader per pupilla e bordo dell'iride),
+più la luminosità dipinta.
 
 Servono allo shader di hero_portrait.gd per dare ai ritratti i colori di capelli e occhi
 del generatore personaggi. Questa versione (8/11/2026) rifà le iridi e pulisce i capelli:
@@ -12,7 +14,8 @@ del generatore personaggi. Questa versione (8/11/2026) rifà le iridi e pulisce 
   tinta media dei capelli dipinti, come li usa lo shader.
 
 Uso (dalla cartella del repository):
-    python tools/character_kit/portrait_masks.py MODELLO.task [p001,p002,...]
+    python tools/character_kit/portrait_masks.py MODELLO.task [p001,p002,...] [--occhi]
+--occhi rifà solo iridi e pupille e lascia i capelli come sono.
 MODELLO.task è face_landmarker.task di MediaPipe:
 https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task
 Serve: pip install mediapipe numpy scipy pillow
@@ -36,6 +39,16 @@ BAD_EYES = set("""
 p003 p005 p015 p027 p031 p041 p045 p050 p051 p054 p069 p078 p080 p082 p088 p099 p110 p113 p116 p120
 p129 p140 p143 p156 p157 p165 p171 p180 p190 p198 p200 p204 p206 p208 p215 p223 p224 p244 p247 p249 p257 p290 p296
 p062 p068 p138 p159 p254 p261
+""".split())
+
+# Volti con capelli ricolorabili controllati a occhio l'8/11/2026 (ognuno ricolorato nel colore
+# più lontano che HAIR_COMPAT permette): la maschera dei capelli prende anche bende, colletti,
+# pellicce, occhiali, orecchini grandi o pelle, oppure lascia metà capelli col colore dipinto
+# o fa puntini. Tengono i capelli dipinti (hair_ok falso): il gioco li dà solo a eroi con
+# capelli di quel colore.
+BAD_HAIR = set("""
+p029 p034 p047 p059 p060 p063 p066 p082 p107 p113 p121 p124 p127 p143 p146 p147
+p151 p172 p176 p200 p209 p217 p230 p233 p260 p264 p266 p271 p272 p273 p282 p295
 """.split())
 
 LEYE = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246]
@@ -152,6 +165,7 @@ def irises(lab, hair, lm, size):
     yy, xx = np.mgrid[0:h, 0:w]
     L = lab[..., 0]
     out = np.zeros((h, w), np.float32)
+    radial = np.zeros((h, w), np.float32)
     eyes = []
     for c0, contour in ((468, LEYE), (473, REYE)):
         c = lm[c0]
@@ -163,13 +177,14 @@ def irises(lab, hair, lm, size):
         disc = np.clip((1.0 - dist / r) / 0.18, 0, 1) * opening
         cover = 1 - np.clip((hair - 0.3) / 0.4, 0, 1)
         visible = disc * cover
+        radial = np.maximum(radial, np.clip(1.0 - dist / r, 0, 1) * (visible > 0.02))
         inside = (disc > 0.5) & (cover > 0.5)
         ring = (dist > 1.6 * r) & (dist < 3.4 * r) & (hair < 0.3) & (L > 0.45) & ~polygon(lm[contour], size, 2)
         dark = float(np.median(L[ring]) - np.median(L[inside])) if inside.sum() >= 6 and ring.sum() >= 20 else 0.0
         eyes.append(dict(r=r, open=height / max(width, 1e-3), area=float((disc > 0.5).sum()),
                          seen=float(inside.sum()), dark=dark))
         out = np.maximum(out, visible)
-    return ndi.gaussian_filter(out, 0.5), eyes
+    return ndi.gaussian_filter(out, 0.5), radial, eyes
 
 
 def stats(L, w, thr):
@@ -180,8 +195,10 @@ def stats(L, w, thr):
 
 
 def main():
-    model = sys.argv[1]
-    only = set(sys.argv[2].split(",")) if len(sys.argv) > 2 else None
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    eyes_only = "--occhi" in sys.argv
+    model = args[0]
+    only = set(args[1].split(",")) if len(args) > 1 else None
     detect = landmarker(model)
     manifest = json.loads((DIR / "portraits.json").read_text())
     counts = {"eyes": 0, "hair": 0}
@@ -196,11 +213,12 @@ def main():
         lm = detect(img)
         beast = "K" in e.get("flags", "")
         eyes = np.zeros(hair.shape, np.float32)
+        radial = np.zeros(hair.shape, np.float32)
         e["has_eyes"] = False
         if lm is not None:
-            if hair.max() > 0.5: hair = clean_hair(lab, hair, lm, img.size)
+            if hair.max() > 0.5 and not eyes_only: hair = clean_hair(lab, hair, lm, img.size)
             if not beast:
-                eyes, info = irises(lab, hair, lm, img.size)
+                eyes, radial, info = irises(lab, hair, lm, img.size)
                 usable = [i for i in info if i["open"] >= 0.15 and i["seen"] >= 14 and i["dark"] >= 0.07]
                 hidden = [i for i in info if i["seen"] < 0.35 * max(i["area"], 1)]
                 # un occhio solo colorato sembrerebbe eterocromia: l'altro dev'essere coperto
@@ -208,6 +226,8 @@ def main():
                     e["has_eyes"] = True
                 else:
                     eyes[:] = 0
+                    radial[:] = 0
+        if pid in BAD_HAIR: e["hair_ok"] = False
         L = lab[..., 0]
         if e["has_eyes"]:
             e["eye_lo"], e["eye_mid"], e["eye_hi"] = stats(L, eyes, 0.6)
@@ -221,6 +241,7 @@ def main():
         m = np.zeros(hair.shape + (3,), np.uint8)
         m[..., 0] = np.clip(hair * 255 + 0.5, 0, 255).astype(np.uint8)
         m[..., 1] = np.clip(eyes * 255 + 0.5, 0, 255).astype(np.uint8)
+        m[..., 2] = np.clip(radial * 255 + 0.5, 0, 255).astype(np.uint8)
         Image.fromarray(m).save(DIR / f"{pid}_mask.png", optimize=True)
     detect.close()
     manifest["masks"] = "tools/character_kit/portrait_masks.py (luminosità in OKLab L)"

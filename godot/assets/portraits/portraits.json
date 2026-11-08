@@ -167,7 +167,7 @@
 "w":432,
 "h":302,
 "hair_lo":0.224,
-"hair_hi":0.619,
+"hair_hi":0.618,
 "has_hair":true,
 "eye_lo":0.118,
 "eye_hi":0.721,
@@ -335,7 +335,7 @@
 "w":490,
 "h":286,
 "hair_lo":0.169,
-"hair_hi":0.593,
+"hair_hi":0.592,
 "has_hair":true,
 "eye_lo":0.122,
 "eye_hi":0.444,
@@ -502,7 +502,7 @@
 "cy":0.413,
 "w":428,
 "h":276,
-"hair_lo":0.251,
+"hair_lo":0.25,
 "hair_hi":0.885,
 "has_hair":true,
 "eye_lo":0.173,
@@ -638,7 +638,7 @@
 "has_eyes":false,
 "eye_mid":0.221,
 "hair_mid":0.32,
-"hair_ok":true,
+"hair_ok":false,
 "hair_a":0.0133,
 "hair_b":0.0022
 },
@@ -712,7 +712,7 @@
 "cy":0.408,
 "w":428,
 "h":240,
-"hair_lo":0.158,
+"hair_lo":0.159,
 "hair_hi":0.451,
 "has_hair":true,
 "eye_lo":0.228,
@@ -742,7 +742,7 @@
 "has_eyes":true,
 "eye_mid":0.528,
 "hair_mid":0.635,
-"hair_ok":true,
+"hair_ok":false,
 "hair_a":0.0215,
 "hair_b":0.0185
 },
@@ -878,7 +878,7 @@
 "cy":0.439,
 "w":426,
 "h":246,
-"hair_lo":0.263,
+"hair_lo":0.262,
 "hair_hi":0.838,
 "has_hair":true,
 "eye_lo":0.067,
@@ -1009,7 +1009,7 @@
 "has_eyes":true,
 "eye_mid":0.427,
 "hair_mid":0.562,
-"hair_ok":true,
+"hair_ok":false,
 "hair_a":0.0244,
 "hair_b":0.022
 },
@@ -1266,7 +1266,7 @@
 "has_eyes":true,
 "eye_mid":0.542,
 "hair_mid":0.552,
-"hair_ok":true,
+"hair_ok":false,
 "hair_a":0.023,
 "hair_b":0.0187
 },
@@ -1288,7 +1288,7 @@
 "has_eyes":false,
 "eye_mid":0.453,
 "hair_mid":0.645,
-"hair_ok":true,
+"hair_ok":false,
 "hair_a":0.0195,
 "hair_b":-0.0083
 },
@@ -1354,7 +1354,7 @@
 "has_eyes":true,
 "eye_mid":0.471,
 "hair_mid":0.555,
-"hair_ok":true,
+"hair_ok":false,
 "hair_a":0.0387,
 "hair_b":0.0157
 },
@@ -1420,7 +1420,7 @@
 "has_eyes":false,
 "eye_mid":0.367,
 "hair_mid":0.551,
-"hair_ok":true,
+"hair_ok":false,
 "hair_a":0.0228,
 "hair_b":0.0167
 },
@@ -1758,7 +1758,7 @@
 "has_eyes":false,
 "eye_mid":0.355,
 "hair_mid":0.434,
-"hair_ok":true,
+"hair_ok":false,
 "hair_a":0.0235,
 "hair_b":0.0168
 },
@@ -1773,7 +1773,7 @@
 "w":418,
 "h":240,
 "hair_lo":0.217,
-"hair_hi":0.655,
+"hair_hi":0.654,
 "has_hair":true,
 "eye_lo":0.204,
 "eye_hi":0.677,
@@ -1879,7 +1879,7 @@
 "eye_mid":0.325,
 "hair_mid":0.447,
 "hair_ok":true,
-"hair_a":0.0218,
+"hair_a":0.0219,
 "hair_b":0.0174
 },
 {
@@ -1987,7 +1987,7 @@
 "hair_mid":0.571,
 "hair_ok":false,
 "hair_a":0.0167,
-"hair_b":0.0243
+"hair_b":0.0244
 },
 {
 "id":"p094",
@@ -2006,7 +2006,7 @@
 "eye_hi":0.727,
 "has_eyes":true,
 "eye_mid":0.449,
-"hair_mid":0.322,
+"hair_mid":0.321,
 "hair_ok":true,
 "hair_a":0.0117,
 "hair_b":-0.0007
@@ -2042,7 +2042,7 @@
 "w":432,
 "h":226,
 "hair_lo":0.186,
-"hair_hi":0.585,
+"hair_hi":0.584,
 "has_hair":true,
 "eye_lo":0.195,
 "eye_hi":0.74,
@@ -2177,7 +2177,7 @@
 "eye_mid":0.271,
 "hair_mid":0.46,
 "hair_ok":true,
-"hair_a":0.038,
+"hair_a":0.0379,
 "hair_b":0.0246
 },
 {
@@ -2283,7 +2283,7 @@
 "has_eyes":false,
 "eye_mid":0.293,
 "hair_mid":0.326,
-"hair_ok":true,
+"hair_ok":false,
 "hair_a":0.0107,
 "hair_b":-0.004
 },
@@ -2412,7 +2412,7 @@
 "has_eyes":false,
 "eye_mid":0.454,
 "hair_mid":0.607,
-"hair_ok":true,
+"hair_ok":false,
 "hair_a":0.026,
 "hair_b":0.0249
 },
@@ -2580,7 +2580,7 @@
 "has_eyes":true,
 "eye_mid":0.568,
 "hair_mid":0.602,
-"hair_ok":true,
+"hair_ok":false,
 "hair_a":0.0234,
 "hair_b":0.0229
 },
@@ -2641,7 +2641,7 @@
 "has_eyes":false,
 "eye_mid":0.309,
 "hair_mid":0.635,
-"hair_ok":true,
+"hair_ok":false,
 "hair_a":0.039,
 "hair_b":0.0104
 },
@@ -2701,7 +2701,7 @@
 "has_hair":true,
 "has_eyes":false,
 "hair_mid":0.355,
-"hair_ok":true,
+"hair_ok":false,
 "hair_a":0.0146,
 "hair_b":0.0024
 },
@@ -2722,7 +2722,7 @@
 "eye_hi":0.731,
 "has_eyes":true,
 "eye_mid":0.505,
-"hair_mid":0.478,
+"hair_mid":0.477,
 "hair_ok":true,
 "hair_a":0.0188,
 "hair_b":0.01
@@ -2974,7 +2974,7 @@
 "hair_mid":0.487,
 "hair_ok":false,
 "hair_a":0.0366,
-"hair_b":0.0238
+"hair_b":0.0237
 },
 {
 "id":"p141",
@@ -3036,7 +3036,7 @@
 "has_eyes":false,
 "eye_mid":0.415,
 "hair_mid":0.621,
-"hair_ok":true,
+"hair_ok":false,
 "hair_a":0.0256,
 "hair_b":-0.0101
 },
@@ -3092,7 +3092,7 @@
 "has_hair":true,
 "has_eyes":false,
 "hair_mid":0.405,
-"hair_ok":true,
+"hair_ok":false,
 "hair_a":0.0196,
 "hair_b":0.0069
 },
@@ -3114,7 +3114,7 @@
 "has_eyes":true,
 "eye_mid":0.536,
 "hair_mid":0.552,
-"hair_ok":true,
+"hair_ok":false,
 "hair_a":0.0207,
 "hair_b":0.0117
 },
@@ -3129,7 +3129,7 @@
 "w":410,
 "h":236,
 "hair_lo":0.243,
-"hair_hi":0.82,
+"hair_hi":0.821,
 "has_hair":true,
 "eye_lo":0.06,
 "eye_hi":0.625,
@@ -3199,7 +3199,7 @@
 "has_eyes":true,
 "eye_mid":0.517,
 "hair_mid":0.616,
-"hair_ok":true,
+"hair_ok":false,
 "hair_a":0.0239,
 "hair_b":0.0182
 },
@@ -3651,7 +3651,7 @@
 "has_eyes":true,
 "eye_mid":0.419,
 "hair_mid":0.371,
-"hair_ok":true,
+"hair_ok":false,
 "hair_a":0.0144,
 "hair_b":0.0087
 },
@@ -3734,7 +3734,7 @@
 "has_eyes":true,
 "eye_mid":0.413,
 "hair_mid":0.449,
-"hair_ok":true,
+"hair_ok":false,
 "hair_a":0.0374,
 "hair_b":0.0236
 },
@@ -4240,7 +4240,7 @@
 "has_eyes":false,
 "eye_mid":0.213,
 "hair_mid":0.352,
-"hair_ok":true,
+"hair_ok":false,
 "hair_a":0.0181,
 "hair_b":0.0079
 },
@@ -4280,7 +4280,7 @@
 "eye_hi":0.773,
 "has_eyes":true,
 "eye_mid":0.569,
-"hair_mid":0.613,
+"hair_mid":0.614,
 "hair_ok":true,
 "hair_a":0.0267,
 "hair_b":0.0219
@@ -4326,7 +4326,7 @@
 "eye_mid":0.278,
 "hair_mid":0.561,
 "hair_ok":true,
-"hair_a":0.0197,
+"hair_a":0.0196,
 "hair_b":0.0012
 },
 {
@@ -4430,7 +4430,7 @@
 "has_hair":true,
 "has_eyes":false,
 "hair_mid":0.597,
-"hair_ok":true,
+"hair_ok":false,
 "hair_a":0.0309,
 "hair_b":-0.0104
 },
@@ -4464,7 +4464,7 @@
 "w":434,
 "h":298,
 "hair_lo":0.2,
-"hair_hi":0.631,
+"hair_hi":0.63,
 "has_hair":true,
 "eye_lo":0.25,
 "eye_hi":0.735,
@@ -4598,7 +4598,7 @@
 "has_eyes":false,
 "eye_mid":0.386,
 "hair_mid":0.654,
-"hair_ok":true,
+"hair_ok":false,
 "hair_a":0.0374,
 "hair_b":0.0108
 },
@@ -4806,7 +4806,7 @@
 "w":434,
 "h":270,
 "hair_lo":0.185,
-"hair_hi":0.63,
+"hair_hi":0.629,
 "has_hair":true,
 "eye_lo":0.227,
 "eye_hi":0.479,
@@ -4876,7 +4876,7 @@
 "has_eyes":false,
 "eye_mid":0.345,
 "hair_mid":0.393,
-"hair_ok":true,
+"hair_ok":false,
 "hair_a":0.0148,
 "hair_b":0.0048
 },
@@ -4937,7 +4937,7 @@
 "has_eyes":true,
 "eye_mid":0.416,
 "hair_mid":0.343,
-"hair_ok":true,
+"hair_ok":false,
 "hair_a":0.0134,
 "hair_b":0.003
 },
@@ -4952,7 +4952,7 @@
 "w":438,
 "h":246,
 "hair_lo":0.234,
-"hair_hi":0.711,
+"hair_hi":0.71,
 "has_hair":true,
 "eye_lo":0.129,
 "eye_hi":0.544,
@@ -5201,7 +5201,7 @@
 "w":434,
 "h":218,
 "hair_lo":0.201,
-"hair_hi":0.704,
+"hair_hi":0.703,
 "has_hair":true,
 "eye_lo":0.3,
 "eye_hi":0.699,
@@ -5314,7 +5314,7 @@
 "eye_mid":0.528,
 "hair_mid":0.415,
 "hair_ok":true,
-"hair_a":0.03,
+"hair_a":0.0299,
 "hair_b":0.0181
 },
 {
@@ -5509,7 +5509,7 @@
 "has_eyes":true,
 "eye_mid":0.458,
 "hair_mid":0.354,
-"hair_ok":true,
+"hair_ok":false,
 "hair_a":0.0151,
 "hair_b":0.0026
 },
@@ -5592,7 +5592,7 @@
 "has_eyes":true,
 "eye_mid":0.464,
 "hair_mid":0.319,
-"hair_ok":true,
+"hair_ok":false,
 "hair_a":0.0126,
 "hair_b":0.0028
 },
@@ -5636,7 +5636,7 @@
 "has_eyes":true,
 "eye_mid":0.411,
 "hair_mid":0.348,
-"hair_ok":true,
+"hair_ok":false,
 "hair_a":0.015,
 "hair_b":0.0068
 },
@@ -5741,7 +5741,7 @@
 "has_eyes":true,
 "eye_mid":0.416,
 "hair_mid":0.387,
-"hair_ok":true,
+"hair_ok":false,
 "hair_a":0.0178,
 "hair_b":0.0109
 },
@@ -5763,7 +5763,7 @@
 "has_eyes":true,
 "eye_mid":0.439,
 "hair_mid":0.618,
-"hair_ok":true,
+"hair_ok":false,
 "hair_a":0.0186,
 "hair_b":-0.0041
 },
@@ -5785,7 +5785,7 @@
 "has_eyes":true,
 "eye_mid":0.475,
 "hair_mid":0.418,
-"hair_ok":true,
+"hair_ok":false,
 "hair_a":0.0195,
 "hair_b":0.0144
 },
@@ -5819,7 +5819,7 @@
 "w":490,
 "h":282,
 "hair_lo":0.229,
-"hair_hi":0.573,
+"hair_hi":0.572,
 "has_hair":true,
 "eye_lo":0.237,
 "eye_hi":0.822,
@@ -5891,7 +5891,7 @@
 "eye_hi":0.711,
 "has_eyes":true,
 "eye_mid":0.426,
-"hair_mid":0.425,
+"hair_mid":0.424,
 "hair_ok":false,
 "hair_a":0.0295,
 "hair_b":0.0196
@@ -5977,7 +5977,7 @@
 "has_eyes":false,
 "eye_mid":0.321,
 "hair_mid":0.575,
-"hair_ok":true,
+"hair_ok":false,
 "hair_a":0.0249,
 "hair_b":0.0206
 },
@@ -6080,7 +6080,7 @@
 "eye_mid":0.495,
 "hair_mid":0.6,
 "hair_ok":false,
-"hair_a":0.0347,
+"hair_a":0.0348,
 "hair_b":0.009
 },
 {
@@ -6248,7 +6248,7 @@
 "has_eyes":true,
 "eye_mid":0.491,
 "hair_mid":0.524,
-"hair_ok":true,
+"hair_ok":false,
 "hair_a":0.0262,
 "hair_b":0.0214
 },

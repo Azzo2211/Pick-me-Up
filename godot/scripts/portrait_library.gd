@@ -113,7 +113,7 @@ static func shows_hair(id: String, family: String) -> bool:
 	return painted == family or painted == "bald" or hair_recolors_to(id, family)
 
 ## Cosa ricolorare nel ritratto `id` per un eroe con capelli `family`:
-## maschera (R capelli, G iridi), cosa accendere e la luminosità dipinta di capelli e occhi.
+## maschera (R capelli, G iridi, B distanza dal centro dell'iride), cosa accendere e la luminosità dipinta di capelli e occhi.
 static func recolor(id: String, family: String) -> Dictionary:
 	var e := entry(id)
 	if e.is_empty(): return {}

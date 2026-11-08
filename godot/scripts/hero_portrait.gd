@@ -32,8 +32,10 @@ static var _grey_material: ShaderMaterial
 ##   riflessi del colore nuovo (il tono medio si sposta per due terzi), la tinta è quella nuova
 ##   un po' smorzata, meno satura nei riflessi, con le piccole variazioni di colore del disegno;
 ##   ciò che è più chiaro dei capelli dipinti (pelle tra le ciocche) non si tocca;
-## - iridi: luminosità dipinta (si avvicina solo un po' a quella del colore nuovo, niente
-##   puntini che brillano) con la tinta nuova; pupilla, ciglia e riflessi bianchi restano.
+## - iridi: tinta nuova sulla parte chiara dell'iride dipinta (che si avvicina un po' alla
+##   luminosità del colore nuovo); ombra della palpebra e toni scuri restano scuri, al centro
+##   una pupilla scura e il bordo dell'iride più scuro (blu della maschera: distanza dal centro),
+##   ciglia e riflessi bianchi non si toccano: anche un colore acceso resta un occhio (8/11/2026).
 const RECOLOR_SHADER := """shader_type canvas_item;
 uniform sampler2D mask_tex : filter_linear_mipmap;
 uniform vec3 hair_color = vec3(0.3, 0.2, 0.15);
@@ -99,11 +101,25 @@ vec3 hair_lab(vec3 lab, vec3 t) {
 	return vec3(l, t.yz * f + (lab.yz - hair_ab) * 0.6);
 }
 
-// iridi: tinta nuova, luminosità dipinta; pupilla e ciglia (scure) e riflessi (chiari) restano
-vec3 eye_lab(vec3 lab, vec3 t) {
-	float l = clamp(lab.x + (t.x - eye_range.y) * 0.3, 0.0, 1.0);
-	float w = smoothstep(0.2, 0.4, l) * (1.0 - smoothstep(0.84, 0.95, lab.x));
-	return vec3(mix(lab.x, l, w), mix(lab.yz, t.yz * 0.82, w));
+// iridi: tinta nuova sulla parte chiara dell'iride dipinta; pupilla, bordo dell'iride e ombra
+// della palpebra (i toni più scuri dell'iride dipinta) restano scuri e poco colorati, anzi un po'
+// più scuri, così anche un colore acceso come l'oro si legge come un occhio e non come una luce;
+// ciglia quasi nere e riflessi bianchi non si toccano
+// rad: distanza dal centro dell'iride (blu della maschera, 1 al centro, 0 al bordo): pupilla
+// scura al centro e bordo dell'iride più scuro, come negli occhi disegnati
+vec3 eye_lab(vec3 lab, vec3 t, float rad) {
+	float lo = eye_range.x;
+	float mid = eye_range.y;
+	float hi = eye_range.z;
+	float k = smoothstep(lo + 0.2 * (mid - lo), mid + 0.45 * (hi - mid), lab.x);
+	float l = clamp(lab.x + (t.x - mid) * 0.35 * k - 0.07 * (1.0 - k), 0.0, 1.0);
+	vec2 ab = t.yz * 0.85 * (0.35 + 0.65 * k) * smoothstep(0.1, 0.25, lab.x);
+	float pupil = smoothstep(0.58, 0.7, rad);
+	float rim = 1.0 - smoothstep(0.08, 0.3, rad);
+	l = mix(l, min(l, 0.18), 0.82 * pupil) - 0.08 * rim * (1.0 - pupil);
+	ab *= (1.0 - 0.8 * pupil) * (1.0 - 0.35 * rim);
+	float keep = 1.0 - smoothstep(0.84, 0.95, lab.x);
+	return vec3(mix(lab.x, max(l, 0.0), keep), mix(lab.yz, ab, keep));
 }
 
 void fragment() {
@@ -118,7 +134,7 @@ void fragment() {
 		wh *= 1.0 - smoothstep(hair_range.z + 0.02, hair_range.z + 0.1, lab.x);
 		vec3 res = lab;
 		if (wh > 0.0) res = mix(res, hair_lab(lab, to_oklab(hair_color)), wh);
-		if (we > 0.0) res = mix(res, eye_lab(lab, to_oklab(eye_color)), we);
+		if (we > 0.0) res = mix(res, eye_lab(lab, to_oklab(eye_color), m.b), we);
 		rgb = from_oklab(res);
 	}
 	if (grey > 0.5) {

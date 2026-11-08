@@ -11,6 +11,15 @@ Qui ogni Claude (o altro agente) che lavora sul repository scrive **cosa sta fac
 
 ---
 
+## 2026-11-08 · Art · Ritratti: occhi con la pupilla, capelli solo dove la maschera è pulita — fatto
+Segnalazione del proprietario (immagini di Pyria, Rhea e Iven): alcuni ritratti ancora sbagliati; gli occhi dorati vanno bene, ma si deve vedere che sono occhi; Iven ha la benda sugli occhi gialla.
+- **Occhi** (`godot/scripts/hero_portrait.gd`, `eye_lab`): il colore resta acceso, ma al centro dell'iride c'è una pupilla scura e il bordo dell'iride è più scuro; ombra della palpebra e toni scuri restano scuri. Usa il blu delle maschere (distanza dal centro dell'iride), scritto da `tools/character_kit/portrait_masks.py` (opzione nuova `--occhi`: rifà solo iridi e pupille, i capelli restano come sono).
+- **Capelli** (`godot/assets/portraits/portraits.json`, `hair_ok`): i 99 volti con capelli ricolorabili ricolorati per prova nel colore più lontano permesso e guardati uno per uno. 32 coloravano anche bende (Iven: `p060`), colletti, pellicce, occhiali, orecchini grandi o pelle, oppure lasciavano metà capelli col colore vecchio: ora tengono i capelli dipinti e vanno solo a eroi con quel colore. Lista `BAD_HAIR` nello strumento, così una nuova passata la rispetta.
+- **Cosa cambia in gioco**: Iven (biondo) e pochi altri eroi che avevano uno di quei 32 volti ricolorati prendono un altro volto. Simulazione: con 40 eroi quasi nessuno cambia, con 120 eroi in media 4.
+- Test: regole 37 su 37, interfaccia 35 su 35.
+- Immagine prima/dopo: `/mnt/project-files/riftward-personaggi/prima_dopo_pupille_capelli.png`.
+- Da controllare (QA): carte di eroi con occhi dorati, viola o rossi (pupilla visibile) e un roster grande (nessun capello colorato su bende, colletti o pellicce).
+
 ## 2026-11-08 · Art · La base cresce in larghezza e con isolotti — fatto
 Richiesta del proprietario: la base cresceva solo in altezza (piani degli edifici), poco bello; farla crescere in grandezza o con isole.
 - **Isola principale più grande a ogni livello** (`godot/scripts/hub3d/hub_world.gd`, `ISLAND_GROWTH`): raggio medio 18,6 al Lv.1 → 21,2 al Lv.5. Scogliera, ponte del Portale e laghetto seguono il bordo (`_build_shore()`, `pond_center()`). Borgo e mura restano dove sono.
