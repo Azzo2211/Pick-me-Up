@@ -15,7 +15,8 @@ del generatore personaggi. Questa versione (8/11/2026) rifà le iridi e pulisce 
 
 Uso (dalla cartella del repository):
     python tools/character_kit/portrait_masks.py MODELLO.task [p001,p002,...] [--occhi]
---occhi rifà solo iridi e pupille e lascia i capelli come sono.
+--occhi rifà solo iridi e pupille e lascia i capelli come sono. Volti e occhi scartati o corretti
+a mano: BAD_EYES, EYE_FIX e BAD_HAIR qui sotto.
 MODELLO.task è face_landmarker.task di MediaPipe:
 https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task
 Serve: pip install mediapipe numpy scipy pillow
@@ -39,7 +40,24 @@ BAD_EYES = set("""
 p003 p005 p015 p027 p031 p041 p045 p050 p051 p054 p069 p078 p080 p082 p088 p099 p110 p113 p116 p120
 p129 p140 p143 p156 p157 p165 p171 p180 p190 p198 p200 p204 p206 p208 p215 p223 p224 p244 p247 p249 p257 p290 p296
 p062 p068 p138 p159 p254 p261
+p002 p025 p042 p122 p240 p251
 """.split())
+
+# Correzioni a mano degli occhi, controllate ingrandendo l'8/11/2026 ("sx"/"dx": l'occhio a sinistra
+# o a destra nell'immagine).
+# "via": l'occhio lontano di un volto di tre quarti, mezzo nascosto da palpebra o naso, oppure
+# sfocato. Colorato diventava una striscia sulla palpebra: resta dipinto (si vede appena) e si
+# colora solo l'altro.
+# (dx, dy): MediaPipe metteva l'iride accanto a quella dipinta; iride e apertura dell'occhio si
+# spostano di tanti pixel del ritratto.
+_VIA_DX = """
+p000 p083 p086 p090 p094 p096 p119 p121 p131 p133 p135 p139 p142 p145 p150 p151 p154 p155 p158
+p162 p164 p167 p169 p173 p175 p182 p193 p195 p196 p202 p205 p212 p213 p218 p219 p222 p226 p233
+p246 p250 p253 p264 p275 p281 p285 p288 p295 p297 p298
+""".split()
+_VIA_SX = "p057 p172 p277".split()
+EYE_FIX = {**{p: {"dx": "via"} for p in _VIA_DX}, **{p: {"sx": "via"} for p in _VIA_SX},
+           "p293": {"sx": (-8.5, 3.5)}}
 
 # Volti con capelli ricolorabili controllati a occhio l'8/11/2026 (ognuno ricolorato nel colore
 # più lontano che HAIR_COMPAT permette): la maschera dei capelli prende anche bende, colletti,
@@ -157,10 +175,11 @@ def clean_hair(lab, hair, lm, size):
     return np.where(skinlike, 0.0, np.maximum(np.minimum(soft * 1.2, 1.0), np.where(hard, hair, 0.0)))
 
 
-def irises(lab, hair, lm, size):
+def irises(lab, hair, lm, size, fix=None):
     """Iride di ogni occhio: il cerchio dei punti dell'iride di MediaPipe (un po' più largo),
     dentro l'apertura dell'occhio e sotto le ciocche che lo coprono. "dark" dice quanto
-    l'iride è più scura della pelle intorno: palpebre chiuse e cerchi finiti sulla pelle no."""
+    l'iride è più scura della pelle intorno: palpebre chiuse e cerchi finiti sulla pelle no.
+    fix: correzioni a mano di EYE_FIX per questo volto."""
     w, h = size
     yy, xx = np.mgrid[0:h, 0:w]
     L = lab[..., 0]
@@ -168,21 +187,27 @@ def irises(lab, hair, lm, size):
     radial = np.zeros((h, w), np.float32)
     eyes = []
     for c0, contour in ((468, LEYE), (473, REYE)):
-        c = lm[c0]
-        r = max(float(np.mean([np.linalg.norm(lm[c0 + k] - c) for k in range(1, 5)])), 3.0) * 1.08
-        opening = polygon(lm[contour], size, 1)
-        width = np.linalg.norm(lm[contour[0]] - lm[contour[8]])
-        height = np.linalg.norm(lm[contour[12]] - lm[contour[4]])
+        other = 473 if c0 == 468 else 468
+        side = "sx" if lm[c0][0] < lm[other][0] else "dx"
+        f = (fix or {}).get(side)
+        shift = np.array(f, float) if isinstance(f, tuple) else np.zeros(2)
+        c = lm[c0] + shift
+        pts = lm[contour] + shift
+        r = max(float(np.mean([np.linalg.norm(lm[c0 + k] - lm[c0]) for k in range(1, 5)])), 3.0) * 1.08
+        opening = polygon(pts, size, 1)
+        width = np.linalg.norm(pts[0] - pts[8])
+        height = np.linalg.norm(pts[12] - pts[4])
         dist = np.sqrt((xx - c[0]) ** 2 + (yy - c[1]) ** 2)
         disc = np.clip((1.0 - dist / r) / 0.18, 0, 1) * opening
         cover = 1 - np.clip((hair - 0.3) / 0.4, 0, 1)
         visible = disc * cover
-        radial = np.maximum(radial, np.clip(1.0 - dist / r, 0, 1) * (visible > 0.02))
         inside = (disc > 0.5) & (cover > 0.5)
-        ring = (dist > 1.6 * r) & (dist < 3.4 * r) & (hair < 0.3) & (L > 0.45) & ~polygon(lm[contour], size, 2)
+        ring = (dist > 1.6 * r) & (dist < 3.4 * r) & (hair < 0.3) & (L > 0.45) & ~polygon(pts, size, 2)
         dark = float(np.median(L[ring]) - np.median(L[inside])) if inside.sum() >= 6 and ring.sum() >= 20 else 0.0
         eyes.append(dict(r=r, open=height / max(width, 1e-3), area=float((disc > 0.5).sum()),
-                         seen=float(inside.sum()), dark=dark))
+                         seen=float(inside.sum()), dark=dark, side=side, via=f == "via"))
+        if f == "via": continue
+        radial = np.maximum(radial, np.clip(1.0 - dist / r, 0, 1) * (visible > 0.02))
         out = np.maximum(out, visible)
     return ndi.gaussian_filter(out, 0.5), radial, eyes
 
@@ -218,10 +243,11 @@ def main():
         if lm is not None:
             if hair.max() > 0.5 and not eyes_only: hair = clean_hair(lab, hair, lm, img.size)
             if not beast:
-                eyes, radial, info = irises(lab, hair, lm, img.size)
-                usable = [i for i in info if i["open"] >= 0.15 and i["seen"] >= 14 and i["dark"] >= 0.07]
-                hidden = [i for i in info if i["seen"] < 0.35 * max(i["area"], 1)]
+                eyes, radial, info = irises(lab, hair, lm, img.size, EYE_FIX.get(pid))
+                usable = [i for i in info if not i["via"] and i["open"] >= 0.15 and i["seen"] >= 14 and i["dark"] >= 0.07]
+                hidden = [i for i in info if i["via"] or i["seen"] < 0.35 * max(i["area"], 1)]
                 # un occhio solo colorato sembrerebbe eterocromia: l'altro dev'essere coperto
+                # (o lontano e mezzo nascosto, EYE_FIX "via")
                 if usable and len(usable) + len(hidden) >= 2 and pid not in BAD_EYES:
                     e["has_eyes"] = True
                 else:

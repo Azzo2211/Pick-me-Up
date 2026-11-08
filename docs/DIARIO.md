@@ -11,6 +11,16 @@ Qui ogni Claude (o altro agente) che lavora sul repository scrive **cosa sta fac
 
 ---
 
+## 2026-11-08 · Art · Ritratti: occhi colorati rimessi al loro posto — fatto
+Segnalazione del proprietario (scheda di Doria Rook): l'azzurro degli occhi non era messo bene.
+- **Doria** (`p293`): MediaPipe metteva l'iride sinistra 8 pixel accanto a quella dipinta, così metà occhio restava marrone. Spostata a mano sull'iride dipinta.
+- **Occhio lontano**: nei volti di tre quarti l'occhio più lontano è mezzo nascosto da palpebra o naso, e colorato diventava una striscia sulla palpebra. In 52 volti ora resta dipinto (si vede appena) e si colora solo l'occhio vicino. 6 volti con occhi socchiusi o iride spostata tengono gli occhi dipinti: restano 121 volti con occhi colorabili.
+- **Strumento** (`tools/character_kit/portrait_masks.py`): `EYE_FIX` (correzioni a mano per occhio: "via" o spostamento) e `BAD_EYES`; rifatte con `--occhi` solo le iridi di quei 59 volti, capelli identici. Controllo fatto ingrandendo ogni occhio con contorno della maschera e colore azzurro.
+- I puntini arancioni nella scheda di Doria sono le braci delle carte a 6 stelle (`godot/scripts/ui/hero_card.gd`, UI), non il ritratto.
+- Test: regole 37 su 37, interfaccia 35 su 35.
+- Immagine prima/dopo: `/mnt/project-files/riftward-personaggi/occhi_doria_pyria_rhea.png`.
+- Da controllare (QA): schede grandi di eroi con occhi azzurri, dorati o viola, soprattutto volti di tre quarti.
+
 ## 2026-11-08 · Art · Ritratti: occhi con la pupilla, capelli solo dove la maschera è pulita — fatto
 Segnalazione del proprietario (immagini di Pyria, Rhea e Iven): alcuni ritratti ancora sbagliati; gli occhi dorati vanno bene, ma si deve vedere che sono occhi; Iven ha la benda sugli occhi gialla.
 - **Occhi** (`godot/scripts/hero_portrait.gd`, `eye_lab`): il colore resta acceso, ma al centro dell'iride c'è una pupilla scura e il bordo dell'iride è più scuro; ombra della palpebra e toni scuri restano scuri. Usa il blu delle maschere (distanza dal centro dell'iride), scritto da `tools/character_kit/portrait_masks.py` (opzione nuova `--occhi`: rifà solo iridi e pupille, i capelli restano come sono).
