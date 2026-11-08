@@ -221,7 +221,7 @@ func _test_base_islands() -> Array:
 	var beds_before := game.dormitory_slots()
 	var xp_before := int(game.floor_rewards(30, 1, true).xp)
 	game.data.world.gold = 10000000
-	game.debug_clear_floors(25)
+	game.debug_clear_floors(40)
 	for k in 5: game.upgrade_base()
 	valid = valid and game.base_level() == 6 and game.has_island("campi") and not game.has_island("dimore")
 	valid = valid and game.training_slots() == slots_before + 2 and game.dormitory_slots() == beds_before
