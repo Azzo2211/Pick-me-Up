@@ -92,18 +92,20 @@ const TRAITS := ["Nervi saldi", "Istinto protettivo", "Passo leggero", "Tenace",
 # --- Base e strutture ---------------------------------------------------------
 ## Livelli della base. Ogni livello alza il livello massimo delle strutture e sblocca nuovi cantieri.
 ## Con 100 piani nella Torre la base arriva al Lv.10 (decisione del proprietario, 2026-11-05):
+## regola fissa: Lv.2 col Guardiano del Piano 5, poi un livello ogni 10 piani (10, 20 … 80),
+## sempre un piano Guardiano, così la Torre e la base salgono insieme.
 ## dal Lv.6 si aggiungono isole collegate da ponti (vedi BASE_ISLANDS).
 ## look = come cambia il borgo (testo per il pannello del Cristallo).
 const BASE_LEVELS := [
 	{"level": 1, "floor": 0, "gold": 0, "look": "Sentieri di terra, palizzata di legno e tetti di paglia."},
-	{"level": 2, "floor": 3, "gold": 40000, "look": "Piazza e strade principali lastricate, lampioni di ferro, una bancarella e una porta di pietra nella palizzata."},
-	{"level": 3, "floor": 6, "gold": 120000, "look": "Tutte le strade lastricate, mura di pietra, fontana, mercato e tetti di ardesia."},
-	{"level": 4, "floor": 10, "gold": 300000, "look": "Torri sulle mura con rune azzurre e statue lungo la strada del Portale."},
-	{"level": 5, "floor": 15, "gold": 700000, "look": "Stendardi dorati, lanterne che fluttuano sulla piazza e l'aurora nel cielo."},
-	{"level": 6, "floor": 25, "gold": 1200000, "look": "Prima isola nuova, collegata da un ponte."},
-	{"level": 7, "floor": 35, "gold": 1900000, "look": "Anelli di pietra sospesi attorno al Cristallo e lampioni a rune lungo le strade."},
-	{"level": 8, "floor": 50, "gold": 3000000, "look": "Seconda isola nuova, collegata da un ponte."},
-	{"level": 9, "floor": 65, "gold": 4500000, "look": "Lanterne sospese sopra i ponti e le isole, fuochi azzurri sulle torri."},
+	{"level": 2, "floor": 5, "gold": 40000, "look": "Piazza e strade principali lastricate, lampioni di ferro, una bancarella e una porta di pietra nella palizzata."},
+	{"level": 3, "floor": 10, "gold": 120000, "look": "Tutte le strade lastricate, mura di pietra, fontana, mercato e tetti di ardesia."},
+	{"level": 4, "floor": 20, "gold": 300000, "look": "Torri sulle mura con rune azzurre e statue lungo la strada del Portale."},
+	{"level": 5, "floor": 30, "gold": 700000, "look": "Stendardi dorati, lanterne che fluttuano sulla piazza e l'aurora nel cielo."},
+	{"level": 6, "floor": 40, "gold": 1200000, "look": "Prima isola nuova, collegata da un ponte."},
+	{"level": 7, "floor": 50, "gold": 1900000, "look": "Anelli di pietra sospesi attorno al Cristallo e lampioni a rune lungo le strade."},
+	{"level": 8, "floor": 60, "gold": 3000000, "look": "Seconda isola nuova, collegata da un ponte."},
+	{"level": 9, "floor": 70, "gold": 4500000, "look": "Lanterne sospese sopra i ponti e le isole, fuochi azzurri sulle torri."},
 	{"level": 10, "floor": 80, "gold": 6500000, "look": "Terza isola nuova, la più alta di tutte."},
 ]
 ## Livello massimo delle strutture (sempre entro il livello della base).
@@ -770,20 +772,54 @@ func _assessment(hero: Dictionary) -> Array:
 	output.append("Affinità evidente: " + {"str": "Forza", "int": "Intelletto", "sta": "Stamina", "agi": "Agilità"}[best_stat])
 	return output
 
+## Livelli di stanchezza: da "min" in su l'eroe subisce questi malus, in missione
+## e nella potenza. hp/atk/def moltiplicano vita, attacco/magia e difesa; acc e
+## eva tolgono punti di precisione e schivata; speed rallenta il passo; cadence
+## allunga la pausa tra un attacco e l'altro. Chi è Sfinito non può partire.
+const FATIGUE_LEVELS := [
+	{"min": 0, "name": "Riposato", "hp": 1.0, "atk": 1.0, "def": 1.0, "acc": 0.0, "eva": 0.0, "speed": 1.0, "cadence": 1.0},
+	{"min": 40, "name": "Stanco", "hp": 1.0, "atk": 0.9, "def": 0.95, "acc": 5.0, "eva": 2.0, "speed": 0.92, "cadence": 1.1},
+	{"min": 70, "name": "Esausto", "hp": 0.9, "atk": 0.75, "def": 0.85, "acc": 12.0, "eva": 5.0, "speed": 0.8, "cadence": 1.25},
+	{"min": 90, "name": "Sfinito", "hp": 0.8, "atk": 0.6, "def": 0.7, "acc": 20.0, "eva": 10.0, "speed": 0.7, "cadence": 1.45},
+]
+## Stanchezza da cui l'eroe non può più partire per la Torre.
+const FATIGUE_NO_DEPLOY := 90
+
+func fatigue_level(hero: Dictionary) -> Dictionary:
+	var fatigue := float(hero.get("fatigue", 0))
+	var result: Dictionary = FATIGUE_LEVELS[0]
+	for level in FATIGUE_LEVELS:
+		if fatigue >= float(level.min): result = level
+	return result
+
+## Testo breve dei malus, per schede e avvisi ("" se l'eroe è riposato).
+func fatigue_penalty_text(hero: Dictionary) -> String:
+	var f := fatigue_level(hero)
+	if float(f.atk) >= 1.0: return ""
+	var parts := ["Attacco -%d%%" % roundi((1.0 - float(f.atk)) * 100), "Difesa -%d%%" % roundi((1.0 - float(f.def)) * 100)]
+	if float(f.hp) < 1.0: parts.append("Vita -%d%%" % roundi((1.0 - float(f.hp)) * 100))
+	parts.append("Precisione -%d" % roundi(float(f.acc)))
+	parts.append("più lento")
+	return "%s: %s" % [str(f.name), ", ".join(parts)]
+
 func derived_stats(hero: Dictionary) -> Dictionary:
 	var equipment: Dictionary = hero.equipment
 	var accessory: Dictionary = equipment.get("accessory", {})
-	var max_hp := roundi(100 + hero.stats.sta * 12 + hero.level * 6 + int(accessory.get("hp", 0)))
+	var f := fatigue_level(hero)
+	var max_hp := roundi((100 + hero.stats.sta * 12 + hero.level * 6 + int(accessory.get("hp", 0))) * float(f.hp))
 	return {
 		"max_hp": max_hp,
-		"attack": float(equipment.main.get("power", 0)) + hero.stats.str * 1.75,
-		"magic": hero.stats.int * 1.9 + (12 if hero.role in ["Mage", "Support"] else 0) + float(equipment.main.get("power", 0)) * (0.6 if hero.role in ["Mage", "Support"] else 0.0),
-		"defense": float(equipment.armor.get("defense", 0)) + hero.stats.sta * 0.55,
-		"accuracy": clampf(70 + hero.stats.agi * 0.45, 35, 98),
-		"evasion": clampf(hero.stats.agi * 0.22, 0, 35),
+		"attack": (float(equipment.main.get("power", 0)) + hero.stats.str * 1.75) * float(f.atk),
+		"magic": (hero.stats.int * 1.9 + (12 if hero.role in ["Mage", "Support"] else 0) + float(equipment.main.get("power", 0)) * (0.6 if hero.role in ["Mage", "Support"] else 0.0)) * float(f.atk),
+		"defense": (float(equipment.armor.get("defense", 0)) + hero.stats.sta * 0.55) * float(f.def),
+		"accuracy": clampf(70 + hero.stats.agi * 0.45 - float(f.acc), 35, 98),
+		"evasion": clampf(hero.stats.agi * 0.22 - float(f.eva), 0, 35),
 		"crit": clampf(3 + hero.stats.agi * 0.08, 3, 30),
 		"block": equipment.sub.get("block", 0),
 		"ammo": equipment.sub.get("ammo", 0),
+		"speed_mult": float(f.speed),
+		"cadence_mult": float(f.cadence),
+		"fatigue_state": str(f.name),
 	}
 
 func hero_power(hero: Dictionary) -> int:
@@ -791,7 +827,7 @@ func hero_power(hero: Dictionary) -> int:
 	var d := derived_stats(hero)
 	var attack: float = max(d.attack * 0.75, d.magic) if hero.role in ["Mage", "Support"] else d.attack
 	var injury_factor := 0.85 if not hero.get("injuries", []).is_empty() else 1.0
-	return roundi((d.max_hp * 0.22 + attack * 3 + d.defense * 2) * (0.8 + hero.morale / 500.0) * (1.0 - max(0, hero.fatigue - 50) * 0.0035) * injury_factor)
+	return roundi((d.max_hp * 0.22 + attack * 3 + d.defense * 2) * (0.8 + hero.morale / 500.0) * injury_factor)
 
 func level_cap(hero: Dictionary) -> int:
 	return int(RARITY_CAPS.get(int(hero.current_rarity), 10))
@@ -875,14 +911,16 @@ func party_readiness() -> Dictionary:
 		if hero.is_empty(): continue
 		alive += 1
 		score += hero_power(hero)
-		if hero.fatigue >= 70: warnings.append(hero.name + " è molto stanco")
+		if float(hero.fatigue) >= FATIGUE_NO_DEPLOY: warnings.append(hero.name + " è sfinito: non può partire, mandalo al Dormitorio")
+		elif float(hero.fatigue) >= 40: warnings.append(hero.name + " · " + fatigue_penalty_text(hero))
 		if not hero.injuries.is_empty(): warnings.append(hero.name + " è ferito")
 		if data.assignments.has(hero.id): warnings.append(hero.name + " lascerà la sua attività")
 		var line: String = ROLES[hero.role].line
 		if line != FORMATION_LINES[i]: warnings.append("%s (%s) è fuori ruolo in %s" % [hero.name, line, FORMATION_LINES[i]])
 	if alive < PARTY_SIZE: warnings.append("Squadra incompleta: %d/%d" % [alive, PARTY_SIZE])
 	var grade := "S" if score >= 2200 else "A" if score >= 1700 else "B" if score >= 1200 else "C" if score >= 800 else "D"
-	return {"score": score, "grade": grade, "warnings": warnings, "ready": alive == PARTY_SIZE}
+	var exhausted := party.filter(func(hero): return not hero.is_empty() and float(hero.fatigue) >= FATIGUE_NO_DEPLOY).size()
+	return {"score": score, "grade": grade, "warnings": warnings, "ready": alive == PARTY_SIZE and exhausted == 0}
 
 # =============================================================================
 # Base e strutture
@@ -1476,15 +1514,22 @@ func floor_rewards(floor_index: int, attempt: int, first_clear: bool) -> Diction
 	# Santuario del Nexus (isola della Base Lv.10): +10% esperienza
 	var xp_bonus := 1.1 if has_island("santuario") else 1.0
 	var rewards := {"gold": roundi((7200 + floor_index * 2600) * retry_multiplier * trial_bonus), "xp": roundi((95 + floor_index * 34) * retry_multiplier * trial_bonus * xp_bonus)}
+	# Gemme a ogni piano vinto: tante al primo completamento (doppie alla Prova
+	# del Guardiano), poche quando lo si ripete, così farmare non sostituisce salire.
+	var gem_trial := 2 if is_trial_floor(floor_index) else 1
 	if first_clear:
-		rewards.gems = (120 + floor_index * 10) * (2 if is_trial_floor(floor_index) else 1)
+		rewards.gems = (120 + floor_index * 10) * gem_trial
 		if is_trial_floor(floor_index): rewards.stones = 1 + floor_index / 20
+	else:
+		rewards.gems = maxi(5, roundi((15 + floor_index * 1.5) * gem_trial * retry_multiplier))
 	return rewards
 
 func begin_mission(floor_index: int) -> Dictionary:
 	if floor_index < 1 or floor_index > int(data.world.max_floor): return {"ok": false, "message": "Piano non sbloccato"}
 	var party := get_party()
 	if party.filter(func(hero): return not hero.is_empty()).size() != PARTY_SIZE: return {"ok": false, "message": "Servono cinque eroi vivi in squadra"}
+	for hero in party:
+		if float(hero.fatigue) >= FATIGUE_NO_DEPLOY: return {"ok": false, "message": "%s è sfinito: deve riposare al Dormitorio" % hero.name}
 	for hero in party: data.assignments.erase(str(hero.id))
 	var stage_state := _materialize_stage(floor_index)
 	stage_state.attempts += 1

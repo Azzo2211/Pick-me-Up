@@ -22,6 +22,8 @@ func _initialize() -> void:
 	_test("addestramento nel tempo con level-up e cap", _test_training)
 	_test("dormitorio: recupero e guarigione", _test_dormitory)
 	_test("espansione base e cantieri", _test_base_upgrade)
+	_test("stanchezza: malus reali e sfiniti a casa", _test_fatigue_penalties)
+	_test("gemme a ogni piano vinto", _test_floor_gems)
 	_test("livello strutture limitato dal livello base", _test_facility_cap)
 	_test("base fino al Lv.10, strutture fino al Lv.10, isole e vantaggi", _test_base_islands)
 	_test("descriptor persistente e piani procedurali", _test_stage_persistence)
@@ -187,8 +189,9 @@ func _test_dormitory() -> Array:
 func _test_base_upgrade() -> Array:
 	var game := _fresh("base-seed")
 	game.data.world.gold = 500000
+	game.debug_clear_floors(4)
 	var blocked: bool = not game.upgrade_base().ok
-	game.debug_clear_floors(3)
+	game.debug_clear_floors(5)
 	var upgraded := game.upgrade_base()
 	var plot: bool = game.facility_available("armory") and not game.facility_built("armory")
 	var built := game.build_facility("armory")
@@ -647,3 +650,34 @@ func _test_motion_pack() -> Array:
 		var pose: Dictionary = motion.sample(clip, 0.4)
 		valid = valid and pose.size() == motion.JOINTS.size() + 1
 	return [valid, "Clip mancanti o scheletro non compatibile"]
+
+func _test_fatigue_penalties() -> Array:
+	var game := _fresh("fatigue-seed")
+	var hero: Dictionary = game.get_party()[0]
+	hero.fatigue = 0
+	var fresh: Dictionary = game.derived_stats(hero)
+	var fresh_power := game.hero_power(hero)
+	hero.fatigue = 45
+	var tired: Dictionary = game.derived_stats(hero)
+	hero.fatigue = 75
+	var exhausted: Dictionary = game.derived_stats(hero)
+	var exhausted_power := game.hero_power(hero)
+	var worse: bool = float(tired.attack) < float(fresh.attack) and float(exhausted.attack) < float(tired.attack)
+	worse = worse and int(exhausted.max_hp) < int(fresh.max_hp) and float(exhausted.accuracy) < float(fresh.accuracy) and exhausted_power < fresh_power
+	worse = worse and float(exhausted.speed_mult) < 1.0 and float(exhausted.cadence_mult) > 1.0
+	hero.fatigue = 95
+	var blocked: bool = not game.begin_mission(1).ok and not game.party_readiness().ready
+	hero.fatigue = 0
+	game.free()
+	return [worse and blocked, "La stanchezza non penalizza o uno sfinito può partire"]
+
+func _test_floor_gems() -> Array:
+	var game := _fresh("gems-seed")
+	var ok := true
+	for floor_index in [1, 2, 3, 4, 6, 7]:
+		ok = ok and int(game.floor_rewards(floor_index, 1, true).get("gems", 0)) > 0
+		ok = ok and int(game.floor_rewards(floor_index, 5, false).get("gems", 0)) > 0
+	ok = ok and int(game.floor_rewards(5, 1, true).gems) > int(game.floor_rewards(4, 1, true).gems)
+	ok = ok and int(game.floor_rewards(3, 1, true).gems) > int(game.floor_rewards(3, 2, false).gems)
+	game.free()
+	return [ok, "Qualche piano non dà gemme"]

@@ -545,7 +545,7 @@ func _build_gate(body: VBoxContainer, footer: VBoxContainer) -> void:
 	body.add_child(card)
 	var rewards := GS.floor_rewards(gate_floor, int(record.attempts) + 1, not bool(record.cleared))
 	var reward_text := "%s Oro · %d esperienza a superstite" % [GS.format_number(rewards.gold), int(rewards.xp)]
-	if rewards.has("gems"): reward_text += " · %d Gemme al primo completamento" % int(rewards.gems)
+	if rewards.has("gems"): reward_text += " · %d Gemme%s" % [int(rewards.gems), " (primo completamento)" if not bool(record.cleared) else ""]
 	if rewards.has("stones"): reward_text += " · %d Pietre" % int(rewards.stones)
 	body.add_child(info_card("Ricompense: " + reward_text, "good"))
 	if int(record.attempts) > 0 and not bool(record.cleared): body.add_child(info_card("Il piano non cambia tra un tentativo e l'altro: stessi nemici, ricompense ridotte a ogni nuovo tentativo.", "warn"))
@@ -677,6 +677,9 @@ func _tower_info(info: VBoxContainer, floor_index: int, modal_ref: Array) -> voi
 	var ready := GS.party_readiness()
 	info.add_child(UIKit.label("Potenza della squadra: %s · grado %s" % [GS.format_number(ready.score), ready.grade], 15, UIKit.INK_SOFT, UIKit.body_bold()))
 	var rewards := GS.floor_rewards(floor_index, int(record.attempts) + 1, not bool(record.cleared))
+	for base_step in GS.BASE_LEVELS:
+		if int(base_step.floor) == floor_index and int(base_step.level) > 1:
+			info.add_child(info_card("Completarlo permette di portare la base al Lv.%d." % int(base_step.level), "good"))
 	var tiles := HBoxContainer.new()
 	tiles.add_theme_constant_override("separation", 8)
 	tiles.add_child(stat_tile("Oro", GS.format_number(rewards.gold), UIKit.GOLD))
@@ -1257,6 +1260,8 @@ func build_dossier(content: VBoxContainer, hero: Dictionary, modal_ref: Array) -
 	var skills := []
 	for skill in hero.skills: skills.append("%s Lv.%d" % [GS.skill_label(str(skill.name)), int(skill.level)])
 	dv.add_child(UIKit.para("Abilità: " + " · ".join(skills) + "   ·   Tratti: " + ", ".join(hero.traits), 15, UIKit.INK_SOFT))
+	var tired := GS.fatigue_penalty_text(hero)
+	if tired != "": dv.add_child(UIKit.para("Stanchezza %d · %s%s" % [roundi(float(hero.fatigue)), tired, " · non può partire" if float(hero.fatigue) >= GS.FATIGUE_NO_DEPLOY else ""], 15, UIKit.ROSE))
 	if not hero.injuries.is_empty():
 		var inj := []
 		for injury in hero.injuries: inj.append("%s (%d min di riposo)" % [injury.name, ceili(float(injury.minutes))])

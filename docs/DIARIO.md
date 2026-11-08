@@ -11,6 +11,13 @@ Qui ogni Claude (o altro agente) che lavora sul repository scrive **cosa sta fac
 
 ---
 
+## 2026-11-08 · Design + Programming · Stanchezza con malus veri, base legata ai Guardiani, gemme a ogni piano — fatto
+Richiesta del proprietario: la stanchezza non cambiava niente; i requisiti piano/base non erano coerenti; i piani davano gemme solo al primo completamento.
+- **Stanchezza** (`game_state.gd` `FATIGUE_LEVELS`, `fatigue_level`, `derived_stats`; `battle_scene.gd` passo e cadenza): 4 livelli (Riposato, Stanco 40+, Esausto 70+, Sfinito 90+) con malus a vita, attacco, difesa, precisione, schivata, passo e velocità d'attacco. Sfinito = non parte. Avvisi nel Portale e riga nella scheda eroe (`facility_panels.gd`).
+- **Base**: Lv.2 al Piano 5, poi Piani 10, 20 … 80 (sempre un Guardiano). La mappa della Torre dice quale piano sblocca un livello della base.
+- **Gemme**: ogni vittoria dà gemme; il primo completamento come prima, le ripetizioni 15+1,5×piano (×2 ai Guardiani, ridotte dai tentativi).
+- Test nuovi in `tests/test_runner.gd` (stanchezza, gemme) e test della base aggiornato. Non eseguiti nel cloud (Godot non avviabile qui): da lanciare sul PC.
+
 ## 2026-11-05 · Design + Programming + Art + UI · Base fino al Lv.10, edifici e isole (#16) — fatto
 Commit bfdc4e6, 1b4b769, d32d4ba, ea965f6, d4eb248 (etichette che non si accavallano). Richiesta del proprietario: non gli piace il cerchio iniziale dell'evocazione; più livelli per base ed edifici (il massimo non può essere 5 con 100 piani); se serve spazio, altre isole.
 - **Evocazione** (`godot/scripts/ui/summon_event.gd`): niente più cerchio; il Rift si apre con uno squarcio verticale e fulmini, le carte escono dallo squarcio.

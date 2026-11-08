@@ -550,8 +550,8 @@ func _create_heroes() -> void:
 			"attack": float(max(d.attack * 0.75, d.magic) if role in ["Mage", "Support"] else d.attack), "defense": float(d.defense),
 			"accuracy": float(d.accuracy) - (15.0 if trial_rules.has("nebbia") else 0.0), "evasion": float(d.evasion), "crit": float(d.crit), "block": float(d.block),
 			"range": 7.0 if role in ["Ranger", "Mage"] else 6.0 if role == "Support" else 2.0 if role == "Lancer" else 1.25,
-			"speed": 3.0 if role == "Ranger" else 2.6, "cooldown": rng.randf_range(0.2, 0.8), "skill_cd": rng.randf_range(2.0, 4.0),
-			"cadence": 1.35 if role in ["Mage", "Support"] else 1.0, "target": -1, "action": "hold", "alive": true,
+			"speed": (3.0 if role == "Ranger" else 2.6) * float(d.get("speed_mult", 1.0)), "cooldown": rng.randf_range(0.2, 0.8), "skill_cd": rng.randf_range(2.0, 4.0),
+			"cadence": (1.35 if role in ["Mage", "Support"] else 1.0) * float(d.get("cadence_mult", 1.0)), "target": -1, "action": "hold", "alive": true,
 			"kills": 0, "damage": 0, "healing": 0, "ammo": int(d.ammo), "max_ammo": int(d.ammo), "status": "", "fear": 0.0,
 			"courage": int(source.personality.courage), "ranged": ranged, "threat": 0,
 		}
