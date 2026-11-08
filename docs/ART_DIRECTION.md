@@ -27,6 +27,7 @@ The base is a walled hamlet on a floating island in the Rift:
 - the Mission Gate on its own floating rock, a monumental stone arch with a dark swirling rift, reached by a chained stone bridge;
 - heroes and a few villagers visibly living there;
 - **isole della base** (Base Lv.6, 8 e 10; `godot/scripts/hub3d/hub_islands.gd`): zolle sospese ai lati e dietro l'isola principale (Campi a est, Dimore a ovest, Santuario a nord-ovest e più in alto), ognuna con la sua scogliera e un ponte di pietra (per il Santuario una scalinata). Dalla strada del Portale un sentiero gira fuori dalle mura fino ai ponti. La disposizione del borgo resta quella di sempre: le isole si aggiungono. Quando ci sono isole la camera iniziale si allontana per inquadrarle tutte.
+- **crescita dell'isola e isolotti** (`godot/scripts/hub3d/hub_outposts.gd`, `HubWorld.ISLAND_GROWTH`): dal Lv.1 al Lv.5 l'isola principale si allarga (raggio medio 18,6 → 21,2; scogliera, ponte del Portale e laghetto seguono il bordo). Ogni livello aggiunge anche un isolotto con ponte di corda, solo scenografia: Vedetta (Lv.2, torre di guardia), Frutteto (Lv.3, alberi da frutto e arnie), Sorgente (Lv.4, laghetto e cascata), Miniera (Lv.5, cristalli e carrello), Faro (Lv.7, fascio di luce che ruota). La camera iniziale si allontana un po' per ogni isolotto.
 
 Avoid:
 - chibi heroes, pastel candy palettes, cartoon outlines;

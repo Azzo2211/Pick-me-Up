@@ -14,18 +14,23 @@ const BuildingModelScript := preload("res://scripts/hub3d/building_model.gd")
 const WaterShader := preload("res://scripts/hub3d/water.gdshader")
 const HubAgentScript := preload("res://scripts/hub3d/hub_agent.gd")
 const HubIslandsScript := preload("res://scripts/hub3d/hub_islands.gd")
+const HubOutpostsScript := preload("res://scripts/hub3d/hub_outposts.gd")
 
 const PLAZA_RADIUS := 4.4
 const RING_RADIUS := 7.2
 const RING_WIDTH := 1.5
 const WALL_RADIUS := 15.2
 const ISLAND_BASE := 21.2
+## Raggio medio dell'isola principale per livello della base (Lv.1..5): l'isola
+## si allarga a ogni livello, poi crescono le isole e gli isolotti intorno.
+const ISLAND_GROWTH := [18.6, 19.3, 19.9, 20.6, 21.2]
 const GATE_ANGLE := 4.9742
 const GATE_DISTANCE := 27.0
 const GATE_HEIGHT := 1.4
 const GATE_PLATFORM_RADIUS := 4.6
 const POND_ANGLE := 0.96
-const POND_DISTANCE := 18.2
+## Il laghetto sta a questa distanza dal bordo dell'isola (si sposta quando l'isola cresce).
+const POND_EDGE_GAP := 2.2
 const POND_RADIUS := 1.6
 const SPOKES := [4.9742, 0.2618, 1.8326, 3.4034]
 const MAX_AGENTS := 30
@@ -87,6 +92,12 @@ var _decor_holder: Node3D
 var _wall_holder: Node3D
 ## Isole della base (Lv.6, 8, 10) con i loro ponti.
 var islands: HubIslands
+## Isolotti decorativi (Lv.2, 3, 4, 5, 7) con ponti di corda.
+var outposts: HubOutpostsScript
+## Raggio medio attuale dell'isola principale (vedi ISLAND_GROWTH).
+var island_base := ISLAND_BASE
+## Scogliera, rupe del Portale e laghetto: si ricostruiscono quando l'isola cresce.
+var _shore_root: Node3D
 var gate_road_nodes: Array[int] = []
 var _training_main_spots := 0
 var _decor_spinners: Array[Node3D] = []
@@ -106,10 +117,11 @@ func _ready() -> void:
 	islands = HubIslandsScript.new()
 	islands.setup(self)
 	add_child(islands)
+	outposts = HubOutpostsScript.new()
+	outposts.setup(self)
+	add_child(outposts)
 	_define_roads()
-	_build_cliffs()
-	_build_gate_platform()
-	_build_water()
+	_build_shore()
 	_build_plaza()
 	_build_sky_dressing()
 	_tint_world()
@@ -151,7 +163,24 @@ func _group(name_text: String) -> Node3D:
 # =============================================================================
 
 func island_radius(angle: float) -> float:
-	return ISLAND_BASE + 1.1 * sin(2.0 * angle + 0.6) + 0.8 * sin(3.0 * angle + 1.9) + 0.45 * sin(5.0 * angle + 0.3) + 0.25 * sin(9.0 * angle + 2.0)
+	return island_base + 1.1 * sin(2.0 * angle + 0.6) + 0.8 * sin(3.0 * angle + 1.9) + 0.45 * sin(5.0 * angle + 0.3) + 0.25 * sin(9.0 * angle + 2.0)
+
+static func island_base_for(level: int) -> float:
+	return float(ISLAND_GROWTH[clampi(level, 1, ISLAND_GROWTH.size()) - 1])
+
+func pond_center() -> Vector2:
+	return polar(rad_to_deg(POND_ANGLE), island_radius(POND_ANGLE) - POND_EDGE_GAP)
+
+## Ricostruisce i pezzi che dipendono dal bordo dell'isola.
+func _build_shore() -> void:
+	if _shore_root != null: _shore_root.queue_free()
+	_shore_root = Node3D.new()
+	_shore_root.name = "Shore"
+	terrain_root.add_child(_shore_root)
+	_build_cliffs()
+	_build_gate_platform()
+	_build_water()
+	_tint_world()
 
 func is_on_island(p: Vector2, margin: float = 0.0) -> bool:
 	return p.length() < island_radius(atan2(p.y, p.x)) - margin
@@ -339,7 +368,7 @@ func _terrain_mask(p: Vector2, base_level: int) -> Color:
 	# sentiero lungo le mura (dall'interno)
 	dirt = maxf(dirt, smoothstep(0.9, 0.3, absf(r - (WALL_RADIUS - 0.9))) * 0.55)
 	# pozza e ruscello
-	var pond := polar(rad_to_deg(POND_ANGLE), POND_DISTANCE)
+	var pond := pond_center()
 	dirt = maxf(dirt, smoothstep(POND_RADIUS + 0.9, POND_RADIUS + 0.2, p.distance_to(pond)) * 0.6)
 	var edge := island_radius(atan2(p.y, p.x))
 	var rock := smoothstep(edge - 0.9, edge - 0.1, r) * 0.7
@@ -406,7 +435,7 @@ func _build_cliffs() -> void:
 		var a0 := layers * segments + s
 		var a1 := layers * segments + (s + 1) % segments
 		_tri_idx(indices, verts, a0, tip, a1, Vector3(verts[a0].x, -2.0, verts[a0].z).normalized())
-	_add_flat_mesh(terrain_root, verts, cols, indices, WorldMaterials.terrain(), true)
+	_add_flat_mesh(_shore_root, verts, cols, indices, WorldMaterials.terrain(), true)
 
 func _add_flat_mesh(parent: Node3D, verts: PackedVector3Array, cols: PackedColorArray, indices: PackedInt32Array, mat: Material, shadows: bool) -> MeshInstance3D:
 	# normali per faccia (vertici duplicati) per un aspetto roccioso
@@ -498,7 +527,7 @@ func _build_gate_platform() -> void:
 			var p0 := (post + Vector3(0, 1.55, 0)).lerp(top, t0) + Vector3(0, -sin(t0 * PI) * 0.7, 0)
 			var p1 := (post + Vector3(0, 1.55, 0)).lerp(top, t1) + Vector3(0, -sin(t1 * PI) * 0.7, 0)
 			b.rod("metal", p0, p1, 0.035, 0.035, Color("#2e2c2a"), 4)
-	b.instance(terrain_root)
+	b.instance(_shore_root)
 	set_meta("gate_bridge", [start, finish])
 
 # =============================================================================
@@ -515,7 +544,7 @@ func _water_material(speed: float, stripes: float, alpha: float) -> ShaderMateri
 	return m
 
 func _build_water() -> void:
-	var pond2 := polar(rad_to_deg(POND_ANGLE), POND_DISTANCE)
+	var pond2 := pond_center()
 	var pond := Vector3(pond2.x, ground_height(pond2) - 0.05, pond2.y)
 	var b := MeshBuilder.new()
 	b.material("rock", WorldMaterials.terrain())
@@ -531,7 +560,7 @@ func _build_water() -> void:
 	water.mesh = disc
 	water.material_override = _water_material(0.3, 2.5, 0.92)
 	water.position = pond + Vector3(0, 0.06, 0)
-	terrain_root.add_child(water)
+	_shore_root.add_child(water)
 	var dir := pond2.normalized()
 	var edge := dir * (island_radius(POND_ANGLE) - 0.1)
 	var start := pond2 + dir * (POND_RADIUS - 0.3)
@@ -544,12 +573,12 @@ func _build_water() -> void:
 	var mid := (start + edge) * 0.5
 	stream.position = Vector3(mid.x, ground_height(mid) + 0.06, mid.y)
 	stream.rotation = Vector3(-PI / 2, atan2(-dir.x, -dir.y), 0)
-	terrain_root.add_child(stream)
+	_shore_root.add_child(stream)
 	for i in 6:
 		var t := (i + 0.5) / 6.0
 		var p := start.lerp(edge, t) + Vector2(-dir.y, dir.x) * (0.55 if i % 2 == 0 else -0.55)
 		b.rock("rock", 0.18, Vector3(p.x, ground_height(p) + 0.05, p.y), Color(0, 0, 1, 1), Vector3(1.1, 0.6, 1.0), 80 + i, 0.25)
-	b.instance(terrain_root)
+	b.instance(_shore_root)
 	var fall := MeshInstance3D.new()
 	var fall_quad := QuadMesh.new()
 	fall_quad.size = Vector2(0.9, 14.0)
@@ -558,7 +587,7 @@ func _build_water() -> void:
 	var outward := Vector3(dir.x, 0, dir.y)
 	fall.position = Vector3(edge.x, -7.0, edge.y) + outward * 1.3
 	fall.rotation = Vector3(-0.12, atan2(dir.x, dir.y), 0)
-	terrain_root.add_child(fall)
+	_shore_root.add_child(fall)
 	var mist := CPUParticles3D.new()
 	mist.position = Vector3(edge.x, -13.5, edge.y) + outward * 2.2
 	mist.amount = 16
@@ -579,7 +608,7 @@ func _build_water() -> void:
 	pm.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	puff.material = pm
 	mist.mesh = puff
-	terrain_root.add_child(mist)
+	_shore_root.add_child(mist)
 
 # =============================================================================
 # Piazza e Cristallo del Nexus
@@ -680,12 +709,13 @@ func _blocked(p: Vector2, clearance: float) -> bool:
 	for g in GARDENS:
 		var gp := polar(g.x, g.y)
 		if maxf(absf(p.x - gp.x), absf(p.y - gp.y)) < 1.6 + clearance: return true
-	var pond := polar(rad_to_deg(POND_ANGLE), POND_DISTANCE)
+	var pond := pond_center()
 	if p.distance_to(pond) < POND_RADIUS + 0.8 + clearance: return true
 	if p.distance_to(polar(FOUNTAIN.x, FOUNTAIN.y)) < 1.6 + clearance: return true
 	var edge_dir := pond.normalized()
 	if Geometry2D.get_closest_point_to_segment(p, pond, edge_dir * island_radius(POND_ANGLE)).distance_to(p) < 0.8 + clearance: return true
 	if islands != null and islands.blocks_main(p, clearance): return true
+	if outposts != null and outposts.blocks_main(p, clearance): return true
 	return false
 
 func _build_vegetation() -> void:
@@ -1075,6 +1105,11 @@ func refresh(state: RiftwardState) -> void:
 	for island in state.base_islands(): island_ids.append(str(island.id))
 	var islands_changed := island_ids != islands.ids or (level_changed and not island_ids.is_empty())
 	if islands_changed: islands.ids = island_ids.duplicate()
+	if level_changed:
+		var new_base := island_base_for(base_level)
+		if not is_equal_approx(new_base, island_base):
+			island_base = new_base
+			_build_shore()
 	var sites_now := {}
 	for id in SITES:
 		var status := ""
@@ -1096,6 +1131,8 @@ func refresh(state: RiftwardState) -> void:
 	if islands_changed:
 		islands.rebuild(island_ids, base_level)
 		_update_island_labels()
+	if level_changed or islands_changed:
+		outposts.rebuild(base_level)
 	if level_changed:
 		_build_walls(base_level)
 		_build_decor(base_level)
@@ -1610,14 +1647,18 @@ func rest_facing(pos: Vector3) -> Vector3:
 func home_view() -> Dictionary:
 	var count := 0 if islands == null else islands.ids.size()
 	match count:
-		0: return {"target": Vector3(2.6, 0.0, -6.2), "distance": 80.0}
+		0:
+			# senza isole: la camera si allontana un po' per ogni isolotto (Lv.2-5)
+			var extra := 0 if outposts == null else outposts.ids.size()
+			return {"target": Vector3(2.6 - extra * 0.4, 0.0, -6.2 + extra * 0.9), "distance": 80.0 + extra * 7.0}
 		1: return {"target": Vector3(11.0, 0.0, -2.0), "distance": 86.0}
 		2: return {"target": Vector3(6.0, 0.0, 3.0), "distance": 94.0}
 	return {"target": Vector3(0.0, 0.0, -8.0), "distance": 118.0}
 
 ## Fin dove si può spostare la camera.
 func view_radius() -> float:
-	return 26.0 if islands == null or islands.ids.is_empty() else 46.0
+	if islands == null or islands.ids.is_empty(): return 26.0 + (0.0 if outposts == null else outposts.ids.size() * 3.0)
+	return 46.0
 
 func agent_for(hero_id: String) -> HubAgent:
 	return agents.get(hero_id)
@@ -1684,6 +1725,7 @@ func set_selected(id: String) -> void:
 func focus_position(id: String) -> Vector3:
 	if id == "crystal": return Vector3(0, 1.2, 0)
 	if id.begins_with("isola:") and islands != null and islands.ids.has(id.trim_prefix("isola:")): return islands.focus(id.trim_prefix("isola:")) + Vector3(0, 1.5, 0)
+	if id.begins_with("isolotto:") and outposts != null and outposts.ids.has(id.trim_prefix("isolotto:")): return outposts.center(id.trim_prefix("isolotto:")) + Vector3(0, 1.2, 0)
 	if id == "gate" and buildings.has(id): return buildings[id].position + Vector3(0, 3.6, 0)
 	if buildings.has(id): return buildings[id].position + Vector3(0, 1.4, 0)
 	return Vector3.ZERO

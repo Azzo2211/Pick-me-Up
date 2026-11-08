@@ -11,6 +11,14 @@ Qui ogni Claude (o altro agente) che lavora sul repository scrive **cosa sta fac
 
 ---
 
+## 2026-11-08 · Art · La base cresce in larghezza e con isolotti — fatto
+Richiesta del proprietario: la base cresceva solo in altezza (piani degli edifici), poco bello; farla crescere in grandezza o con isole.
+- **Isola principale più grande a ogni livello** (`godot/scripts/hub3d/hub_world.gd`, `ISLAND_GROWTH`): raggio medio 18,6 al Lv.1 → 21,2 al Lv.5. Scogliera, ponte del Portale e laghetto seguono il bordo (`_build_shore()`, `pond_center()`). Borgo e mura restano dove sono.
+- **Isolotti con ponte di corda** (`godot/scripts/hub3d/hub_outposts.gd`, nuovo): Vedetta (Lv.2), Frutteto (Lv.3), Sorgente con cascata (Lv.4), Miniera di cristalli (Lv.5), Faro (Lv.7). Solo scenografia: niente bonus, eroi e abitanti non ci vanno. Le isole con vantaggio (Lv.6, 8, 10) restano com'erano.
+- Camera iniziale un po' più lontana per ogni isolotto; `focus_on("isolotto:<id>")` per inquadrarli; `hub_preview_runner.gd --shots=isolotto:faro`.
+- Test: 34 + 33 passati.
+- Da controllare (QA): potenziare la base dal Lv.1 al Lv.7 con le Impostazioni di sviluppo e guardare che gli isolotti compaiano senza tagli in camera.
+
 ## 2026-11-08 · Art · Occhi e capelli colorati dei ritratti — fatto
 Segnalazione del proprietario: con occhi o capelli colorati i ritratti si vedono male.
 - **Cosa non andava**: le iridi ricolorate erano dischetti più piccoli dell'iride e più chiari del disegno (puntini che brillano, spesso sulla palpebra); i capelli ricolorati avevano macchie sulla pelle tra le ciocche e colori piatti.
@@ -29,6 +37,7 @@ Richiesta del proprietario: l'armeria deve essere completamente diversa, le armi
 - **Pannello Armeria** (`godot/scripts/ui/facility_panels.gd`): scelta della difficoltà, ricette con costo aggiornato, "Riprendi la forgia", precisione degli oggetti in deposito.
 - Test: nuovo test di regole in `test_runner.gd`, smoke aggiornato. Documento: `GAME_SYSTEMS.md`.
 - Da controllare (QA): giocare le quattro difficoltà, chiudere il gioco a metà forgia e riprenderla.
+
 ## 2026-11-08 · Design + Programming · Stanchezza con malus veri, base legata ai Guardiani, gemme a ogni piano — fatto
 Richiesta del proprietario: la stanchezza non cambiava niente; i requisiti piano/base non erano coerenti; i piani davano gemme solo al primo completamento.
 - **Stanchezza** (`game_state.gd` `FATIGUE_LEVELS`, `fatigue_level`, `derived_stats`; `battle_scene.gd` passo e cadenza): 4 livelli (Riposato, Stanco 40+, Esausto 70+, Sfinito 90+) con malus a vita, attacco, difesa, precisione, schivata, passo e velocità d'attacco. Sfinito = non parte. Avvisi nel Portale e riga nella scheda eroe (`facility_panels.gd`).

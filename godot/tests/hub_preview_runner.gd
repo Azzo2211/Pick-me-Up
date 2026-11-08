@@ -60,7 +60,7 @@ func _run() -> void:
 	for id in shots.split(","):
 		view.focus_on(id, 0)
 		await create_timer(1.0).timeout
-		_capture("res://tests/captures/preview_%s_%s.png" % [tag, id.replace("isola:", "isola_")])
+		_capture("res://tests/captures/preview_%s_%s.png" % [tag, id.replace("isola:", "isola_").replace("isolotto:", "isolotto_")])
 	quit(0)
 
 func _capture(path: String) -> void:
