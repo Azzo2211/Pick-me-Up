@@ -33,6 +33,7 @@ func _initialize() -> void:
 	_test("clear, sblocco piano ed esperienza", _test_clear)
 	_test("promozioni 6★ riservate all'endgame", _test_promotion_gate)
 	_test("armeria: forgia ed equipaggiamento", _test_armory)
+	_test("armeria: forgia a mano, gradi da F a S e difficoltà", _test_forge_minigame_rules)
 	_test("richiamo d'emergenza contro il blocco", _test_emergency)
 	_test("ricarica JSON: niente piani completati falsi", _test_json_reload)
 	_test("sblocchi di sviluppo non sopravvivono", _test_dev_leak)
@@ -358,6 +359,35 @@ func _test_armory() -> Array:
 	var valid: bool = blocked and forged.ok and equipped.ok and game.data.inventory.is_empty() and float(game.derived_stats(hero).attack) != before
 	game.free()
 	return [valid, "Forgia o equipaggiamento non conformi"]
+
+func _test_forge_minigame_rules() -> Array:
+	var game := _fresh("forge-seed")
+	game.data.world.gold = 2000000
+	game.data.world.base_level = 5
+	game.build_facility("armory")
+	var materials_ok := true
+	for key in ["ore", "wood", "leather", "cores"]: game.grant(key, 200, "test", "test")
+	# Precisione → grado, con il tetto della difficoltà
+	var ladder: bool = game.forge_grade_index(0.0, "master") == 0 and game.forge_grade_index(0.3, "master") == 1 and game.forge_grade_index(0.95, "master") == 6
+	var capped: bool = game.forge_grade_index(1.0, "easy") == 3 and game.forge_grade_index(1.0, "normal") == 4 and game.forge_grade_index(1.0, "hard") == 5
+	# Difficile e Maestro bloccati all'Armeria Lv.1
+	var locked: bool = not game.begin_forge("weapon", "hard").ok and not game.begin_forge("weapon", "master").ok
+	# Un lavoro alla volta; i materiali si pagano all'inizio
+	var gold_before := game.resource_amount("gold")
+	var started := game.begin_forge("weapon", "normal")
+	var paid: bool = game.resource_amount("gold") < gold_before and not game.forge_pending().is_empty()
+	var second_blocked: bool = not game.begin_forge("armor", "normal").ok
+	var bad := game.finish_forge(0.0)
+	var no_pending: bool = game.forge_pending().is_empty() and not game.finish_forge(0.5).ok
+	# Armeria Lv.5: Maestro sbloccato, S con precisione alta e più forte del grado F
+	game.data.facilities.armory.level = 5
+	var great := game.forge_item("weapon", "master", 0.97)
+	var valid: bool = materials_ok and ladder and capped and locked and started.ok and paid and second_blocked
+	valid = valid and bad.ok and str(bad.item.grade) == "F" and no_pending
+	valid = valid and great.ok and str(great.item.grade) == "S" and int(great.item.power) > int(bad.item.power) * 4
+	valid = valid and game.forge_window_bonus() > 1.0
+	game.free()
+	return [valid, "Forgia a mano non conforme"]
 
 func _test_emergency() -> Array:
 	var game := _fresh("emergency-seed")

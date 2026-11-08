@@ -106,6 +106,15 @@ Important rule: **system availability and visual presence must stay coherent**. 
 
 Newer base/hub decisions in `GAME_VISION.md` override older facility visualization assumptions.
 
+### Armeria: forgia a mano (novembre 2026)
+Richiesta del proprietario: le armi non escono più a caso, si forgiano a mano con un minigioco di precisione.
+- **Tre fasi**: *Scalda* (ferma il cursore nella zona incandescente della barra), *Martella* (sulla lama compaiono dei punti, un anello si stringe su ognuno: colpisci quando combacia con il bordo; con il mouse conta anche la mira), *Tempra* (come Scalda, zona più stretta e cursore più veloce).
+- **Precisione** = calore 20% + media dei colpi di martello 60% + tempra 20%.
+- **Gradi da F a S** (`GRADES`): F <25%, E 25%, D 40%, C 55%, B 70%, A 82%, S 92% (`FORGE_GRADE_THRESHOLDS`). Statistiche per grado: ×0,55 / 0,75 / 1 / 1,35 / 1,75 / 2,2 / 2,8 sui valori base (arma 18 attacco, armatura 14 difesa, amuleto 30 vita), più fino al +10% per la precisione.
+- **Difficoltà** (`FORGE_DIFFICULTIES`): Facile (max C, 4 punti, oro ×0,8), Normale (max B, 5 punti), Difficile (max A, 6 punti, oro ×1,35, Armeria Lv.3), Maestro (max S, 7 punti, oro ×1,8, Armeria Lv.5). Più è difficile, più tutto è veloce e le zone sono strette.
+- **Livello dell'Armeria**: sblocca le difficoltà e allarga le zone buone del 5% per livello oltre il primo.
+- I materiali si pagano all'inizio; se il gioco si chiude a metà, il lavoro resta sull'incudine e si riprende dall'Armeria senza pagare di nuovo. Gli oggetti vecchi (D–S) restano validi.
+
 ## Determinism and save integrity
 Existing deterministic world/stage behavior, HeroSeed uniqueness, irreversible results, and save integrity are regression-sensitive. Changes touching RNG, mission generation, hero creation, death, economy, progression, or persistence require extra caution and relevant tests.
 

@@ -11,6 +11,13 @@ Qui ogni Claude (o altro agente) che lavora sul repository scrive **cosa sta fac
 
 ---
 
+## 2026-11-08 · Design + Programming + UI · Armeria con forgia a mano — fatto
+Richiesta del proprietario: l'armeria deve essere completamente diversa, le armi si forgiano a mano con minigiochi di precisione e difficoltà, grado da F a S.
+- **Minigioco** (`godot/scripts/ui/forge_minigame.gd`, nuovo): Scalda → Martella i punti → Tempra, a tutto schermo; mouse o Spazio/Invio; scintille e giudizio a ogni colpo; alla fine il grado grande con l'oggetto ottenuto.
+- **Regole** (`godot/scripts/game_state.gd`): gradi F–S, `FORGE_DIFFICULTIES`, `begin_forge` (paga) e `finish_forge(precisione)`; `forge_item` resta per test e strumenti. Lavoro sospeso salvato in `forge_pending`.
+- **Pannello Armeria** (`godot/scripts/ui/facility_panels.gd`): scelta della difficoltà, ricette con costo aggiornato, "Riprendi la forgia", precisione degli oggetti in deposito.
+- Test: nuovo test di regole in `test_runner.gd`, smoke aggiornato. Documento: `GAME_SYSTEMS.md`.
+- Da controllare (QA): giocare le quattro difficoltà, chiudere il gioco a metà forgia e riprenderla.
 ## 2026-11-08 · Design + Programming · Stanchezza con malus veri, base legata ai Guardiani, gemme a ogni piano — fatto
 Richiesta del proprietario: la stanchezza non cambiava niente; i requisiti piano/base non erano coerenti; i piani davano gemme solo al primo completamento.
 - **Stanchezza** (`game_state.gd` `FATIGUE_LEVELS`, `fatigue_level`, `derived_stats`; `battle_scene.gd` passo e cadenza): 4 livelli (Riposato, Stanco 40+, Esausto 70+, Sfinito 90+) con malus a vita, attacco, difesa, precisione, schivata, passo e velocità d'attacco. Sfinito = non parte. Avvisi nel Portale e riga nella scheda eroe (`facility_panels.gd`).

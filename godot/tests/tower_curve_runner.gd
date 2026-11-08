@@ -94,10 +94,10 @@ func _reference_squad(tier: int, variant: int) -> void:
 		for l in level - 1: state._apply_level_up(hero)
 		var grade: int = row[2]
 		hero.equipment.main.power = 18 + grade * 7
-		hero.equipment.main.grade = state.GRADES[grade]
+		hero.equipment.main.grade = state.GRADES[grade + 2]
 		hero.equipment.armor.defense = 14 + grade * 6 + (4 if role == "Guardian" else 0)
-		hero.equipment.armor.grade = state.GRADES[grade]
-		hero.equipment.accessory = {"name": "Amuleto", "grade": state.GRADES[grade], "hp": 30 + grade * 22}
+		hero.equipment.armor.grade = state.GRADES[grade + 2]
+		hero.equipment.accessory = {"name": "Amuleto", "grade": state.GRADES[grade + 2], "hp": 30 + grade * 22}
 		hero.morale = 75
 		hero.fatigue = 0
 		state.data.heroes.append(hero)

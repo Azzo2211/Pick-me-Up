@@ -1273,7 +1273,20 @@ const FORGE_RECIPES := {
 	"armor": {"name": "Armatura rinforzata", "slot": "armor", "cost": {"gold": 3500, "ore": 2, "leather": 2}},
 	"charm": {"name": "Amuleto del Rift", "slot": "accessory", "cost": {"gold": 6000, "cores": 1, "leather": 1}},
 }
-const GRADES := ["D", "C", "B", "A", "S"]
+## Gradi delle armi forgiate a mano, dal peggiore al migliore.
+const GRADES := ["F", "E", "D", "C", "B", "A", "S"]
+## Precisione minima (0..1) del minigioco di forgia per ogni grado.
+const FORGE_GRADE_THRESHOLDS := [0.0, 0.25, 0.40, 0.55, 0.70, 0.82, 0.92]
+## Moltiplicatore delle statistiche per grado (D = valori di prima).
+const FORGE_GRADE_MULT := [0.55, 0.75, 1.0, 1.35, 1.75, 2.2, 2.8]
+## Difficoltà della forgia: più è difficile, più il minigioco è veloce e stretto,
+## ma più alto è il grado massimo che si può ottenere. `unlock` = livello Armeria.
+const FORGE_DIFFICULTIES := {
+	"easy": {"name": "Facile", "unlock": 1, "max_grade": 3, "speed": 0.75, "window": 1.3, "hits": 4, "gold_mult": 0.8},
+	"normal": {"name": "Normale", "unlock": 1, "max_grade": 4, "speed": 1.0, "window": 1.0, "hits": 5, "gold_mult": 1.0},
+	"hard": {"name": "Difficile", "unlock": 3, "max_grade": 5, "speed": 1.3, "window": 0.8, "hits": 6, "gold_mult": 1.35},
+	"master": {"name": "Maestro", "unlock": 5, "max_grade": 6, "speed": 1.6, "window": 0.65, "hits": 7, "gold_mult": 1.8},
+}
 const WORKSHOP_RECIPES := {
 	"cores": {"name": "Nucleo raffinato", "output": {"cores": 1}, "cost": {"gold": 1500, "ore": 3, "wood": 2}},
 	"medicine": {"name": "Kit medico", "output": {"medicine": 1}, "cost": {"gold": 900, "herbs": 2, "leather": 1}},
@@ -1283,26 +1296,75 @@ const ALCHEMY_RECIPES := {
 	"morale": {"name": "Elisir del coraggio", "description": "+25 morale, -20 stanchezza.", "cost": {"gold": 2500, "herbs": 3, "cores": 1}},
 }
 
-func forge_item(recipe_id: String) -> Dictionary:
+## Costo di una ricetta alla difficoltà scelta (cambia solo l'oro).
+func forge_cost(recipe_id: String, difficulty: String = "normal") -> Dictionary:
+	var cost: Dictionary = FORGE_RECIPES.get(recipe_id, {}).get("cost", {}).duplicate()
+	if cost.has("gold"): cost.gold = roundi(float(cost.gold) * float(FORGE_DIFFICULTIES.get(difficulty, FORGE_DIFFICULTIES.normal).gold_mult))
+	return cost
+
+func forge_difficulty_unlocked(difficulty: String) -> bool:
+	return FORGE_DIFFICULTIES.has(difficulty) and facility_level("armory") >= int(FORGE_DIFFICULTIES[difficulty].unlock)
+
+## Margine in più nel minigioco: +5% di tolleranza per ogni livello dell'Armeria oltre il primo.
+func forge_window_bonus() -> float:
+	return 1.0 + 0.05 * maxf(0.0, float(facility_level("armory") - 1))
+
+## Grado che corrisponde a una precisione (0..1), limitato dalla difficoltà.
+func forge_grade_index(precision: float, difficulty: String) -> int:
+	var index := 0
+	for i in FORGE_GRADE_THRESHOLDS.size():
+		if precision >= float(FORGE_GRADE_THRESHOLDS[i]): index = i
+	return mini(index, int(FORGE_DIFFICULTIES.get(difficulty, FORGE_DIFFICULTIES.normal).max_grade))
+
+func forge_pending() -> Dictionary:
+	return data.get("forge_pending", {})
+
+## Primo passo della forgia a mano: paga i materiali e mette il lavoro sull'incudine.
+## Il grado arriva con `finish_forge`, dopo il minigioco. Se il gioco si chiude a metà
+## la forgia resta in sospeso e si riprende dall'Armeria senza pagare di nuovo.
+func begin_forge(recipe_id: String, difficulty: String = "normal") -> Dictionary:
 	if not facility_built("armory"): return {"ok": false, "message": "Costruisci prima l'Armeria"}
+	if not forge_pending().is_empty(): return {"ok": false, "message": "C'è già un lavoro sull'incudine"}
 	var recipe: Dictionary = FORGE_RECIPES.get(recipe_id, {})
 	if recipe.is_empty(): return {"ok": false, "message": "Ricetta sconosciuta"}
-	if not pay(recipe.cost, "Forgia " + recipe.name, "armory"): return {"ok": false, "message": "Risorse insufficienti"}
+	if not FORGE_DIFFICULTIES.has(difficulty): return {"ok": false, "message": "Difficoltà sconosciuta"}
+	if not forge_difficulty_unlocked(difficulty): return {"ok": false, "message": "Serve l'Armeria Lv.%d" % int(FORGE_DIFFICULTIES[difficulty].unlock)}
+	if not pay(forge_cost(recipe_id, difficulty), "Forgia " + recipe.name, "armory"): return {"ok": false, "message": "Risorse insufficienti"}
 	data.item_counter = int(data.get("item_counter", 0)) + 1
-	var rng := rng_for(str(data.world.seed) + ":item:" + str(data.item_counter))
-	var level := facility_level("armory")
-	var grade_index := clampi(int(rng.randf_range(0.0, 1.0 + level * 0.55)), 0, mini(GRADES.size() - 1, level))
+	data["forge_pending"] = {"recipe": recipe_id, "difficulty": difficulty, "number": int(data.item_counter)}
+	save_and_notify()
+	return {"ok": true, "pending": data.forge_pending}
+
+## Secondo passo: la precisione del minigioco (0..1) decide il grado, da F a S.
+func finish_forge(precision: float) -> Dictionary:
+	var pending := forge_pending()
+	if pending.is_empty(): return {"ok": false, "message": "Nessun lavoro sull'incudine"}
+	var recipe: Dictionary = FORGE_RECIPES.get(str(pending.recipe), {})
+	if recipe.is_empty():
+		data.erase("forge_pending")
+		return {"ok": false, "message": "Ricetta sconosciuta"}
+	precision = clampf(precision, 0.0, 1.0)
+	var difficulty := str(pending.difficulty)
+	var grade_index := forge_grade_index(precision, difficulty)
 	var grade: String = GRADES[grade_index]
-	var quality := rng.randf_range(0.9, 1.15)
-	var item := {"id": "I-%05d" % data.item_counter, "name": "%s [%s]" % [recipe.name, grade], "slot": recipe.slot, "grade": grade}
+	var quality := 0.95 + precision * 0.1
+	var mult: float = float(FORGE_GRADE_MULT[grade_index]) * quality
+	var item := {"id": "I-%05d" % int(pending.number), "name": "%s [%s]" % [recipe.name, grade], "slot": recipe.slot, "grade": grade, "precision": roundi(precision * 100.0), "difficulty": difficulty}
 	match recipe.slot:
-		"main": item.power = roundi((18 + grade_index * 7) * quality)
-		"armor": item.defense = roundi((14 + grade_index * 6) * quality)
-		"accessory": item.hp = roundi((30 + grade_index * 22) * quality)
+		"main": item.power = maxi(1, roundi(18.0 * mult))
+		"armor": item.defense = maxi(1, roundi(14.0 * mult))
+		"accessory": item.hp = maxi(1, roundi(30.0 * mult))
 	data.inventory.append(item)
-	add_event("ARMERIA", "Forgiato: " + item.name, "Disponibile in Armeria.", "good")
+	data.erase("forge_pending")
+	add_event("ARMERIA", "Forgiato: " + item.name, "Precisione %d%% · %s." % [int(item.precision), FORGE_DIFFICULTIES[difficulty].name], "good")
 	save_and_notify()
 	return {"ok": true, "item": item}
+
+## Forgia in un colpo solo (test e strumenti): paga e chiude con la precisione data.
+func forge_item(recipe_id: String, difficulty: String = "normal", precision: float = 0.75) -> Dictionary:
+	var started := begin_forge(recipe_id, difficulty)
+	if not started.ok: return started
+	return finish_forge(precision)
 
 func equip_item(hero_id: String, item_id: String) -> Dictionary:
 	if item_id.is_empty(): return {"ok": false, "message": "Oggetto non valido"}

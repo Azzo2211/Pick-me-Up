@@ -8,6 +8,7 @@ const HeroPortraitScript := preload("res://scripts/hero_portrait.gd")
 const HeroCardScript := preload("res://scripts/ui/hero_card.gd")
 const SummonEventScript := preload("res://scripts/ui/summon_event.gd")
 const TowerMapScript := preload("res://scripts/ui/tower_map.gd")
+const ForgeMinigameScript := preload("res://scripts/ui/forge_minigame.gd")
 const HeroLookScript := preload("res://scripts/characters/hero_look.gd")
 const ROSTER_PAGE := 24
 ## Categorie e colori del generatore personaggi (solo aspetto: non cambiano ruolo o statistiche).
@@ -23,6 +24,7 @@ var gate_floor := -1
 var last_summon: Array = []
 var roster_limit := ROSTER_PAGE
 var shop_tab := "daily"
+var forge_difficulty := "normal"
 var _shop_screen: VBoxContainer
 var dyn_rows: Dictionary = {}
 var rendered_signature := ""
@@ -979,10 +981,35 @@ func _recipe_card(title: String, description: String, costs: Dictionary, button_
 	return card
 
 func _build_armory(body: VBoxContainer) -> void:
-	body.add_child(info_card("Forgia armi, armature e amuleti. Più l'Armeria è alta, più è facile ottenere gradi migliori (da D a S)."))
+	body.add_child(info_card("Le armi si forgiano a mano: scalda il metallo, martella i punti al momento giusto e tempra la lama. Più sei preciso, più alto è il grado (da F a S). Le difficoltà alte sono più veloci ma arrivano ai gradi migliori; ogni livello dell'Armeria allarga un po' le zone buone."))
+	var pending := GS.forge_pending()
+	if not pending.is_empty():
+		var recipe_name := str(GS.FORGE_RECIPES.get(str(pending.recipe), {}).get("name", "Oggetto"))
+		body.add_child(info_card("Sull'incudine c'è ancora: %s (%s). I materiali sono già pagati." % [recipe_name, str(GS.FORGE_DIFFICULTIES.get(str(pending.difficulty), {}).get("name", ""))], "warn"))
+		var resume := small_button("Riprendi la forgia", _open_forge_minigame, "gold")
+		resume.size_flags_horizontal = Control.SIZE_SHRINK_END
+		body.add_child(resume)
+	body.add_child(section("Difficoltà", "grado massimo %s" % GS.GRADES[int(GS.FORGE_DIFFICULTIES[forge_difficulty].max_grade)]))
+	var diff_row := HBoxContainer.new()
+	diff_row.add_theme_constant_override("separation", 6)
+	for diff_id in GS.FORGE_DIFFICULTIES:
+		var info: Dictionary = GS.FORGE_DIFFICULTIES[diff_id]
+		var unlocked := GS.forge_difficulty_unlocked(diff_id)
+		var text := str(info.name) if unlocked else "%s · Lv.%d" % [info.name, int(info.unlock)]
+		var b := small_button(text, _set_forge_difficulty.bind(diff_id), "gold" if diff_id == forge_difficulty else "ghost", "" if unlocked else "Serve l'Armeria Lv.%d" % int(info.unlock))
+		b.custom_minimum_size.x = 0
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		diff_row.add_child(b)
+	body.add_child(diff_row)
+	body.add_child(section("Ricette"))
 	for recipe_id in GS.FORGE_RECIPES:
 		var recipe: Dictionary = GS.FORGE_RECIPES[recipe_id]
-		body.add_child(_recipe_card(str(recipe.name), "", recipe.cost, "Forgia", _forge.bind(recipe_id), "gold"))
+		var card := _recipe_card(str(recipe.name), "", GS.forge_cost(recipe_id, forge_difficulty), "Forgia a mano", _forge.bind(recipe_id), "gold")
+		if not pending.is_empty():
+			for b in card.find_children("*", "Button", true, false):
+				b.disabled = true
+				b.tooltip_text = "Finisci prima il lavoro sull'incudine"
+		body.add_child(card)
 	body.add_child(section("In deposito", "%d oggetti" % GS.data.inventory.size()))
 	if GS.data.inventory.is_empty(): body.add_child(UIKit.para("Nessun oggetto forgiato.", 15))
 	for item in GS.data.inventory:
@@ -992,7 +1019,8 @@ func _build_armory(body: VBoxContainer) -> void:
 		var t := VBoxContainer.new()
 		t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		t.add_child(UIKit.label(str(item.get("name", "Oggetto")), 17, UIKit.INK, UIKit.head_font()))
-		t.add_child(UIKit.label("%s · grado %s" % [stat, str(item.get("grade", "D"))], 14, UIKit.INK_SOFT, UIKit.body_bold()))
+		var precision_note := (" · precisione %d%%" % int(item.precision)) if item.has("precision") else ""
+		t.add_child(UIKit.label("%s · grado %s%s" % [stat, str(item.get("grade", "D")), precision_note], 14, UIKit.INK_SOFT, UIKit.body_bold()))
 		row.add_child(t)
 		var item_id := str(item.get("id", ""))
 		row.add_child(small_button("Equipaggia", _equip_pick.bind(item_id), "primary", "" if not item_id.is_empty() else "Oggetto non valido"))
@@ -1001,9 +1029,25 @@ func _build_armory(body: VBoxContainer) -> void:
 		card.add_child(row)
 		body.add_child(card)
 
+func _set_forge_difficulty(diff_id: String) -> void:
+	forge_difficulty = diff_id
+	main._render_panel()
+
+## Paga i materiali e apre il minigioco di forgia a tutto schermo.
 func _forge(recipe_id: String) -> void:
-	var result := GS.forge_item(recipe_id)
-	main.report(result, "Forgiato", str(result.get("item", {}).get("name", "")))
+	var result := GS.begin_forge(recipe_id, forge_difficulty)
+	if not result.ok:
+		main.report(result, "")
+		return
+	_open_forge_minigame()
+
+func _open_forge_minigame() -> void:
+	var pending := GS.forge_pending()
+	if pending.is_empty(): return
+	var game = ForgeMinigameScript.new()
+	game.setup(str(pending.recipe), str(pending.difficulty), GS.forge_window_bonus())
+	main.modal_layer.add_child(game)
+	game.grab_focus()
 
 func _equip_pick(item_id: String) -> void:
 	pick_hero("Chi lo indossa?", GS.get_alive_heroes(), _equip.bind(item_id))
