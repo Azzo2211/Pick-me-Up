@@ -11,6 +11,17 @@ Qui ogni Claude (o altro agente) che lavora sul repository scrive **cosa sta fac
 
 ---
 
+## 2026-11-08 · Art · Occhi e capelli colorati dei ritratti — fatto
+Segnalazione del proprietario: con occhi o capelli colorati i ritratti si vedono male.
+- **Cosa non andava**: le iridi ricolorate erano dischetti più piccoli dell'iride e più chiari del disegno (puntini che brillano, spesso sulla palpebra); i capelli ricolorati avevano macchie sulla pelle tra le ciocche e colori piatti.
+- **Shader** (`godot/scripts/hero_portrait.gd`, `RECOLOR_SHADER`): colore in OKLab; capelli con ombre e riflessi del disegno e tinta un po' smorzata, la pelle tra le ciocche (più chiara dei capelli dipinti) non si tocca; iridi con la luminosità dipinta e solo la tinta nuova, pupilla e riflessi restano.
+- **Maschere e catalogo** (`godot/assets/portraits/pNNN_mask.png`, `portraits.json`, strumento nuovo `tools/character_kit/portrait_masks.py`): iridi intere dai punti dell'iride di MediaPipe dentro l'apertura dell'occhio; controllate a occhio una per una, 127 volti le hanno (prima 140, con dischetti spesso fuori posto), gli altri tengono gli occhi dipinti. Capelli scuri senza i pezzi di pelle del viso. Luminosità in OKLab.
+- **Scelta del colore** (`godot/scripts/portrait_library.gd`): i capelli si ricolorano solo tra colori vicini (`HAIR_COMPAT`); prima anche nero → biondo, che veniva grigio.
+- Test: regole 37 su 37, interfaccia 35 su 35 (con i test dei piani appena allineati ai nuovi requisiti della base).
+- Strumento: si rilancia senza problemi per le iridi; sui capelli già puliti toglie ancora un po' di pixel, quindi per rifare tutto si riparte dalle maschere di prima (commit 106589f).
+- Documento: `ART_DIRECTION.md`. Immagine prima/dopo: `/mnt/project-files/riftward-personaggi/prima_dopo_occhi_capelli.png`.
+- Da controllare (QA): carte e dossier di eroi con capelli blu, rosa, verdi o viola e con occhi colorati.
+
 ## 2026-11-08 · Design + Programming + UI · Armeria con forgia a mano — fatto
 Richiesta del proprietario: l'armeria deve essere completamente diversa, le armi si forgiano a mano con minigiochi di precisione e difficoltà, grado da F a S.
 - **Minigioco** (`godot/scripts/ui/forge_minigame.gd`, nuovo): Scalda → Martella i punti → Tempra, a tutto schermo; mouse o Spazio/Invio; scintille e giudizio a ogni colpo; alla fine il grado grande con l'oggetto ottenuto.

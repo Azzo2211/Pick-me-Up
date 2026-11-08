@@ -25,16 +25,23 @@ void fragment() {
 }
 """
 static var _grey_material: ShaderMaterial
-## Ricolora capelli e occhi del ritratto dipinto con i colori del generatore:
-## la maschera (R capelli, G iridi) dice dove, la luminosità dipinta dà ombre e riflessi
-## (mappa a gradiente: il tono medio dipinto diventa esattamente il colore del generatore),
-## i riflessi bianchi degli occhi restano.
+## Ricolora capelli e occhi del ritratto dipinto con i colori del generatore.
+## La maschera (R capelli, G iridi) dice dove; si lavora in OKLab (luminosità e tinta
+## separate, come le vede l'occhio), così restano le pennellate del disegno:
+## - capelli: ombre, tono medio e riflessi dipinti (dal catalogo) diventano ombre, colore e
+##   riflessi del colore nuovo (il tono medio si sposta per due terzi), la tinta è quella nuova
+##   un po' smorzata, meno satura nei riflessi, con le piccole variazioni di colore del disegno;
+##   ciò che è più chiaro dei capelli dipinti (pelle tra le ciocche) non si tocca;
+## - iridi: luminosità dipinta (si avvicina solo un po' a quella del colore nuovo, niente
+##   puntini che brillano) con la tinta nuova; pupilla, ciglia e riflessi bianchi restano.
 const RECOLOR_SHADER := """shader_type canvas_item;
 uniform sampler2D mask_tex : filter_linear_mipmap;
 uniform vec3 hair_color = vec3(0.3, 0.2, 0.15);
 uniform vec3 eye_color = vec3(0.5, 0.3, 0.2);
-uniform vec3 hair_range = vec3(0.1, 0.35, 0.6);
-uniform vec3 eye_range = vec3(0.1, 0.35, 0.6);
+// luminosità OKLab dipinta: 5°, 50° e 97° percentile; tinta media dei capelli dipinti (a, b)
+uniform vec3 hair_range = vec3(0.25, 0.4, 0.7);
+uniform vec2 hair_ab = vec2(0.0);
+uniform vec3 eye_range = vec3(0.3, 0.45, 0.7);
 uniform float hair_on = 0.0;
 uniform float eye_on = 0.0;
 uniform float grey = 0.0;
@@ -46,32 +53,73 @@ void vertex() {
 	vertex_color = COLOR;
 }
 
-// luminosità dipinta → 0…1, con il tono medio a 0.55
-float tmap(float l, vec3 r) {
-	float mid = clamp(r.y, r.x + 0.02, max(r.z - 0.02, r.x + 0.02));
-	if (l < mid) return 0.55 * clamp((l - r.x) / max(mid - r.x, 0.02), 0.0, 1.0);
-	return 0.55 + 0.45 * clamp((l - mid) / max(r.z - mid, 0.02), 0.0, 1.0);
+vec3 to_oklab(vec3 srgb) {
+	vec3 c = mix(srgb / 12.92, pow((max(srgb, 0.0) + 0.055) / 1.055, vec3(2.4)), step(0.04045, srgb));
+	vec3 lms = vec3(
+		0.4122214708 * c.r + 0.5363325363 * c.g + 0.0514459929 * c.b,
+		0.2119034982 * c.r + 0.6806995451 * c.g + 0.1073969566 * c.b,
+		0.0883024619 * c.r + 0.2817188376 * c.g + 0.6299787005 * c.b);
+	lms = pow(max(lms, vec3(0.0)), vec3(1.0 / 3.0));
+	return vec3(
+		0.2104542553 * lms.x + 0.7936177850 * lms.y - 0.0040720468 * lms.z,
+		1.9779984951 * lms.x - 2.4285922050 * lms.y + 0.4505937099 * lms.z,
+		0.0259040371 * lms.x + 0.7827717662 * lms.y - 0.8086757660 * lms.z);
 }
 
-// ombra scura → colore → riflesso chiaro; i colori chiari hanno ombre meno nere
-vec3 gmap(float t, vec3 col, float base_dark, float base_light) {
-	float y = dot(col, LUM);
-	vec3 dark = col * (base_dark + 0.25 * y);
-	vec3 light = col + (vec3(1.0) - col) * base_light * (0.55 + 0.45 * y);
-	return t < 0.55 ? mix(dark, col, t / 0.55) : mix(col, light, (t - 0.55) / 0.45);
+vec3 from_oklab(vec3 lab) {
+	vec3 lms = vec3(
+		lab.x + 0.3963377774 * lab.y + 0.2158037573 * lab.z,
+		lab.x - 0.1055613458 * lab.y - 0.0638541728 * lab.z,
+		lab.x - 0.0894841775 * lab.y - 1.2914855480 * lab.z);
+	lms = lms * lms * lms;
+	vec3 c = vec3(
+		4.0767416621 * lms.x - 3.3077115913 * lms.y + 0.2309699292 * lms.z,
+		-1.2684380046 * lms.x + 2.6097574011 * lms.y - 0.3413193965 * lms.z,
+		-0.0041960863 * lms.x - 0.7034186147 * lms.y + 1.7076147010 * lms.z);
+	c = max(c, vec3(0.0));
+	return clamp(mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)), 0.0, 1.0);
+}
+
+// capelli: ombre, tono medio e riflessi dipinti → ombre, colore e riflessi del colore nuovo.
+// Il tono medio va solo per due terzi verso quello nuovo: nero → blu resta un blu profondo.
+vec3 hair_lab(vec3 lab, vec3 t) {
+	float lo = hair_range.x;
+	float hi = hair_range.z;
+	float mid = clamp(hair_range.y, lo + 0.02, hi - 0.02);
+	float lt = mix(t.x, mid, 0.35);
+	float out_lo = lt * (0.5 + 0.2 * lt);
+	float out_hi = lt + (1.0 - lt) * 0.55;
+	float l = lab.x < mid
+		? lt - (mid - lab.x) / max(mid - lo, 0.02) * (lt - out_lo)
+		: lt + (lab.x - mid) / max(hi - mid, 0.02) * (out_hi - lt);
+	l = clamp(l, 0.03, 0.99);
+	float up = clamp((l - lt) / max(1.0 - lt, 0.05), 0.0, 1.0);
+	float dn = clamp((lt - l) / max(lt, 0.05), 0.0, 1.0);
+	float f = (1.0 - 0.65 * up) * (1.0 - 0.25 * dn) * 0.88;
+	return vec3(l, t.yz * f + (lab.yz - hair_ab) * 0.6);
+}
+
+// iridi: tinta nuova, luminosità dipinta; pupilla e ciglia (scure) e riflessi (chiari) restano
+vec3 eye_lab(vec3 lab, vec3 t) {
+	float l = clamp(lab.x + (t.x - eye_range.y) * 0.3, 0.0, 1.0);
+	float w = smoothstep(0.2, 0.4, l) * (1.0 - smoothstep(0.84, 0.95, lab.x));
+	return vec3(mix(lab.x, l, w), mix(lab.yz, t.yz * 0.82, w));
 }
 
 void fragment() {
 	vec4 c = texture(TEXTURE, UV);
 	vec3 m = texture(mask_tex, UV).rgb;
-	float l = dot(c.rgb, LUM);
 	vec3 rgb = c.rgb;
-	if (hair_on > 0.5) {
-		rgb = mix(rgb, gmap(tmap(l, hair_range), hair_color, 0.18, 0.6), m.r);
-	}
-	if (eye_on > 0.5) {
-		float keep = clamp((l - 0.85) / 0.1, 0.0, 1.0);
-		rgb = mix(rgb, gmap(tmap(l, eye_range), eye_color, 0.22, 0.55), m.g * (1.0 - keep));
+	float wh = hair_on > 0.5 ? m.r : 0.0;
+	float we = eye_on > 0.5 ? m.g : 0.0;
+	if (wh + we > 0.002) {
+		vec3 lab = to_oklab(rgb);
+		// più chiaro dei capelli dipinti più chiari: pelle tra le ciocche, non capelli
+		wh *= 1.0 - smoothstep(hair_range.z + 0.02, hair_range.z + 0.1, lab.x);
+		vec3 res = lab;
+		if (wh > 0.0) res = mix(res, hair_lab(lab, to_oklab(hair_color)), wh);
+		if (we > 0.0) res = mix(res, eye_lab(lab, to_oklab(eye_color)), we);
+		rgb = from_oklab(res);
 	}
 	if (grey > 0.5) {
 		float g = dot(rgb, LUM);
@@ -277,8 +325,9 @@ func _painted_material() -> ShaderMaterial:
 	var eye_c: Color = look.get("eyes", Color.BLACK)
 	mat.set_shader_parameter("hair_color", Vector3(hair_c.r, hair_c.g, hair_c.b))
 	mat.set_shader_parameter("eye_color", Vector3(eye_c.r, eye_c.g, eye_c.b))
-	mat.set_shader_parameter("hair_range", info.get("hair_range", Vector3(0.1, 0.35, 0.6)))
-	mat.set_shader_parameter("eye_range", info.get("eye_range", Vector3(0.1, 0.35, 0.6)))
+	mat.set_shader_parameter("hair_range", info.get("hair_range", Vector3(0.25, 0.4, 0.7)))
+	mat.set_shader_parameter("hair_ab", info.get("hair_ab", Vector2.ZERO))
+	mat.set_shader_parameter("eye_range", info.get("eye_range", Vector3(0.3, 0.45, 0.7)))
 	mat.set_shader_parameter("grey", 1.0 if dead else 0.0)
 	return mat
 

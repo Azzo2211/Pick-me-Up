@@ -15,7 +15,9 @@ const MANIFEST := DIR + "portraits.json"
 ## O anziano, E elfo, D nano, C testa coperta (cappuccio, cappello, fazzoletto),
 ## F robusto, L capelli lunghi, Q pelleverde (goblin, orco), K uomo-bestia, R occhi rossi dipinti.
 ## Ogni volto ha anche pNNN_mask.png (rosso = capelli, verde = iridi) e nel catalogo
-## la luminosità dipinta di capelli e occhi: servono a ricolorarli con i colori del generatore.
+## la luminosità dipinta di capelli e occhi (OKLab L) e la tinta media dei capelli: servono
+## a ricolorarli con i colori del generatore. Le fa tools/character_kit/portrait_masks.py;
+## le iridi sono controllate a occhio (has_eyes), chi non le ha tiene gli occhi dipinti.
 const HAIR_HEX := {
 	"black": "#25222b", "brown": "#704833", "blond": "#dec27f", "auburn": "#a85439",
 	"copper": "#da793c", "silver": "#c5cedb", "white": "#f0e9e7", "blue": "#578ddc",
@@ -99,10 +101,16 @@ static func hair_recolorable(id: String) -> bool:
 	var flags := str(e.get("flags", ""))
 	return bool(e.get("hair_ok", false)) and not flags.contains("B") and not flags.contains("C")
 
+## I capelli dipinti di `id` diventano bene del colore `family`? Solo tra colori vicini
+## (HAIR_COMPAT): nero → biondo o bianco verrebbe grigio e sporco, meglio il colore dipinto.
+static func hair_recolors_to(id: String, family: String) -> bool:
+	var painted := str(entry(id).get("hair", ""))
+	return hair_recolorable(id) and HAIR_COMPAT.get(painted, []).has(family)
+
 ## Il ritratto mostrerà i capelli nel colore `family` (già dipinti così, ricolorati o calvo)?
 static func shows_hair(id: String, family: String) -> bool:
 	var painted := str(entry(id).get("hair", ""))
-	return painted == family or painted == "bald" or hair_recolorable(id)
+	return painted == family or painted == "bald" or hair_recolors_to(id, family)
 
 ## Cosa ricolorare nel ritratto `id` per un eroe con capelli `family`:
 ## maschera (R capelli, G iridi), cosa accendere e la luminosità dipinta di capelli e occhi.
@@ -114,28 +122,28 @@ static func recolor(id: String, family: String) -> Dictionary:
 	var painted := str(e.get("hair", ""))
 	return {
 		"mask": mask,
-		"hair_on": mask != null and not family.is_empty() and painted != family and painted != "bald" and hair_recolorable(id),
+		"hair_on": mask != null and not family.is_empty() and painted != family and painted != "bald" and hair_recolors_to(id, family),
 		"eye_on": mask != null and bool(e.get("has_eyes", false)),
 		"hair_range": _range(e, "hair"),
+		"hair_ab": Vector2(float(e.get("hair_a", 0.0)), float(e.get("hair_b", 0.0))),
 		"eye_range": _range(e, "eye"),
 	}
 
-## Luminosità dipinta (più scura, media, più chiara) di capelli o iridi.
+## Luminosità dipinta (più scura, media, più chiara) di capelli o iridi, in OKLab L.
 static func _range(e: Dictionary, part: String) -> Vector3:
-	var lo := float(e.get(part + "_lo", 0.1))
-	var hi := float(e.get(part + "_hi", 0.6))
+	var lo := float(e.get(part + "_lo", 0.25))
+	var hi := float(e.get(part + "_hi", 0.7))
 	return Vector3(lo, float(e.get(part + "_mid", (lo + hi) * 0.5)), hi)
 
 ## Quanto un volto è adatto ai capelli dell'eroe (0 è il migliore): stesso colore dipinto,
-## poi un colore che si ricolora bene, poi qualunque ricolorabile, poi il resto.
-## Mezzo punto in più se gli occhi non si possono ricolorare.
+## poi un colore che si ricolora bene, poi il resto (capelli col colore dipinto).
+## Un punto in più se gli occhi non si possono ricolorare.
 static func _tier(e: Dictionary, family: String, red_eyes: bool = false) -> int:
 	var id := str(e.get("id", ""))
 	var painted := str(e.get("hair", ""))
 	var tier := 6
 	if family.is_empty() or painted == family: tier = 0
-	elif painted == "bald" or (hair_recolorable(id) and HAIR_COMPAT.get(painted, []).has(family)): tier = 2
-	elif hair_recolorable(id): tier = 4
+	elif painted == "bald" or hair_recolors_to(id, family): tier = 2
 	var eyes_ok := bool(e.get("has_eyes", false))
 	if not eyes_ok: tier += 1
 	# occhi rossi (1 su 100.000): servono occhi ricolorabili o già dipinti rossi;
