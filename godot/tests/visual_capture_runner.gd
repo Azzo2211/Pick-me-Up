@@ -129,7 +129,7 @@ func _run() -> void:
 	await _wait(0.2)
 	# Base più avanzata: Lv.3 con nuove strutture
 	state.data.world.base_level = 3
-	state.debug_clear_floors(6)
+	state.debug_clear_floors(10)
 	state.data.facilities.training.level = 3
 	state.data.facilities.dormitory.level = 2
 	state.data.facilities.merging.level = 2

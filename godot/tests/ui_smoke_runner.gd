@@ -78,7 +78,7 @@ func _run() -> void:
 			break
 	_check(merged and main.panels.merge_selected.is_empty(), "fusione dal Centro di Fusione")
 	# Espansione base e nuovo cantiere
-	state.debug_clear_floors(3)
+	state.debug_clear_floors(5)
 	state.data.world.gold = 300000
 	main.panels._upgrade_base()
 	await _frames(4)
