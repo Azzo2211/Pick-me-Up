@@ -11,6 +11,17 @@ Qui ogni Claude (o altro agente) che lavora sul repository scrive **cosa sta fac
 
 ---
 
+## 2026-11-10 · Art · Mostri rifatti e movimenti a tutto corpo — fatto
+Richiesta del proprietario: migliorare personaggi 3D, movimenti e mostri, "che sono stati un problema nel gioco". Tutto in `godot/scripts/hub3d/character_model.gd` (più due righe in `hub_agent.gd`); `battle_scene.gd` non è stato toccato.
+- **Segugio**: lupo vero (torace profondo, vita stretta, collo, criniera, zampe dietro col garretto, coda attaccata, mascella che si apre, cristalli del Varco sulla schiena). Trotta o galoppa secondo la velocità, morde con un balzo, sussulta ai colpi, cade sul fianco.
+- **Bruto**: orco curvo e massiccio (spalle enormi, braccia lunghe, zanne, spallaccio, mazza ferrata). Passo pesante che dondola, colpo dall'alto con tutto il corpo, crolla in ginocchio e poi a terra.
+- **Guardiano**: colosso di massi con avambracci enormi, nucleo e crepe accesi nel colore del piano, cristalli sulle spalle. Stessi movimenti pesanti del bruto, pugni a terra.
+- **Eroi e predoni**: fendente, spadone a due mani e affondo di lancia ora muovono tutto il corpo (carica, passo, peso in avanti, piedi piantati). Il passo segue la velocità vera: camminata, corsa o scatto, così i piedi non pattinano più in battaglia. Chi viene colpito incassa all'indietro (parte dal lampo di `flash()`). Alla base si cammina soltanto (`calm`).
+- Il danno arriva sempre all'inizio del colpo, come prima: l'impatto dell'animazione cade a circa un terzo della durata. Durate nuove in `ATTACK_LENGTHS` (mischia 0,55 s, spadone 0,74, lancia 0,52, morso 0,55, mostri grossi 0,95).
+- Test: regole 37 su 37, interfaccia 35 su 35. Battaglie di prova ai piani 2, 4 e 5 senza errori.
+- Immagini: `/mnt/project-files/riftward-personaggi/mostri_prima_dopo.png`, `/mnt/project-files/riftward-personaggi/movimenti_eroi.png`.
+- Da controllare (QA): in battaglia, altezza delle barre vita su bruto e Guardiano, e se la corsa degli eroi a velocità ×2 e ×4 resta leggibile. Per Programmazione: se volete l'impatto preciso, il momento è `attack_length * 0.31` (0,38 per i mostri grossi).
+
 ## 2026-11-08 · Art · Ritratti: occhi colorati rimessi al loro posto — fatto
 Segnalazione del proprietario (scheda di Doria Rook): l'azzurro degli occhi non era messo bene.
 - **Doria** (`p293`): MediaPipe metteva l'iride sinistra 8 pixel accanto a quella dipinta, così metà occhio restava marrone. Spostata a mano sull'iride dipinta.

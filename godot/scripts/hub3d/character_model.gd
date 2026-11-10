@@ -56,6 +56,22 @@ var _meshes: Array[MeshInstance3D] = []
 var _flash_mat: ShaderMaterial
 var _dead_t := 0.0
 var _sit_t := 0.0
+var _hit_t := 0.0
+var _hit_side := 1.0
+var _flash_prev := 0.0
+var _last_pos := Vector3.INF
+var _speed := 0.0
+## ≥ 0: velocità imposta (m/s del modello) al posto di quella misurata. Serve alle anteprime.
+var gait_speed := -1.0
+## Vero: non corre mai, al più cammina svelto (gli abitanti della base).
+var calm := false
+var _weapon_r := false
+## Perni in più dei mostri (mascella, garretti, punta della coda): nome del pezzo → nodo.
+var _extra: Dictionary = {}
+var _gait_t := 0.0
+var _walk_w := 0.0
+var thigh_len := 0.45
+var shin_len := 0.45
 var upright_r := false
 var upright_l := false
 ## Clip di animazione (falso: solo pose procedurali, per esempio se manca il GLB).
@@ -120,13 +136,9 @@ func build_monster(kind: String, tint: Color) -> void:
 		"hound":
 			_build_wolf(tint)
 		"brute":
-			_build_rig({"scale": 1.45, "shoulder": 0.27, "hip": 0.13, "limb": 1.55, "torso": Vector3(1.35, 1.0, 1.25), "head": 0.82})
-			_dress_brute(accent)
-			attack_style = "heavy"
+			_build_brute(accent)
 		"boss":
-			_build_rig({"scale": 2.35, "shoulder": 0.29, "hip": 0.13, "limb": 1.7, "torso": Vector3(1.5, 1.05, 1.3), "head": 0.7})
-			_dress_golem(tint)
-			attack_style = "heavy"
+			_build_golem(tint)
 		"archer":
 			if _build_raider(tint, true): return
 			_build_rig({"scale": 0.98, "shoulder": 0.195, "hip": 0.1})
@@ -221,20 +233,26 @@ func _build_rig(p: Dictionary) -> void:
 	add_child(rig)
 	var shoulder := float(p.get("shoulder", 0.205))
 	var hip := float(p.get("hip", 0.1))
-	hip_height = 0.95
+	# i mostri grossi hanno proporzioni loro: gambe corte, braccia lunghe, spalle alte
+	thigh_len = float(p.get("thigh", 0.45))
+	shin_len = float(p.get("shin", 0.45))
+	var upper := float(p.get("upper_arm", 0.29))
+	var fore := float(p.get("fore_arm", 0.26))
+	var chest := float(p.get("chest", 0.42))
+	hip_height = 0.05 + thigh_len + shin_len
 	hips = _pivot(rig, Vector3(0, hip_height, 0))
 	spine = _pivot(hips, Vector3(0, 0.06, 0))
-	head = _pivot(spine, Vector3(0, 0.5, 0))
-	arm_l = _pivot(spine, Vector3(-shoulder, 0.42, 0))
-	arm_r = _pivot(spine, Vector3(shoulder, 0.42, 0))
-	fore_l = _pivot(arm_l, Vector3(0, -0.29, 0))
-	fore_r = _pivot(arm_r, Vector3(0, -0.29, 0))
-	hand_l = _pivot(fore_l, Vector3(0, -0.26, 0))
-	hand_r = _pivot(fore_r, Vector3(0, -0.26, 0))
+	head = _pivot(spine, p.get("head_at", Vector3(0, 0.5, 0)))
+	arm_l = _pivot(spine, Vector3(-shoulder, chest, 0))
+	arm_r = _pivot(spine, Vector3(shoulder, chest, 0))
+	fore_l = _pivot(arm_l, Vector3(0, -upper, 0))
+	fore_r = _pivot(arm_r, Vector3(0, -upper, 0))
+	hand_l = _pivot(fore_l, Vector3(0, -fore, 0))
+	hand_r = _pivot(fore_r, Vector3(0, -fore, 0))
 	leg_l = _pivot(hips, Vector3(-hip, -0.03, 0))
 	leg_r = _pivot(hips, Vector3(hip, -0.03, 0))
-	shin_l = _pivot(leg_l, Vector3(0, -0.45, 0))
-	shin_r = _pivot(leg_r, Vector3(0, -0.45, 0))
+	shin_l = _pivot(leg_l, Vector3(0, -thigh_len, 0))
+	shin_r = _pivot(leg_r, Vector3(0, -thigh_len, 0))
 	set_meta("limb", float(p.get("limb", 1.0)))
 	set_meta("torso", p.get("torso", Vector3.ONE))
 	set_meta("head", float(p.get("head", 1.0)))
@@ -287,7 +305,9 @@ func _finish() -> void:
 	var map := {"hips": hips, "spine": spine, "head": head, "arm_l": arm_l, "arm_r": arm_r, "fore_l": fore_l, "fore_r": fore_r,
 		"hand_l": hand_l, "hand_r": hand_r, "leg_l": leg_l, "leg_r": leg_r, "shin_l": shin_l, "shin_r": shin_r, "tail": tail, "root": rig}
 	for i in legs_back.size(): map["back_%d" % i] = legs_back[i]
+	map.merge(_extra)
 	_flash()
+	_weapon_r = _parts.has("hand_r") and (_parts["hand_r"] as MeshBuilder).has_geometry() and not upright_r and _skel != null
 	for part in _parts:
 		var b: MeshBuilder = _parts[part]
 		if not b.has_geometry(): continue
@@ -578,45 +598,150 @@ func _dress_bandit(tint: Color, archer: bool) -> void:
 	else:
 		_falchion(_b("hand_r"), Color("#8d9097"))
 
-func _dress_brute(tint: Color) -> void:
-	var skin := Color("#6b7458")
-	var look := {"skin": skin, "hair": Color("#1f1c18"), "fem": false, "style": 1, "beard": 0, "outfit": tint}
-	_body(look, {"shirt": skin, "sleeve": skin, "fore": skin, "hand": skin.darkened(0.1), "pants": Color("#4a3a2a"), "boots": skin.darkened(0.25), "pelvis": Color("#4a3a2a")})
-	var hd := _b("head")
-	for sx in [-1.0, 1.0]: hd.cone("cloth", 0.016, 0.06, Vector3(sx * 0.04, 0.07, 0.1), Color("#e6dcc4"), 5)
-	var tb := _b("spine")
-	tb.rod("cloth", Vector3(-0.2, 0.42, 0.1), Vector3(0.2, 0.0, 0.13), 0.035, 0.035, tint, 6)
-	tb.box("dull", Vector3(0.16, 0.14, 0.03), Vector3(0.12, 0.38, 0.12), Color("#5b5550"), Vector3(0, 0, 0.3))
-	_b("hips").box("cloth", Vector3(0.3, 0.32, 0.02), Vector3(0, -0.2, 0.12), Color("#5a4632"))
-	var club := _b("hand_r")
-	club.rod("cloth", Vector3(0, -0.06, 0), Vector3(0, 0.9, 0.0), 0.03, 0.08, Color("#4a3624"), 7)
-	for i in 4: club.cone("dull", 0.022, 0.07, Vector3(sin(i * 1.7) * 0.07, 0.62 + i * 0.07, cos(i * 1.7) * 0.07), Color("#77736c"), 5, Vector3(cos(i * 1.7) * 1.2, 0, -sin(i * 1.7) * 1.2))
-	_weapon_grip(club, 1.6)
+static func _spike(b: MeshBuilder, key: String, at: Vector3, dir: Vector3, length: float, radius: float, col: Color, segments: int = 5) -> void:
+	b.rod(key, at, at + dir.normalized() * length, radius, 0.0, col, segments)
 
-func _dress_golem(tint: Color) -> void:
-	# le rocce delle membra non vanno appiattite sotto
-	var stone := Color(0, 0, 1, 1)
-	var glow := _glow("spine", tint.lightened(0.35), 3.0)
-	for part in ["leg_l", "leg_r", "shin_l", "shin_r", "hips", "arm_l", "arm_r", "fore_l", "fore_r", "hand_l", "hand_r", "head"]: _glow(part, tint.lightened(0.35), 3.0)
+## Bruto del Varco: un orco curvo e massiccio, spalle enormi, braccia fino alle ginocchia,
+## zanne dal basso e una mazza ferrata. Si muove con le sue pose (_animate_heavy).
+func _build_brute(tint: Color) -> void:
+	_build_rig({"scale": 1.62, "shoulder": 0.36, "hip": 0.17, "thigh": 0.36, "shin": 0.34, "upper_arm": 0.36, "fore_arm": 0.34, "chest": 0.5,
+		"head_at": Vector3(0, 0.55, 0.1)})
+	body_type = "heavy"
+	attack_style = "smash"
+	var skin := Color("#75825a")
+	var shade := skin.darkened(0.2)
+	var pale := skin.lightened(0.14)
+	var hide := Color("#4a3a2a")
+	var iron := Color("#6d6a66")
+	var bone := Color("#e3d9c0")
+	var eye := _glow("head", Color("#ffb24a"), 3.0)
+	# gambe corte e grosse, piedi larghi
 	for side in ["l", "r"]:
-		_b("leg_" + side).rock("rock", 0.14, Vector3(0, -0.22, 0), stone, Vector3(0.75, 1.7, 0.75), 11 if side == "l" else 12, 0.2, false)
-		_b("shin_" + side).rock("rock", 0.13, Vector3(0, -0.24, 0), stone, Vector3(0.75, 1.75, 0.8), 13 if side == "l" else 14, 0.2, false)
-		_b("shin_" + side).rock("rock", 0.11, Vector3(0, -0.43, 0.04), stone, Vector3(1.0, 0.5, 1.3), 15, 0.2, false)
-		_b("arm_" + side).rock("rock", 0.15, Vector3(0, -0.1, 0), stone, Vector3(1.1, 1.3, 1.1), 16 if side == "l" else 17, 0.2, false)
-		_b("fore_" + side).rock("rock", 0.12, Vector3(0, -0.13, 0), stone, Vector3(0.9, 1.5, 0.9), 18 if side == "l" else 19, 0.2, false)
-		_b("hand_" + side).rock("rock", 0.1, Vector3(0, -0.05, 0.01), stone, Vector3(1.0, 0.9, 0.9), 20 if side == "l" else 21, 0.2, false)
-	_b("hips").rock("rock", 0.18, Vector3(0, 0.0, 0), stone, Vector3(1.2, 0.7, 0.9), 22, 0.2, false)
+		var sx := -1.0 if side == "l" else 1.0
+		var lb := _b("leg_" + side)
+		lb.sphere("cloth", 0.14, Vector3(0, -0.02, 0), hide, Vector3(1.0, 1.1, 1.05), 10, 7)
+		lb.rod("cloth", Vector3(0, -0.02, 0), Vector3(0, -0.36, 0), 0.135, 0.1, hide, 10)
+		var sb := _b("shin_" + side)
+		sb.sphere("cloth", 0.1, Vector3(0, 0, 0.01), hide.lightened(0.08), Vector3.ONE, 9, 6)
+		sb.rod("cloth", Vector3(0, 0, 0), Vector3(0, -0.3, 0), 0.098, 0.085, skin, 10)
+		sb.sphere("cloth", 0.1, Vector3(0, -0.33, 0.05), shade, Vector3(1.05, 0.62, 1.7), 10, 6)
+		for toe in 3: sb.sphere("cloth", 0.035, Vector3((toe - 1) * 0.055, -0.36, 0.2), pale, Vector3(1, 0.8, 1.3), 6, 4)
+		# strisce di pelle legate sotto il ginocchio
+		sb.cylinder("cloth", 0.1, 0.1, 0.05, Vector3(0, -0.08, 0), tint.darkened(0.2), 10)
+		# braccia: spalla tonda, bicipite, avambraccio più grosso del braccio, pugno
+		var ab := _b("arm_" + side)
+		ab.sphere("cloth", 0.165, Vector3(sx * 0.01, 0.0, 0), skin, Vector3(1.05, 1.0, 1.05), 12, 8, false, Vector3.ZERO, shade)
+		ab.rod("cloth", Vector3(0, -0.02, 0), Vector3(0, -0.36, 0), 0.118, 0.092, skin, 10)
+		ab.sphere("cloth", 0.1, Vector3(0, -0.17, 0.03), skin, Vector3(0.9, 1.5, 0.9), 9, 6)
+		var fb := _b("fore_" + side)
+		fb.sphere("cloth", 0.092, Vector3.ZERO, shade, Vector3.ONE, 9, 6)
+		fb.rod("cloth", Vector3(0, 0, 0), Vector3(0, -0.34, 0), 0.09, 0.112, skin, 10)
+		fb.cylinder("dull", 0.118, 0.122, 0.13, Vector3(0, -0.24, 0), hide, 10)
+		fb.cylinder("dull", 0.124, 0.124, 0.025, Vector3(0, -0.19, 0), iron, 10)
+		fb.cylinder("dull", 0.126, 0.126, 0.025, Vector3(0, -0.29, 0), iron, 10)
+		var hb2 := _b("hand_" + side)
+		hb2.sphere("cloth", 0.105, Vector3(0, -0.07, 0.01), shade, Vector3(1.0, 1.05, 1.15), 10, 7)
+		for f in 4: hb2.sphere("cloth", 0.034, Vector3((f - 1.5) * 0.05, -0.15, 0.05), skin, Vector3(1, 1.1, 1), 6, 4)
+	# bacino, gonnellino di pelli e cintura con la fibbia d'osso
+	var hb := _b("hips")
+	hb.sphere("cloth", 0.2, Vector3(0, 0.0, 0), hide, Vector3(1.3, 0.85, 1.05), 12, 7)
+	hb.cylinder("dull", 0.25, 0.25, 0.07, Vector3(0, 0.1, 0), Color("#2e2118"), 12, Vector3.ZERO, false)
+	_cloth_panel(hb, 0.3, 0.24, 0.42, Vector3(0, 0.08, 0.2), tint.darkened(0.15), -0.1)
+	_cloth_panel(hb, 0.34, 0.3, 0.38, Vector3(0, 0.08, -0.2), hide.darkened(0.15), 0.1)
+	hb.sphere("dull", 0.05, Vector3(0, 0.1, 0.25), bone, Vector3(1, 1.1, 0.5), 8, 5)
+	# busto a botte: pancia, torace largo, gobba tra le spalle
 	var tb := _b("spine")
-	tb.rock("rock", 0.26, Vector3(0, 0.25, 0), stone, Vector3(1.15, 1.0, 0.8), 23, 0.2, false)
-	tb.rock("rock", 0.14, Vector3(0.0, 0.47, -0.05), stone, Vector3(1.6, 0.6, 0.8), 24, 0.2, false)
-	tb.sphere(glow, 0.06, Vector3(0, 0.28, 0.17), Color.WHITE, Vector3(1, 1.3, 0.4), 8, 5)
-	for i in 5:
-		var y := 0.1 + i * 0.08
-		tb.box(glow, Vector3(0.012, 0.06, 0.012), Vector3(-0.1 + i * 0.05, y, 0.19), Color.WHITE, Vector3(0, 0, 0.4 * sin(i * 2.0)))
+	tb.sphere("cloth", 0.27, Vector3(0, 0.14, 0.04), skin, Vector3(1.12, 0.95, 1.0), 14, 9, false, Vector3.ZERO, pale)
+	tb.sphere("cloth", 0.3, Vector3(0, 0.36, 0.0), skin, Vector3(1.32, 0.9, 0.98), 14, 9, false, Vector3.ZERO, shade)
+	tb.sphere("cloth", 0.2, Vector3(0, 0.53, -0.07), shade, Vector3(1.6, 0.75, 1.0), 12, 7)
+	for sx in [-1.0, 1.0]: tb.sphere("cloth", 0.13, Vector3(sx * 0.15, 0.4, 0.2), pale, Vector3(1.15, 0.85, 0.6), 10, 6)
+	# tracolla nel colore della banda e spallaccio di ferro con le punte
+	tb.rod("cloth", Vector3(-0.33, 0.58, 0.06), Vector3(0.3, 0.1, 0.24), 0.04, 0.04, tint, 6)
+	tb.rod("cloth", Vector3(-0.33, 0.58, -0.06), Vector3(0.3, 0.1, -0.24), 0.04, 0.04, tint.darkened(0.15), 6)
+	tb.sphere("dull", 0.2, Vector3(-0.4, 0.56, 0), iron, Vector3(1.0, 0.7, 1.0), 10, 6, true)
+	for k in 3: _spike(tb, "dull", Vector3(-0.4 + (k - 1) * 0.1, 0.66, (k - 1) * 0.03), Vector3(-0.3 + (k - 1) * 0.3, 1, 0), 0.14, 0.035, bone)
+	# segni di guerra sul braccio libero
+	for k in 2: _b("arm_r").cylinder("fine", 0.115 - k * 0.006, 0.112 - k * 0.006, 0.025, Vector3(0, -0.2 - k * 0.06, 0), tint.lightened(0.1), 10, Vector3.ZERO, false)
+	# testa bassa tra le spalle: fronte sfuggente, mascella larga, zanne, occhi accesi
 	var hd := _b("head")
-	hd.rock("rock", 0.11, Vector3(0, 0.1, 0), stone, Vector3(1.0, 0.85, 1.0), 25, 0.2, false)
-	var hglow := _glow("head", tint.lightened(0.45), 4.0)
-	for sx in [-1.0, 1.0]: hd.sphere(hglow, 0.016, Vector3(sx * 0.04, 0.11, 0.095), Color.WHITE, Vector3(1.4, 0.7, 0.6), 6, 4)
+	hd.sphere("cloth", 0.135, Vector3(0, 0.1, 0.0), skin, Vector3(1.0, 0.95, 1.08), 12, 8)
+	hd.sphere("cloth", 0.125, Vector3(0, 0.02, 0.05), shade, Vector3(1.2, 0.62, 1.05), 12, 7)
+	hd.box("cloth", Vector3(0.21, 0.04, 0.06), Vector3(0, 0.13, 0.12), shade, Vector3(0.2, 0, 0))
+	hd.sphere("cloth", 0.04, Vector3(0, 0.075, 0.15), pale, Vector3(1.2, 0.8, 0.9), 7, 5)
+	for sx in [-1.0, 1.0]:
+		hd.sphere(eye, 0.018, Vector3(sx * 0.055, 0.105, 0.13), Color.WHITE, Vector3(1.3, 0.7, 0.6), 7, 4)
+		_spike(hd, "dull", Vector3(sx * 0.075, 0.03, 0.14), Vector3(sx * 0.12, 1, 0.12), 0.11, 0.024, bone)
+		_spike(hd, "cloth", Vector3(sx * 0.12, 0.1, 0.0), Vector3(sx, 0.35, -0.3), 0.13, 0.04, skin)
+	for k in 4: _spike(hd, "cloth", Vector3(0, 0.2, 0.06 - k * 0.055), Vector3(0, 1, -0.5), 0.1 - k * 0.012, 0.03, Color("#1f1c18"))
+	# mazza: un tronco cerchiato di ferro con le punte, impugnata bassa
+	var club := _b("hand_r")
+	club.push(Transform3D(Basis(Vector3.RIGHT, 1.9), Vector3(0, -0.08, 0.03)))
+	club.rod("cloth", Vector3(0, -0.14, 0), Vector3(0, 0.5, 0), 0.036, 0.05, Color("#4a3624"), 8)
+	club.rod("cloth", Vector3(0, 0.48, 0), Vector3(0, 1.0, 0), 0.07, 0.125, Color("#3c2b1c"), 9)
+	club.sphere("cloth", 0.125, Vector3(0, 1.0, 0), Color("#3c2b1c"), Vector3(1, 0.5, 1), 9, 5)
+	for ring in 2: club.cylinder("dull", 0.1 + ring * 0.026, 0.094 + ring * 0.026, 0.045, Vector3(0, 0.62 + ring * 0.24, 0), iron, 9, Vector3.ZERO, false)
+	for k in 7:
+		var ang := k * 2.4
+		_spike(club, "dull", Vector3(sin(ang) * 0.09, 0.6 + k * 0.058, cos(ang) * 0.09), Vector3(sin(ang), 0.15, cos(ang)), 0.1, 0.028, Color("#8d8a84"))
+	club.pop()
+
+## Guardiano di pietra: un colosso di massi con spalle larghe, avambracci enormi e il
+## nucleo del Varco acceso nel petto. Crepe e cristalli nel colore del piano.
+func _build_golem(tint: Color) -> void:
+	_build_rig({"scale": 2.45, "shoulder": 0.5, "hip": 0.2, "thigh": 0.3, "shin": 0.3, "upper_arm": 0.36, "fore_arm": 0.4, "chest": 0.6,
+		"head_at": Vector3(0, 0.66, 0.1)})
+	body_type = "heavy"
+	attack_style = "smash"
+	var stone := Color("#6c6964")
+	var dark := Color("#4b4844")
+	var light := Color("#858178")
+	var moss := Color("#55683a").lerp(tint, 0.25)
+	var lit := tint.lightened(0.4)
+	for part in ["spine", "head", "hips", "arm_l", "arm_r", "fore_l", "fore_r", "hand_l", "hand_r", "shin_l", "shin_r"]: _glow(part, lit, 1.15)
+	var glow := "glow_" + lit.to_html()
+	for side in ["l", "r"]:
+		var sx := -1.0 if side == "l" else 1.0
+		var n := 0 if side == "l" else 7
+		_b("leg_" + side).rock("cloth", 0.17, Vector3(0, -0.15, 0), dark, Vector3(0.95, 1.25, 0.95), 11 + n, 0.16, false)
+		var sb := _b("shin_" + side)
+		sb.rock("cloth", 0.2, Vector3(0, -0.12, 0.01), stone, Vector3(1.0, 1.05, 1.05), 13 + n, 0.18, false)
+		sb.rock("cloth", 0.2, Vector3(0, -0.29, 0.07), light, Vector3(1.05, 0.45, 1.5), 15 + n, 0.14, false)
+		sb.box(glow, Vector3(0.02, 0.16, 0.02), Vector3(sx * 0.06, -0.1, 0.2), Color.WHITE, Vector3(0, 0, sx * 0.3))
+		var ab := _b("arm_" + side)
+		ab.rock("cloth", 0.27, Vector3(sx * 0.03, 0.04, 0), light, Vector3(1.1, 0.95, 1.1), 16 + n, 0.2, false)
+		ab.rock("cloth", 0.15, Vector3(0, -0.22, 0), dark, Vector3(0.95, 1.3, 0.95), 17 + n, 0.16, false)
+		ab.sphere("cloth", 0.12, Vector3(sx * 0.08, 0.2, -0.05), moss, Vector3(1.4, 0.45, 1.2), 8, 5)
+		var fb := _b("fore_" + side)
+		fb.rock("cloth", 0.22, Vector3(0, -0.2, 0), stone, Vector3(1.0, 1.35, 1.05), 18 + n, 0.18, false)
+		fb.torus(glow, 0.17, 0.016, Vector3(0, -0.03, 0), Color.WHITE, Vector3.ZERO, 12, 5)
+		var hb2 := _b("hand_" + side)
+		hb2.rock("cloth", 0.22, Vector3(0, -0.1, 0.02), light, Vector3(1.05, 1.0, 1.15), 20 + n, 0.2, false)
+		for f in 3: hb2.rock("cloth", 0.08, Vector3((f - 1) * 0.12, -0.27, 0.08), dark, Vector3(1, 1.1, 1), 30 + f + n, 0.15, false)
+		# cristalli del Varco che spuntano dalle spalle
+		for k in 3: _spike(ab, glow, Vector3(sx * (0.05 + k * 0.07), 0.2, -0.08 + k * 0.05), Vector3(sx * (0.2 + k * 0.25), 1, -0.25 + k * 0.1), 0.3 - k * 0.07, 0.055 - k * 0.008, Color.WHITE, 5)
+	_b("hips").rock("cloth", 0.27, Vector3(0, 0.0, 0), dark, Vector3(1.25, 0.7, 0.95), 22, 0.18, false)
+	var tb := _b("spine")
+	tb.rock("cloth", 0.24, Vector3(0, 0.14, 0), stone, Vector3(1.1, 0.8, 0.9), 40, 0.16, false)
+	tb.rock("cloth", 0.44, Vector3(0, 0.46, -0.02), stone, Vector3(1.3, 0.85, 0.82), 23, 0.2, false)
+	tb.rock("cloth", 0.26, Vector3(0, 0.7, -0.14), dark, Vector3(1.6, 0.6, 0.9), 24, 0.2, false)
+	for sx in [-1.0, 1.0]: tb.rock("cloth", 0.2, Vector3(sx * 0.2, 0.52, 0.2), light, Vector3(1.0, 0.85, 0.6), 41 if sx < 0.0 else 42, 0.14, false)
+	# nucleo: una cavità scura col cuore acceso e le crepe che ne escono
+	tb.sphere("fine", 0.11, Vector3(0, 0.4, 0.33), Color("#1c1a18"), Vector3(1, 1.15, 0.45), 10, 6)
+	tb.sphere(glow, 0.075, Vector3(0, 0.4, 0.36), Color.WHITE, Vector3(1, 1.2, 0.6), 10, 6)
+	for k in 6:
+		var ang := k * 1.05 + 0.3
+		var from := Vector3(cos(ang) * 0.1, 0.4 + sin(ang) * 0.11, 0.36)
+		var to := Vector3(cos(ang) * (0.26 + 0.06 * (k % 2)), 0.4 + sin(ang) * (0.24 + 0.05 * ((k + 1) % 2)), 0.33 - 0.03 * absf(cos(ang)))
+		tb.rod(glow, from, to, 0.014, 0.004, Color.WHITE, 4)
+	tb.sphere("cloth", 0.16, Vector3(0.12, 0.84, -0.1), moss, Vector3(1.6, 0.4, 1.2), 8, 5)
+	for k in 4: _spike(tb, glow, Vector3(-0.2 + k * 0.13, 0.8, -0.28), Vector3(-0.15 + k * 0.1, 1, -0.7), 0.22 + 0.1 * (k % 2), 0.05, Color.WHITE, 5)
+	# testa piccola incassata: una fessura di luce al posto degli occhi
+	var hd := _b("head")
+	hd.rock("cloth", 0.16, Vector3(0, 0.1, 0), light, Vector3(1.1, 0.95, 1.0), 25, 0.16, false)
+	hd.rock("cloth", 0.13, Vector3(0, 0.02, 0.05), dark, Vector3(1.15, 0.5, 0.95), 26, 0.12, false)
+	hd.box("fine", Vector3(0.2, 0.05, 0.03), Vector3(0, 0.11, 0.145), Color("#1c1a18"))
+	for sx in [-1.0, 1.0]: hd.box(glow, Vector3(0.065, 0.026, 0.02), Vector3(sx * 0.05, 0.11, 0.158), Color.WHITE, Vector3(0, 0, -sx * 0.18))
+	hd.rock("cloth", 0.09, Vector3(0, 0.23, -0.02), stone, Vector3(1.3, 0.6, 1.1), 27, 0.2, false)
 
 ## Corazza: un guscio attorno al petto, poco più largo del busto.
 func _breastplate(b: MeshBuilder, color: Color, key: String) -> void:
@@ -1167,94 +1292,162 @@ func _shield(b: MeshBuilder, color: Color, accent: Color, rim: Color) -> void:
 
 func _build_wolf(tint: Color) -> void:
 	body_type = "beast"
+	attack_style = "bite"
 	rig = Node3D.new()
 	rig.scale = Vector3.ONE * METER * 1.15
 	add_child(rig)
-	var fur := Color("#4b433b").lerp(tint.darkened(0.55), 0.15)
-	var belly := fur.lightened(0.15)
-	hips = _pivot(rig, Vector3(0, 0.62, -0.32))
-	spine = _pivot(rig, Vector3(0, 0.66, 0.22))
-	head = _pivot(spine, Vector3(0, 0.12, 0.3))
-	leg_l = _pivot(spine, Vector3(-0.11, -0.04, 0.06))
-	leg_r = _pivot(spine, Vector3(0.11, -0.04, 0.06))
-	shin_l = _pivot(leg_l, Vector3(0, -0.3, 0))
-	shin_r = _pivot(leg_r, Vector3(0, -0.3, 0))
-	legs_back = [_pivot(hips, Vector3(-0.11, -0.02, -0.02)), _pivot(hips, Vector3(0.11, -0.02, -0.02))]
-	tail = _pivot(hips, Vector3(0, 0.06, -0.18))
-	# corpo morbido e muscoloso: groppa, torace profondo, collo con la gorgiera di pelo
+	var fur := Color("#3d3a40").lerp(tint.darkened(0.45), 0.22)
+	var belly := fur.lightened(0.22)
+	var dark := fur.darkened(0.35)
+	var lit := tint.lightened(0.3)
+	for part in ["spine", "head", "hips"]: _glow(part, lit, 1.15)
+	var glow := "glow_" + lit.to_html()
+	# groppa e torace sono due perni: correndo la schiena si flette davvero
+	hips = _pivot(rig, Vector3(0, 0.6, -0.26))
+	spine = _pivot(rig, Vector3(0, 0.63, 0.2))
+	head = _pivot(spine, Vector3(0, 0.14, 0.27))
+	var jaw := _pivot(head, Vector3(0, -0.03, 0.06))
+	leg_l = _pivot(spine, Vector3(-0.105, -0.06, 0.04))
+	leg_r = _pivot(spine, Vector3(0.105, -0.06, 0.04))
+	shin_l = _pivot(leg_l, Vector3(0, -0.27, 0))
+	shin_r = _pivot(leg_r, Vector3(0, -0.27, 0))
+	legs_back = [_pivot(hips, Vector3(-0.1, -0.03, -0.02)), _pivot(hips, Vector3(0.1, -0.03, -0.02))]
+	tail = _pivot(hips, Vector3(0, 0.06, -0.19))
+	_extra = {"jaw": jaw, "tail2": _pivot(tail, Vector3(0, -0.1, -0.14))}
+	for i in 2:
+		var hock := _pivot(legs_back[i], Vector3(0, -0.22, 0.07))
+		_extra["bshin_%d" % i] = hock
+		_extra["bfoot_%d" % i] = _pivot(hock, Vector3(0, -0.19, -0.13))
+	# groppa e vita stretta che raggiunge il torace
 	var hb := _b("hips")
-	hb.sphere("cloth", 0.13, Vector3(0, 0.02, 0.06), fur, Vector3(0.98, 1.15, 1.6), 16, 10, false, Vector3.ZERO, belly)
-	for sx in [-1.0, 1.0]: hb.sphere("cloth", 0.075, Vector3(sx * 0.075, -0.02, -0.02), fur, Vector3(0.8, 1.25, 1.2), 12, 8)
+	hb.sphere("cloth", 0.15, Vector3(0, 0.0, 0.0), fur, Vector3(0.95, 1.0, 1.35), 14, 9, false, Vector3.ZERO, belly)
+	hb.rod("cloth", Vector3(0, 0.0, 0.04), Vector3(0, 0.02, 0.36), 0.125, 0.14, fur, 12)
+	# torace profondo, garrese, collo forte
 	var sb := _b("spine")
-	sb.sphere("cloth", 0.155, Vector3(0, -0.03, -0.12), fur, Vector3(0.92, 1.4, 1.7), 16, 10, false, Vector3.ZERO, belly)
-	sb.sphere("cloth", 0.13, Vector3(0, -0.02, 0.12), fur.lightened(0.05), Vector3(1.0, 1.7, 1.1), 16, 10, false, Vector3.ZERO, belly)
-	for sx in [-1.0, 1.0]: sb.sphere("cloth", 0.07, Vector3(sx * 0.08, -0.03, 0.1), fur, Vector3(0.8, 1.3, 1.1), 12, 8)
-	sb.rod("cloth", Vector3(0, 0.06, 0.14), Vector3(0, 0.14, 0.3), 0.085, 0.065, fur, 12)
-	# gorgiera: ciocche di pelo a cono intorno al collo e sul dorso
-	for k in 9:
-		var a := -2.2 + 4.4 * k / 8.0
-		sb.cone("cloth", 0.035, 0.11, Vector3(sin(a) * 0.1, 0.1 + cos(a) * 0.06, 0.15), fur.darkened(0.06), 6, Vector3(-1.1 + cos(a) * 0.5, 0, -sin(a) * 0.9))
-	for k in 5:
-		sb.cone("cloth", 0.03, 0.08, Vector3(0, 0.15 - k * 0.012, 0.02 - k * 0.07), fur.darkened(0.12), 5, Vector3(-1.9, 0, 0))
+	sb.sphere("cloth", 0.175, Vector3(0, -0.03, 0.0), fur, Vector3(0.95, 1.2, 1.5), 16, 10, false, Vector3.ZERO, belly)
+	sb.sphere("cloth", 0.13, Vector3(0, 0.08, 0.03), fur.lightened(0.04), Vector3(1.1, 0.9, 1.35), 12, 8)
+	sb.rod("cloth", Vector3(0, 0.02, 0.1), Vector3(0, 0.14, 0.28), 0.125, 0.085, fur, 12)
+	sb.sphere("cloth", 0.1, Vector3(0, -0.04, 0.2), belly, Vector3(1.0, 1.2, 0.9), 10, 7)
+	# criniera: ciocche che puntano indietro dal collo al garrese
+	for k in 8:
+		var along := k / 7.0
+		var at := Vector3((k % 2 - 0.5) * 0.07, lerpf(0.21, 0.15, along), lerpf(0.24, -0.12, along))
+		_spike(sb, "cloth", at, Vector3((k % 2 - 0.5) * 0.4, 0.75, -0.8), 0.14 - along * 0.04, 0.042, dark)
+	# cristalli del Varco che spaccano la schiena
+	_spike(sb, glow, Vector3(0.0, 0.14, -0.04), Vector3(0, 1, -0.45), 0.2, 0.034, Color.WHITE)
+	_spike(sb, glow, Vector3(0.05, 0.14, 0.08), Vector3(0.3, 1, -0.3), 0.13, 0.026, Color.WHITE)
+	_spike(sb, glow, Vector3(-0.045, 0.13, -0.14), Vector3(-0.3, 1, -0.5), 0.15, 0.028, Color.WHITE)
+	_spike(hb, glow, Vector3(0.0, 0.12, 0.12), Vector3(0, 1, -0.6), 0.12, 0.026, Color.WHITE)
+	# testa: cranio, muso lungo, orecchie, occhi accesi sotto la fronte aggrottata
 	var hd := _b("head")
-	hd.sphere("cloth", 0.098, Vector3(0, 0.02, 0.0), fur, Vector3(1.05, 0.92, 1.1), 16, 10, false, Vector3.ZERO, belly)
-	for sx in [-1.0, 1.0]: hd.sphere("cloth", 0.05, Vector3(sx * 0.065, -0.02, 0.02), fur.lightened(0.04), Vector3(0.9, 1.0, 1.2), 10, 6)
-	hd.push(Transform3D(Basis(Vector3.RIGHT, 0.12), Vector3(0, -0.012, 0.13)))
-	hd.cylinder("cloth", 0.03, 0.062, 0.19, Vector3.ZERO, fur.darkened(0.04), 12, Vector3(PI / 2, 0, 0))
-	hd.box("cloth", Vector3(0.07, 0.025, 0.15), Vector3(0, -0.035, 0.0), belly.darkened(0.1))
-	hd.pop()
-	hd.sphere("cloth", 0.022, Vector3(0, 0.0, 0.235), Color("#121010"), Vector3(1.2, 0.9, 1.0), 8, 6)
-	# zanne
-	for sx in [-1.0, 1.0]: hd.cone("cloth", 0.007, 0.03, Vector3(sx * 0.022, -0.05, 0.19), Color("#e8e0cc"), 5, Vector3(PI, 0, 0))
+	hd.sphere("cloth", 0.088, Vector3(0, 0.012, 0.02), fur, Vector3(1.05, 0.95, 1.15), 14, 9, false, Vector3.ZERO, belly)
+	hd.rod("cloth", Vector3(0, 0.0, 0.06), Vector3(0, -0.012, 0.245), 0.056, 0.032, fur.lightened(0.05), 10)
+	hd.sphere("cloth", 0.022, Vector3(0, -0.004, 0.25), Color("#121010"), Vector3(1.2, 0.9, 1.0), 8, 6)
 	for sx in [-1.0, 1.0]:
-		hd.cone("cloth", 0.04, 0.1, Vector3(sx * 0.06, 0.12, -0.03), fur.darkened(0.15), 6, Vector3(-0.25, 0, sx * 0.32))
-		hd.cone("cloth", 0.022, 0.06, Vector3(sx * 0.058, 0.115, -0.02), Color("#5a3e38"), 5, Vector3(-0.25, 0, sx * 0.32))
-	var eye := _glow("head", Color("#ffb347"), 2.8)
-	for sx in [-1.0, 1.0]: hd.sphere(eye, 0.015, Vector3(sx * 0.047, 0.045, 0.085), Color.WHITE, Vector3(1.4, 0.7, 0.6), 8, 5)
-	for i in 4:
-		var ub := _b(["leg_l", "leg_r", "back_0", "back_1"][i])
-		var front := i < 2
-		# coscia piena in alto, zampa asciutta in basso
-		ub.sphere("cloth", 0.07 if front else 0.085, Vector3(0, -0.07, 0.0 if front else -0.02), fur, Vector3(0.8, 1.7, 1.2), 12, 8)
-		ub.cylinder("cloth", 0.056, 0.036, 0.32, Vector3(0, -0.16, 0), fur, 12)
-		if front:
-			var lb := _b(["shin_l", "shin_r"][i])
-			lb.cylinder("cloth", 0.036, 0.028, 0.3, Vector3(0, -0.15, 0), fur.darkened(0.1), 10)
-			lb.sphere("cloth", 0.036, Vector3(0, -0.3, 0.025), fur.darkened(0.22), Vector3(1.0, 0.6, 1.5), 10, 6)
-		else:
-			ub.cylinder("cloth", 0.036, 0.028, 0.32, Vector3(0, -0.42, -0.04), fur.darkened(0.1), 10, Vector3(-0.25, 0, 0))
-			ub.sphere("cloth", 0.036, Vector3(0, -0.6, 0.02), fur.darkened(0.22), Vector3(1.0, 0.6, 1.5), 10, 6)
-	# coda folta
-	_b("tail").sphere("cloth", 0.06, Vector3(0, -0.08, -0.16), fur.darkened(0.04), Vector3(0.8, 0.8, 1.9), 12, 8, false, Vector3(0.5, 0, 0))
-	_b("tail").sphere("cloth", 0.05, Vector3(0, -0.2, -0.32), fur.darkened(0.14), Vector3(0.8, 0.8, 1.8), 12, 8, false, Vector3(0.7, 0, 0))
-	attack_style = "bite"
+		_spike(hd, "cloth", Vector3(sx * 0.072, -0.01, 0.0), Vector3(sx * 0.8, -0.2, -0.6), 0.1, 0.04, fur)
+		_spike(hd, "cloth", Vector3(sx * 0.052, 0.07, -0.015), Vector3(sx * 0.28, 1, -0.2), 0.125, 0.038, dark)
+		_spike(hd, "cloth", Vector3(sx * 0.052, 0.072, -0.005), Vector3(sx * 0.28, 1, -0.2), 0.085, 0.022, Color("#6a4650"))
+		hd.sphere(glow, 0.015, Vector3(sx * 0.047, 0.036, 0.088), Color.WHITE, Vector3(1.35, 0.7, 0.7), 8, 5)
+		hd.rod("cloth", Vector3(sx * 0.018, 0.05, 0.105), Vector3(sx * 0.075, 0.07, 0.07), 0.014, 0.012, dark, 5)
+		_spike(hd, "dull", Vector3(sx * 0.024, -0.03, 0.2), Vector3(0, -1, 0.1), 0.04, 0.009, Color("#eee6d2"))
+		_spike(hd, "dull", Vector3(sx * 0.033, -0.035, 0.14), Vector3(0, -1, 0), 0.022, 0.008, Color("#eee6d2"))
+	# mascella a parte: si spalanca nel morso
+	var jb := _b("jaw")
+	jb.rod("cloth", Vector3(0, 0, -0.02), Vector3(0, -0.012, 0.165), 0.04, 0.022, belly.darkened(0.12), 8)
+	jb.box("fine", Vector3(0.035, 0.008, 0.11), Vector3(0, 0.022, 0.08), Color("#a3353a"))
+	for sx in [-1.0, 1.0]: _spike(jb, "dull", Vector3(sx * 0.018, 0.005, 0.15), Vector3(0, 1, 0.1), 0.032, 0.008, Color("#eee6d2"))
+	# zampe davanti: spalla, avambraccio, zampa
+	for i in 2:
+		var side: String = ["l", "r"][i]
+		var ub := _b("leg_" + side)
+		ub.sphere("cloth", 0.078, Vector3(0, -0.02, 0), fur, Vector3(0.8, 1.6, 1.2), 10, 7)
+		ub.rod("cloth", Vector3(0, 0, 0), Vector3(0, -0.27, 0), 0.052, 0.038, fur, 9)
+		var lb := _b("shin_" + side)
+		lb.sphere("cloth", 0.04, Vector3.ZERO, fur, Vector3.ONE, 8, 5)
+		lb.rod("cloth", Vector3(0, 0, 0), Vector3(0, -0.25, 0), 0.037, 0.029, dark, 8)
+		lb.sphere("cloth", 0.042, Vector3(0, -0.262, 0.022), dark, Vector3(1.0, 0.6, 1.45), 9, 5)
+		# zampe dietro: coscia in avanti, garretto all'indietro, metatarso a terra
+		var tb := _b("back_%d" % i)
+		tb.sphere("cloth", 0.1, Vector3(0, -0.05, 0.01), fur, Vector3(0.75, 1.45, 1.25), 11, 7)
+		tb.rod("cloth", Vector3(0, 0, 0), Vector3(0, -0.22, 0.07), 0.078, 0.05, fur, 9)
+		var kb := _b("bshin_%d" % i)
+		kb.sphere("cloth", 0.05, Vector3.ZERO, fur, Vector3.ONE, 8, 5)
+		kb.rod("cloth", Vector3(0, 0, 0), Vector3(0, -0.19, -0.13), 0.046, 0.03, fur, 8)
+		var fb := _b("bfoot_%d" % i)
+		fb.sphere("cloth", 0.032, Vector3.ZERO, dark, Vector3.ONE, 7, 5)
+		fb.rod("cloth", Vector3(0, 0, 0), Vector3(0, -0.125, 0.025), 0.03, 0.027, dark, 8)
+		fb.sphere("cloth", 0.042, Vector3(0, -0.135, 0.05), dark, Vector3(1.0, 0.6, 1.45), 9, 5)
+	# coda folta attaccata alla groppa, in due pezzi: pende da ferma, si stende in corsa
+	var t1 := _b("tail")
+	t1.sphere("cloth", 0.05, Vector3(0, 0, 0.02), fur, Vector3.ONE, 8, 5)
+	t1.rod("cloth", Vector3(0, 0, 0.02), Vector3(0, -0.1, -0.14), 0.044, 0.066, fur, 9)
+	var t2 := _b("tail2")
+	t2.sphere("cloth", 0.066, Vector3.ZERO, fur, Vector3.ONE, 9, 6)
+	t2.rod("cloth", Vector3.ZERO, Vector3(0, -0.11, -0.13), 0.066, 0.07, fur, 9)
+	t2.sphere("cloth", 0.07, Vector3(0, -0.11, -0.13), fur, Vector3.ONE, 9, 6)
+	t2.rod("cloth", Vector3(0, -0.11, -0.13), Vector3(0, -0.2, -0.27), 0.068, 0.0, dark, 9)
 
 # =============================================================================
 # Animazione
 # =============================================================================
 
+const ATTACK_LENGTHS := {"melee": 0.55, "heavy": 0.74, "thrust": 0.52, "bow": 0.6, "cast": 0.6, "bite": 0.55, "smash": 0.95}
+const GAITS := ["Walk_F", "Jog_F", "Sprint_F"]
+## Velocità naturale dei clip di passo (m/s nel metro del modello): il passo segue la strada fatta, i piedi non pattinano.
+const GAIT_SPEED := {"Walk_F": 1.53, "Jog_F": 2.59, "Sprint_F": 4.09}
+const HIT_TIME := 0.34
+
 func play(name_text: String) -> void:
 	if name_text == "attack":
-		attack_length = {"melee": 0.45, "heavy": 0.7, "thrust": 0.38, "bow": 0.6, "cast": 0.6, "bite": 0.4}.get(attack_style, 0.45)
+		attack_length = ATTACK_LENGTHS.get(attack_style, 0.5)
 		attack_timer = attack_length
 		return
 	anim = name_text
 
 func update_animation(delta: float, speed_scale: float = 1.0) -> void:
-	phase += delta * speed_scale
-	attack_timer = maxf(0.0, attack_timer - delta * speed_scale)
-	_dead_t = move_toward(_dead_t, 1.0 if anim == "dead" else 0.0, delta * speed_scale * 2.5)
-	_sit_t = move_toward(_sit_t, 1.0 if anim in ["sit", "rest"] else 0.0, delta * speed_scale * 3.0)
-	if body_type == "beast": _animate_beast()
-	elif use_clips and _sit_t <= 0.0 and Motion.ensure(): _animate_clips(delta * speed_scale)
+	var dt := delta * speed_scale
+	phase += dt
+	attack_timer = maxf(0.0, attack_timer - dt)
+	_dead_t = move_toward(_dead_t, 1.0 if anim == "dead" else 0.0, dt * (2.5 if body_type == "human" else 1.25))
+	_sit_t = move_toward(_sit_t, 1.0 if anim in ["sit", "rest"] else 0.0, dt * 3.0)
+	_hit_t = maxf(0.0, _hit_t - dt / HIT_TIME)
+	_measure_speed(delta, dt)
+	if body_type == "beast": _animate_beast(dt)
+	elif body_type == "heavy": _animate_heavy(dt)
 	else:
-		if not _clip.is_empty():
-			# dai clip alle pose procedurali: si riparte da articolazioni dritte
-			for joint in _joints(): joint.quaternion = Quaternion.IDENTITY
-			_clip = ""
-			_pose = {}
-		_animate_human()
+		if use_clips and _sit_t <= 0.0 and Motion.ensure(): _animate_clips(dt)
+		else:
+			if not _clip.is_empty():
+				# dai clip alle pose procedurali: si riparte da articolazioni dritte
+				for joint in _joints(): joint.quaternion = Quaternion.IDENTITY
+				_clip = ""
+				_pose = {}
+			_animate_human()
+		_apply_hit()
 	_sync_skeleton()
+
+## Quanto si sta spostando il modello, in m/s del proprio metro e nel tempo di gioco.
+## Chi lo muove (battaglia, base) non deve dire niente: si misura la strada fatta.
+func _measure_speed(delta: float, dt: float) -> void:
+	if rig == null or not is_inside_tree(): return
+	var pos := global_position
+	if _last_pos != Vector3.INF and dt > 0.0001:
+		var unit := maxf(rig.global_transform.basis.get_scale().y, 0.001)
+		var v := minf(Vector2(pos.x - _last_pos.x, pos.z - _last_pos.z).length() / (dt * unit), 9.0)
+		_speed = lerpf(_speed, v, clampf(delta * 10.0, 0.0, 1.0))
+	_last_pos = pos
+
+func move_speed() -> float:
+	return gait_speed if gait_speed >= 0.0 else _speed
+
+## Passo adatto alla velocità: [clip, ritmo]. Chi è già di corsa continua finché non rallenta davvero.
+func _gait() -> Array:
+	var v := move_speed()
+	if v < 0.3: return ["Walk_F", 1.0]
+	var running := _clip in ["Jog_F", "Sprint_F"]
+	if calm or v < (2.0 if running else 2.3): return ["Walk_F", clampf(v / GAIT_SPEED.Walk_F, 0.7, 1.4)]
+	if v > (3.5 if _clip == "Sprint_F" else 3.8): return ["Sprint_F", clampf(v / GAIT_SPEED.Sprint_F, 0.9, 1.3)]
+	return ["Jog_F", clampf(v / GAIT_SPEED.Jog_F, 0.8, 1.45)]
 
 ## Il corpo del kit segue le articolazioni: stesse rotazioni, bacino compreso lo spostamento.
 func _sync_skeleton() -> void:
@@ -1270,27 +1463,33 @@ func _sync_skeleton() -> void:
 		_skel.set_bone_pose_rotation(b, q)
 	if _bone_ids[0] >= 0: _skel.set_bone_pose_position(_bone_ids[0], hips.position)
 
-## Pose dai clip: animazione base su tutto il corpo, arco e magia sulla parte alta
-## (sulle gambe solo da fermi). Le animazioni senza clip usano le pose procedurali,
-## lette come quaternioni così che anche quei passaggi siano morbidi.
+## Pose dai clip: animazione base su tutto il corpo (fermo, passo, corsa, caduta).
+## I colpi si sovrappongono: arco e magia dai clip, spada e lancia dalle pose
+## procedurali a tutto corpo. In movimento il colpo prende solo la parte alta.
 func _animate_clips(dt: float) -> void:
 	if rig == null: return
-	var heavy := monster_kind in ["brute", "boss"]
 	var base: String = BASE_CLIPS.get(anim, "")
-	var action: String = ATTACK_CLIPS.get(attack_style, "") if attack_timer > 0.0 else ""
-	var procedural := base.is_empty() or (attack_timer > 0.0 and action.is_empty())
-	var key := ("proc:" + anim + (":atk" if attack_timer > 0.0 else "")) if procedural else base
-	if key != _clip or action != _action:
+	var moving := anim == "walk"
+	var rate := 1.0
+	if moving:
+		var gait := _gait()
+		base = gait[0]
+		rate = gait[1]
+	var procedural := base.is_empty()
+	var key := ("proc:" + anim) if procedural else base
+	if key != _clip:
 		if _clip.is_empty() and _pose.is_empty():
 			# primo clip: fase casuale, così una folla non si muove all'unisono
 			_clip_t = fmod(float(get_instance_id() % 997) * 0.37, Motion.length(base)) if not base.is_empty() else 0.0
-		elif key != _clip:
+		elif moving and _clip in GAITS:
+			# dal passo alla corsa senza perdere l'appoggio: stesso punto del ciclo
+			_clip_t = _clip_t / Motion.length(_clip) * Motion.length(base)
+		else:
 			_clip_t = 0.0
 		_fade_from = _pose
 		_fade_t = 0.0 if not _pose.is_empty() else 1.0
 		_clip = key
-		_action = action
-	_clip_t += dt * (0.75 if heavy and base == "Walk_F" else 1.0)
+	_clip_t += dt * rate
 	_fade_t = minf(1.0, _fade_t + dt / BLEND_TIME)
 	var pose: Dictionary
 	if procedural:
@@ -1299,11 +1498,26 @@ func _animate_clips(dt: float) -> void:
 		pose = _read_pose()
 	else:
 		pose = Motion.sample(base, _clip_t, base != "Death")
-		if not action.is_empty():
+		if attack_timer > 0.0 and base != "Death":
 			var k := 1.0 - attack_timer / attack_length
-			var strike := Motion.sample(action, k * Motion.length(action), false)
-			for joint in (Motion.UPPER if base == "Walk_F" else Motion.UPPER + Motion.LOWER): pose[joint] = strike[joint]
-			if base != "Walk_F": pose["@hips"] = strike["@hips"]
+			var action: String = ATTACK_CLIPS.get(attack_style, "")
+			var strike: Dictionary
+			if action.is_empty():
+				for joint in _joints(): joint.quaternion = Quaternion.IDENTITY
+				_animate_human()
+				strike = _read_pose()
+			else:
+				strike = Motion.sample(action, k * Motion.length(action), false)
+			# il colpo entra e esce sfumando sulla posa di base: niente scatti
+			var weight := smoothstep(0.0, 0.1, k) * (1.0 - smoothstep(0.8, 1.0, k))
+			for joint in (Motion.UPPER if moving else Motion.UPPER + Motion.LOWER):
+				pose[joint] = (pose[joint] as Quaternion).slerp(strike[joint], weight)
+			if not moving: pose["@hips"] = (pose["@hips"] as Vector3).lerp(strike["@hips"], weight)
+		if base in ["Jog_F", "Sprint_F"] and _weapon_r and attack_timer <= 0.0:
+			# di corsa l'arma non sventola: il braccio che la porta resta raccolto lungo il fianco
+			pose["arm_r"] = (pose["arm_r"] as Quaternion).slerp(Quaternion.from_euler(Vector3(0.2, 0, 0.12)), 0.7)
+			pose["fore_r"] = (pose["fore_r"] as Quaternion).slerp(Quaternion.from_euler(Vector3(-0.75, 0, 0)), 0.7)
+			pose["hand_r"] = Quaternion.from_euler(Vector3(0.35 if attack_style == "thrust" else 0.0, 0, 0))
 	pose = Motion.blend(_fade_from, pose, _fade_t)
 	_pose = pose
 	_apply_pose(pose)
@@ -1329,163 +1543,384 @@ func _apply_pose(pose: Dictionary) -> void:
 	for i in JOINT_NAMES.size(): (nodes[i] as Node3D).quaternion = pose[JOINT_NAMES[i]]
 	hips.position = Vector3(0, hip_height, 0) + (pose["@hips"] as Vector3) * (hip_height / Motion.SOURCE_HIP_HEIGHT)
 
+## Piede piantato a terra: la gamba si piega quanto serve per arrivare a `forward`
+## metri davanti all'anca, col bacino abbassato di `drop` (cinematica inversa a due ossa).
+func _plant(leg: Node3D, shin: Node3D, forward: float, drop: float, side: float = 0.0) -> void:
+	var down := maxf(0.2, thigh_len + shin_len - drop)
+	var reach := clampf(sqrt(forward * forward + down * down), 0.25, (thigh_len + shin_len) * 0.999)
+	var knee := acos(clampf((thigh_len * thigh_len + shin_len * shin_len - reach * reach) / (2.0 * thigh_len * shin_len), -1.0, 1.0))
+	var hip := acos(clampf((thigh_len * thigh_len + reach * reach - shin_len * shin_len) / (2.0 * thigh_len * reach), -1.0, 1.0))
+	leg.rotation = Vector3(-(atan2(forward, down) + hip), 0, side)
+	shin.rotation = Vector3(PI - knee, 0, 0)
+
+static func _ease_out(x: float) -> float:
+	return 1.0 - (1.0 - x) * (1.0 - x)
+
+static func _mix(a: Dictionary, b: Dictionary, weight: float) -> Dictionary:
+	var out := a.duplicate()
+	for key in b: out[key] = lerpf(float(a.get(key, 0.0)), float(b[key]), weight)
+	return out
+
+## Colpi a tutto corpo: carica breve, colpo col peso che avanza, chiusura e ritorno.
+## Il danno arriva subito, quindi l'impatto cade presto (circa al 30%).
+func _strike_pose(base: Dictionary, k: float) -> Dictionary:
+	var wind: Dictionary
+	var hit: Dictionary
+	var t_wind := 0.17
+	var t_hit := 0.31
+	match attack_style:
+		"heavy":
+			# spadone a due mani: dall'alto dietro la testa fino a terra davanti
+			t_wind = 0.2
+			t_hit = 0.34
+			wind = {"arm_r_x": -2.75, "elbow_r": -1.25, "arm_r_z": -0.2, "arm_l_x": -2.6, "elbow_l": -1.45, "arm_l_z": 0.5, "spine_x": -0.24, "spine_y": 0.22,
+				"hips_y": 0.1, "dz": -0.07, "dy": -0.02, "foot_l": 0.12, "foot_r": -0.08, "wrist": -0.25}
+			hit = {"arm_r_x": -0.8, "elbow_r": -0.3, "arm_r_z": -0.35, "arm_l_x": -0.85, "elbow_l": -0.75, "arm_l_z": 0.6, "spine_x": 0.52, "spine_y": -0.3,
+				"hips_y": -0.12, "dz": 0.2, "dy": -0.17, "foot_l": 0.46, "foot_r": -0.12, "wrist": 0.5}
+		"thrust":
+			# affondo di lancia: braccio caricato indietro, poi passo lungo e punta in avanti
+			wind = {"arm_r_x": 0.75, "elbow_r": -1.55, "arm_r_z": 0.25, "arm_l_x": -1.0, "elbow_l": -0.5, "spine_x": 0.06, "spine_y": 0.6,
+				"hips_y": 0.25, "dz": -0.1, "dy": -0.06, "foot_l": 0.14, "foot_r": -0.1}
+			hit = {"arm_r_x": -1.42, "elbow_r": -0.05, "arm_r_z": 0.0, "arm_l_x": 0.75, "elbow_l": -0.35, "arm_l_z": -0.3, "spine_x": 0.3, "spine_y": -0.45,
+				"hips_y": -0.2, "dz": 0.36, "dy": -0.19, "foot_r": 0.62, "foot_l": -0.12}
+		_:
+			# fendente a una mano: spalla indietro, poi il taglio attraversa il corpo con un passo
+			wind = {"arm_r_x": -2.35, "elbow_r": -1.45, "arm_r_z": 0.55, "arm_l_x": -0.75, "elbow_l": -1.0, "arm_l_z": 0.15, "spine_x": -0.1, "spine_y": 0.58,
+				"hips_y": 0.2, "dz": -0.06, "dy": -0.03, "foot_r": -0.08}
+			hit = {"arm_r_x": -0.95, "elbow_r": -0.18, "arm_r_z": -0.6, "arm_l_x": 0.35, "elbow_l": -0.9, "arm_l_z": -0.2, "spine_x": 0.3, "spine_y": -0.62,
+				"hips_y": -0.22, "dz": 0.2, "dy": -0.11, "foot_l": 0.4, "foot_r": -0.08, "wrist": 0.45}
+	wind = _mix(base, wind, 1.0)
+	hit = _mix(base, hit, 1.0)
+	var pose: Dictionary
+	if k < t_wind: pose = _mix(base, wind, _ease_out(k / t_wind))
+	elif k < t_hit:
+		var s := (k - t_wind) / (t_hit - t_wind)
+		pose = _mix(wind, hit, s * s)
+	elif k < 0.6: pose = _mix(hit, base, 0.1 * (k - t_hit) / (0.6 - t_hit))
+	else: pose = _mix(hit, base, 0.1 + 0.9 * smoothstep(0.6, 1.0, k))
+	# lo sguardo resta sul bersaglio mentre il busto gira
+	pose.head_y = -(float(pose.spine_y) + float(pose.hips_y)) * 0.75
+	pose.head_x = -float(pose.spine_x) * 0.6
+	pose.arm_a = 0.0
+	# la lancia resta puntata in avanti qualunque cosa faccia il braccio
+	if attack_style == "thrust":
+		var level := smoothstep(0.0, 0.12, k) * (1.0 - smoothstep(0.75, 1.0, k))
+		pose.wrist = (-(float(pose.arm_r_x) + float(pose.elbow_r)) - 0.16) * level
+		pose.arm_r_y = -(float(pose.spine_y) + float(pose.hips_y)) * level
+	return pose
+
 func _animate_human() -> void:
 	if rig == null: return
 	var t := phase
 	var walk := anim == "walk"
-	var heavy := monster_kind in ["brute", "boss"]
-	var stride := 7.2 if not heavy else 4.6
-	var w := t * stride
-	var leg_a := 0.0
-	var knee_l := 0.04
-	var knee_r := 0.04
-	var arm_a := 0.0
-	var arm_l_x := 0.0
-	var arm_r_x := -0.12
-	var arm_l_z := -0.07
-	var arm_r_z := 0.07
-	var elbow_l := -0.18
-	var elbow_r := -0.32
-	var bob := 0.0
-	var spine_x := sin(t * 1.7) * 0.015
-	var spine_y := 0.0
-	var head_y := 0.0
-	var head_x := 0.0
+	var w := t * 7.2
+	var p := {"leg_a": 0.0, "knee_l": 0.04, "knee_r": 0.04, "arm_a": 0.0, "arm_l_x": 0.0, "arm_r_x": -0.12, "arm_l_z": -0.07, "arm_r_z": 0.07, "arm_r_y": 0.0,
+		"elbow_l": -0.18, "elbow_r": -0.32, "bob": 0.0, "spine_x": sin(t * 1.7) * 0.015, "spine_y": 0.0, "head_x": 0.0, "head_y": 0.0,
+		"wrist": 0.0, "hips_y": 0.0, "dz": 0.0, "dy": 0.0, "foot_l": 0.0, "foot_r": 0.0}
 	if walk:
-		leg_a = sin(w) * (0.55 if not heavy else 0.4)
-		knee_l = maxf(0.0, sin(w + 1.3)) * 0.85 + 0.05
-		knee_r = maxf(0.0, sin(w + 1.3 + PI)) * 0.85 + 0.05
-		arm_a = sin(w) * 0.38
-		bob = absf(sin(w)) * 0.035
-		spine_y = sin(w) * 0.07
-		elbow_l = -0.25 - maxf(0.0, -sin(w)) * 0.35
-		elbow_r = -0.32 - maxf(0.0, sin(w)) * 0.3
+		p.leg_a = sin(w) * 0.55
+		p.knee_l = maxf(0.0, sin(w + 1.3)) * 0.85 + 0.05
+		p.knee_r = maxf(0.0, sin(w + 1.3 + PI)) * 0.85 + 0.05
+		p.arm_a = sin(w) * 0.38
+		p.bob = absf(sin(w)) * 0.035
+		p.spine_y = sin(w) * 0.07
+		p.elbow_l = -0.25 - maxf(0.0, -sin(w)) * 0.35
+		p.elbow_r = -0.32 - maxf(0.0, sin(w)) * 0.3
 	match anim:
 		"idle":
-			head_y = sin(t * 0.5) * 0.3 * sin(t * 0.17)
+			p.head_y = sin(t * 0.5) * 0.3 * sin(t * 0.17)
 		"talk":
-			arm_r_x = -0.5 + sin(t * 3.5) * 0.25
-			elbow_r = -0.9 + sin(t * 4.3) * 0.25
-			head_y = sin(t * 1.3) * 0.15
+			p.arm_r_x = -0.5 + sin(t * 3.5) * 0.25
+			p.elbow_r = -0.9 + sin(t * 4.3) * 0.25
+			p.head_y = sin(t * 1.3) * 0.15
 		"cheer":
-			arm_r_x = -2.85 + sin(t * 7.0) * 0.18
-			arm_l_x = -2.6 - sin(t * 7.0) * 0.18
-			elbow_r = -0.25
-			elbow_l = -0.3
-			bob = absf(sin(t * 7.0)) * 0.05
+			p.arm_r_x = -2.85 + sin(t * 7.0) * 0.18
+			p.arm_l_x = -2.6 - sin(t * 7.0) * 0.18
+			p.elbow_r = -0.25
+			p.elbow_l = -0.3
+			p.bob = absf(sin(t * 7.0)) * 0.05
 		"train":
 			var c := fmod(t, 1.3) / 1.3
 			if c < 0.45:
-				arm_r_x = lerpf(-0.4, -2.5, c / 0.45)
-				elbow_r = lerpf(-0.4, -1.3, c / 0.45)
+				p.arm_r_x = lerpf(-0.4, -2.5, c / 0.45)
+				p.elbow_r = lerpf(-0.4, -1.3, c / 0.45)
 			elif c < 0.6:
 				var k := (c - 0.45) / 0.15
-				arm_r_x = lerpf(-2.5, -0.5, k)
-				elbow_r = lerpf(-1.3, -0.15, k)
-				spine_y = -0.25 * k
+				p.arm_r_x = lerpf(-2.5, -0.5, k)
+				p.elbow_r = lerpf(-1.3, -0.15, k)
+				p.spine_y = -0.25 * k
 			else:
-				arm_r_x = -0.5
-				elbow_r = -0.25
-			arm_l_x = -0.6
-			elbow_l = -1.0
-			leg_a = 0.0
-			knee_l = 0.2
-			knee_r = 0.12
+				p.arm_r_x = -0.5
+				p.elbow_r = -0.25
+			p.arm_l_x = -0.6
+			p.elbow_l = -1.0
+			p.leg_a = 0.0
+			p.knee_l = 0.2
+			p.knee_r = 0.12
 		"rest":
-			head_x = 0.35
-			arm_l_x = -0.5
-			arm_r_x = -0.5
-			elbow_l = -1.0
-			elbow_r = -1.0
-	if attack_timer > 0.0:
+			p.head_x = 0.35
+			p.arm_l_x = -0.5
+			p.arm_r_x = -0.5
+			p.elbow_l = -1.0
+			p.elbow_r = -1.0
+	var attacking := attack_timer > 0.0
+	if attacking:
 		var k := 1.0 - attack_timer / attack_length
 		match attack_style:
-			"melee", "heavy":
-				if k < 0.5:
-					arm_r_x = lerpf(arm_r_x, -2.6, k / 0.5)
-					elbow_r = lerpf(elbow_r, -1.2, k / 0.5)
-					spine_y = lerpf(0.0, 0.25, k / 0.5)
-					if attack_style == "heavy":
-						arm_l_x = lerpf(arm_l_x, -2.4, k / 0.5)
-						elbow_l = -1.0
-				else:
-					var s := (k - 0.5) / 0.5
-					arm_r_x = lerpf(-2.6, -0.35, minf(1.0, s * 1.8))
-					elbow_r = lerpf(-1.2, -0.1, minf(1.0, s * 1.8))
-					spine_y = lerpf(0.25, -0.3, minf(1.0, s * 1.8))
-					spine_x = 0.12 * sin(s * PI)
-					if attack_style == "heavy":
-						arm_l_x = lerpf(-2.4, -0.4, minf(1.0, s * 1.8))
-			"thrust":
-				var s := sin(k * PI)
-				arm_r_x = lerpf(-0.25, -0.8, s)
-				elbow_r = lerpf(-0.6, 0.0, s)
-				spine_x = 0.15 * s
-				arm_l_x = -0.9
-				elbow_l = -0.9
 			"bow":
-				arm_l_x = -1.5
-				arm_l_z = -0.05
-				elbow_l = -0.05
-				arm_r_x = -1.45
-				elbow_r = lerpf(-0.6, -1.9, minf(1.0, k * 2.0))
-				arm_r_z = -0.25
-				spine_y = 0.35
-				head_y = -0.3
+				p.arm_l_x = -1.5
+				p.arm_l_z = -0.05
+				p.elbow_l = -0.05
+				p.arm_r_x = -1.45
+				p.elbow_r = lerpf(-0.6, -1.9, minf(1.0, k * 2.0))
+				p.arm_r_z = -0.25
+				p.spine_y = 0.35
+				p.head_y = -0.3
 			"cast":
 				var s := sin(k * PI)
-				arm_r_x = lerpf(-0.4, -2.1, s)
-				elbow_r = lerpf(-0.4, -0.2, s)
-				arm_l_x = lerpf(0.0, -1.2, s)
-				elbow_l = -0.4
-				spine_x = -0.08 * s
+				p.arm_r_x = lerpf(-0.4, -2.1, s)
+				p.elbow_r = lerpf(-0.4, -0.2, s)
+				p.arm_l_x = lerpf(0.0, -1.2, s)
+				p.elbow_l = -0.4
+				p.spine_x = -0.08 * s
+			_:
+				p = _strike_pose(p, k)
 	# seduto
 	var sit := _sit_t
-	hips.position.y = lerpf(hip_height + bob, 0.52, sit)
-	leg_l.rotation.x = lerpf(-leg_a, -1.5, sit)
-	leg_r.rotation.x = lerpf(leg_a, -1.45, sit)
-	shin_l.rotation.x = lerpf(knee_l, 1.5, sit)
-	shin_r.rotation.x = lerpf(knee_r, 1.45, sit)
-	arm_l.rotation = Vector3(arm_l_x + arm_a, 0, arm_l_z)
-	arm_r.rotation = Vector3(arm_r_x - arm_a, 0, arm_r_z)
-	fore_l.rotation.x = elbow_l
-	fore_r.rotation.x = elbow_r
+	if attacking and not walk and sit <= 0.0 and attack_style not in ["bow", "cast"]:
+		# colpo da fermi: il bacino avanza e si abbassa, i piedi restano piantati
+		hips.position = Vector3(0, hip_height + float(p.dy), float(p.dz))
+		hips.rotation = Vector3(0, float(p.hips_y), 0)
+		_plant(leg_l, shin_l, float(p.foot_l) - float(p.dz), -float(p.dy))
+		_plant(leg_r, shin_r, float(p.foot_r) - float(p.dz), -float(p.dy))
+	else:
+		hips.position = Vector3(0, lerpf(hip_height + float(p.bob), 0.52, sit), 0)
+		hips.rotation = Vector3.ZERO
+		leg_l.rotation = Vector3(lerpf(-float(p.leg_a), -1.5, sit), 0, 0)
+		leg_r.rotation = Vector3(lerpf(float(p.leg_a), -1.45, sit), 0, 0)
+		shin_l.rotation.x = lerpf(float(p.knee_l), 1.5, sit)
+		shin_r.rotation.x = lerpf(float(p.knee_r), 1.45, sit)
+	arm_l.rotation = Vector3(float(p.arm_l_x) + float(p.arm_a), 0, float(p.arm_l_z))
+	arm_r.rotation = Vector3(float(p.arm_r_x) - float(p.arm_a), float(p.arm_r_y), float(p.arm_r_z))
+	fore_l.rotation.x = float(p.elbow_l)
+	fore_r.rotation.x = float(p.elbow_r)
 	# chi impugna bastoni o archi li tiene dritti compensando braccio e gomito
-	hand_r.rotation.x = -(arm_r.rotation.x + elbow_r) - (0.25 if attack_timer > 0.0 and attack_style == "cast" else 0.0) if upright_r else 0.0
-	hand_l.rotation.x = -(arm_l.rotation.x + elbow_l) if upright_l else 0.0
-	spine.rotation = Vector3(spine_x + sit * 0.05, spine_y, 0)
-	head.rotation = Vector3(head_x, head_y, 0)
+	hand_r.rotation.x = (-(arm_r.rotation.x + float(p.elbow_r)) - (0.25 if attacking and attack_style == "cast" else 0.0)) if upright_r else float(p.wrist)
+	hand_l.rotation.x = -(arm_l.rotation.x + float(p.elbow_l)) if upright_l else 0.0
+	spine.rotation = Vector3(float(p.spine_x) + sit * 0.05, float(p.spine_y), 0)
+	head.rotation = Vector3(float(p.head_x), float(p.head_y), 0)
 	# caduto: si accascia all'indietro
 	var d := _dead_t
 	rig.rotation.x = -1.42 * d * d
 	rig.position.y = 0.06 * d
 
-func _animate_beast() -> void:
+## Colpo subito: il busto incassa all'indietro, la testa segue, poi si torna in guardia.
+func _hit_amount() -> float:
+	if _hit_t <= 0.0: return 0.0
+	var x := 1.0 - _hit_t
+	return (x / 0.18) if x < 0.18 else pow(1.0 - (x - 0.18) / 0.82, 2.0)
+
+func _apply_hit() -> void:
+	var h := _hit_amount() * (0.0 if anim == "dead" else 1.0)
+	if h <= 0.0: return
+	hips.position += Vector3(0, -0.03, -0.09) * h
+	spine.quaternion = spine.quaternion * Quaternion(Vector3.RIGHT, -0.36 * h) * Quaternion(Vector3.UP, 0.25 * h * _hit_side)
+	head.quaternion = head.quaternion * Quaternion(Vector3.RIGHT, 0.32 * h)
+	arm_l.quaternion = arm_l.quaternion * Quaternion(Vector3.FORWARD, 0.25 * h)
+	arm_r.quaternion = arm_r.quaternion * Quaternion(Vector3.FORWARD, -0.25 * h)
+
+## Segugio: trotto o galoppo secondo la velocità, schiena che si flette, morso con
+## balzo e mascella che scatta, sussulto ai colpi, caduta sul fianco con le zampe molli.
+func _animate_beast(dt: float) -> void:
 	if rig == null: return
 	var t := phase
-	var trot := t * 9.0
-	var moving := anim == "walk"
-	var a := sin(trot) * 0.55 if moving else 0.0
-	leg_l.rotation.x = -a
-	legs_back[1].rotation.x = -a
-	leg_r.rotation.x = a
-	legs_back[0].rotation.x = a
-	shin_l.rotation.x = maxf(0.0, sin(trot + 1.2)) * 0.6 if moving else 0.0
-	shin_r.rotation.x = maxf(0.0, sin(trot + 1.2 + PI)) * 0.6 if moving else 0.0
-	spine.position.y = 0.66 + (absf(sin(trot)) * 0.03 if moving else sin(t * 2.0) * 0.008)
-	tail.rotation = Vector3(0.3 + sin(t * 3.0) * 0.1, sin(t * (6.0 if moving else 2.0)) * 0.35, 0)
-	head.rotation.x = 0.0
-	if attack_timer > 0.0:
-		var k := sin((1.0 - attack_timer / attack_length) * PI)
-		spine.position.z = 0.22 + k * 0.22
-		head.rotation.x = 0.35 * k
-		hips.position.y = 0.62 - k * 0.04
-	else:
-		spine.position.z = 0.22
-		hips.position.y = 0.62
+	var jaw: Node3D = _extra.get("jaw")
+	var tail2: Node3D = _extra.get("tail2")
+	var moving := anim == "walk" and _dead_t <= 0.0
+	var v := move_speed()
+	if moving and v < 0.3: v = 2.2
+	_walk_w = move_toward(_walk_w, 1.0 if moving else 0.0, dt * 6.0)
+	# quanto è galoppo (1) e quanto trotto (0)
+	var run := smoothstep(2.8, 3.8, v) * _walk_w
+	if moving: _gait_t += dt * TAU * v / lerpf(1.15, 2.1, run)
+	var w := _gait_t
+	var ww := _walk_w
+	var amp := lerpf(0.5, 0.78, run) * ww
+	# fasi delle quattro zampe: in diagonale al trotto, davanti e dietro a coppie al galoppo
+	var ph := [w, w + lerpf(PI, 0.55, run), w + lerpf(PI, PI - 0.3, run), w + lerpf(0.0, PI + 0.25, run)]
+	var front := [[leg_l, shin_l], [leg_r, shin_r]]
+	for i in 2:
+		var a: float = ph[i]
+		(front[i][0] as Node3D).rotation = Vector3(-sin(a) * amp, 0, 0)
+		(front[i][1] as Node3D).rotation.x = maxf(0.0, cos(a)) * lerpf(0.9, 1.3, run) * ww
+		var b: float = ph[2 + i]
+		legs_back[i].rotation = Vector3(-sin(b) * amp * 0.9, 0, 0)
+		(_extra["bshin_%d" % i] as Node3D).rotation.x = maxf(0.0, cos(b)) * 0.8 * ww
+		(_extra["bfoot_%d" % i] as Node3D).rotation.x = -maxf(0.0, cos(b)) * 0.9 * ww
+	var flex := sin(w) * 0.2 * run
+	var bob := (absf(sin(w)) * 0.025 * (1.0 - run) + sin(w - 0.6) * 0.05 * run) * ww
+	var breath := sin(t * 2.2) * 0.006 * (1.0 - ww)
+	var body := Vector3(0, bob + breath, 0)
+	var chest_x := -flex
+	var hips_x := flex * 1.1
+	var head_rot := Vector3(0.12 - chest_x * 0.7, sin(t * 0.6) * 0.25 * sin(t * 0.23) * (1.0 - ww), 0)
+	var jaw_open := 0.1 + sin(t * 1.3) * 0.04
+	var tail_x := lerpf(0.1, 0.75, run) + sin(t * 2.0) * 0.06
+	var tail_y := sin(t * (7.0 if moving else 2.0)) * lerpf(0.3, 0.12, run)
+	if attack_timer > 0.0 and _dead_t <= 0.0:
+		var k := 1.0 - attack_timer / attack_length
+		# si raccoglie, scatta in avanti a fauci aperte, morde e torna
+		var crouch := smoothstep(0.0, 0.16, k) * (1.0 - smoothstep(0.16, 0.3, k))
+		var leap := smoothstep(0.16, 0.32, k) * (1.0 - smoothstep(0.5, 0.95, k))
+		var air := sin(clampf((k - 0.16) / 0.42, 0.0, 1.0) * PI)
+		body += Vector3(0, -0.07 * crouch + 0.1 * air, -0.1 * crouch + 0.42 * leap)
+		chest_x += 0.12 * crouch - 0.3 * air
+		hips_x += -0.1 * crouch + 0.12 * air
+		head_rot.x = 0.3 * crouch - 0.05 * air + 0.25 * smoothstep(0.3, 0.38, k) * (1.0 - smoothstep(0.5, 0.8, k))
+		head_rot.z = sin(k * 34.0) * 0.22 * smoothstep(0.34, 0.4, k) * (1.0 - smoothstep(0.55, 0.75, k))
+		jaw_open = 0.15 + 0.75 * smoothstep(0.05, 0.28, k) * (1.0 - smoothstep(0.31, 0.37, k))
+		for i in 2:
+			(front[i][0] as Node3D).rotation.x += 0.35 * crouch - 0.95 * air
+			(front[i][1] as Node3D).rotation.x += 0.5 * crouch + 0.25 * air
+			legs_back[i].rotation.x += -0.3 * crouch + 0.75 * air
+			(_extra["bshin_%d" % i] as Node3D).rotation.x += 0.35 * crouch - 0.25 * air
+			(_extra["bfoot_%d" % i] as Node3D).rotation.x += -0.35 * crouch + 0.5 * air
+		tail_x = 0.6
+	# colpo subito: sussulta di lato e abbassa la testa
+	var h := _hit_amount() * (0.0 if anim == "dead" else 1.0)
+	body += Vector3(0.03 * _hit_side, -0.03, -0.09) * h
+	chest_x += 0.1 * h
+	head_rot += Vector3(0.35, 0.45 * _hit_side, 0.2 * _hit_side) * h
+	jaw_open += 0.3 * h
+	# caduta: le zampe cedono, poi si rovescia sul fianco
 	var d := _dead_t
-	rig.rotation.z = 1.45 * d * d
-	rig.position.y = 0.05 * d
+	var buckle := smoothstep(0.0, 0.45, d)
+	var roll := smoothstep(0.25, 1.0, d)
+	if d > 0.0:
+		for i in 2:
+			(front[i][0] as Node3D).rotation.x = lerpf((front[i][0] as Node3D).rotation.x, -0.5 + i * 0.25, buckle)
+			(front[i][1] as Node3D).rotation.x = lerpf((front[i][1] as Node3D).rotation.x, 1.1 - i * 0.3, buckle)
+			legs_back[i].rotation.x = lerpf(legs_back[i].rotation.x, 0.5 - i * 0.3, buckle)
+			(_extra["bshin_%d" % i] as Node3D).rotation.x = lerpf((_extra["bshin_%d" % i] as Node3D).rotation.x, 0.5, buckle)
+		body.y -= 0.22 * buckle * (1.0 - roll)
+		head_rot = head_rot.lerp(Vector3(0.55, 0.0, -0.35), buckle)
+		jaw_open = lerpf(jaw_open, 0.35, buckle)
+		tail_x = lerpf(tail_x, -0.2, buckle)
+		tail_y *= 1.0 - buckle
+	spine.position = Vector3(0, 0.63, 0.2) + body + Vector3(0, -0.04 * buckle * (1.0 - roll), 0)
+	hips.position = Vector3(0, 0.6, -0.26) + body
+	spine.rotation = Vector3(chest_x, 0, 0.12 * h * _hit_side)
+	hips.rotation = Vector3(hips_x, 0, 0)
+	head.rotation = head_rot
+	if jaw != null: jaw.rotation.x = jaw_open
+	tail.rotation = Vector3(tail_x, tail_y, 0)
+	if tail2 != null: tail2.rotation = Vector3(tail_x * 0.35 - 0.1, tail_y * 0.8, 0)
+	rig.rotation = Vector3(0, 0, 1.42 * roll * roll)
+	rig.position = Vector3(0, 0.06 * roll, 0)
+
+## Bruto e Guardiano: postura curva, passo pesante che dondola, colpo dall'alto con
+## tutto il corpo, barcollo ai colpi, crollo in ginocchio e poi a terra.
+func _animate_heavy(dt: float) -> void:
+	if rig == null: return
+	var t := phase
+	var boss := monster_kind == "boss"
+	var moving := anim == "walk" and _dead_t <= 0.0
+	var v := move_speed()
+	if moving and v < 0.2: v = 0.6 if boss else 1.1
+	var stride := 0.2 if boss else 0.24
+	if moving: _gait_t += dt * v / stride
+	_walk_w = move_toward(_walk_w, 1.0 if moving else 0.0, dt * 3.5)
+	var w := _gait_t
+	var ww := _walk_w
+	var hunch := 0.16 if boss else 0.3
+	var breath := sin(t * (1.1 if boss else 1.5))
+	var sway := sin(t * 0.8) * (1.0 - ww)
+	var p := {"spine_x": hunch + breath * 0.03, "spine_y": 0.0, "spine_z": 0.0, "head_x": -hunch * 0.75 + breath * 0.02, "head_y": sin(t * 0.45) * 0.22 * sin(t * 0.19) * (1.0 - ww),
+		"arm_l_x": -0.22, "arm_r_x": -0.22, "arm_l_z": -0.32 - breath * 0.03, "arm_r_z": 0.32 + breath * 0.03, "elbow_l": -0.5, "elbow_r": -0.5, "wrist": 0.35,
+		"dx": sway * 0.02, "dy": -0.06 + breath * 0.008, "dz": 0.0, "roll": sway * 0.015, "yaw": 0.0,
+		"foot_l": 0.02, "foot_r": -0.02, "lift_l": 0.0, "lift_r": 0.0}
+	if ww > 0.0:
+		var sw := sin(w)
+		var cw := cos(w)
+		p.foot_l = lerpf(0.02, stride * sw, ww)
+		p.foot_r = lerpf(-0.02, -stride * sw, ww)
+		p.lift_l = maxf(0.0, cw) * 0.09 * ww
+		p.lift_r = maxf(0.0, -cw) * 0.09 * ww
+		# il peso passa sul piede d'appoggio: il corpo dondola e ricade a ogni passo
+		p.roll += cw * 0.075 * ww
+		p.dx += cw * 0.045 * ww
+		p.dy -= absf(sw) * 0.04 * ww
+		p.yaw = -sw * 0.14 * ww
+		p.spine_y = sw * 0.22 * ww
+		p.spine_z = -cw * 0.05 * ww
+		p.spine_x += 0.06 * ww
+		p.arm_l_x += sw * 0.4 * ww
+		p.arm_r_x -= sw * 0.3 * ww
+		p.elbow_l -= maxf(0.0, -sw) * 0.25 * ww
+	if anim == "cheer":
+		p.arm_l_x = -2.7 + sin(t * 6.0) * 0.15
+		p.arm_r_x = -2.7 - sin(t * 6.0) * 0.15
+	if attack_timer > 0.0 and _dead_t <= 0.0:
+		var k := 1.0 - attack_timer / attack_length
+		var wind := _mix(p, {"arm_l_x": -2.85, "arm_r_x": -2.95, "arm_l_z": 0.28, "arm_r_z": -0.28, "elbow_l": -0.75, "elbow_r": -0.6, "wrist": -0.35,
+			"spine_x": -0.28, "spine_y": 0.12, "head_x": 0.1, "dy": 0.0, "dz": -0.06, "foot_l": 0.06, "foot_r": -0.08, "roll": 0.0, "dx": 0.0, "yaw": 0.0, "lift_l": 0.0, "lift_r": 0.0}, 1.0)
+		var hit := _mix(wind, {"arm_l_x": -0.7, "arm_r_x": -0.8, "arm_l_z": 0.2, "arm_r_z": -0.2, "elbow_l": -0.3, "elbow_r": -0.2, "wrist": 0.55,
+			"spine_x": 0.62 if boss else 0.72, "spine_y": -0.1, "head_x": -0.4, "dy": -0.1 if boss else -0.13, "dz": 0.16, "foot_l": 0.3, "foot_r": -0.12}, 1.0)
+		if k < 0.26: p = _mix(p, wind, _ease_out(k / 0.26))
+		elif k < 0.38:
+			var s := (k - 0.26) / 0.12
+			p = _mix(wind, hit, s * s)
+		elif k < 0.62:
+			# il colpo a terra fa tremare tutto
+			var shake := sin(k * 90.0) * 0.012 * (1.0 - (k - 0.38) / 0.24)
+			hit.dy = float(hit.dy) + shake
+			p = _mix(hit, p, 0.08 * (k - 0.38) / 0.24)
+		else: p = _mix(hit, p, 0.08 + 0.92 * smoothstep(0.62, 1.0, k))
+	# colpo subito: barcolla all'indietro
+	var h := _hit_amount() * (0.0 if anim == "dead" else 1.0) * (0.6 if boss else 1.0)
+	p.spine_x = float(p.spine_x) - 0.24 * h
+	p.spine_y = float(p.spine_y) + 0.2 * h * _hit_side
+	p.head_x = float(p.head_x) + 0.25 * h
+	p.dz = float(p.dz) - 0.07 * h
+	p.arm_l_z = float(p.arm_l_z) - 0.2 * h
+	p.arm_r_z = float(p.arm_r_z) + 0.2 * h
+	# caduta: le ginocchia cedono, il busto si piega, poi giù in avanti
+	var d := _dead_t
+	var knees := smoothstep(0.0, 0.5, d)
+	var fall := smoothstep(0.35, 1.0, d)
+	if d > 0.0:
+		p.dy = lerpf(float(p.dy), -0.3, knees)
+		p.spine_x = lerpf(float(p.spine_x), 0.55, knees)
+		p.head_x = lerpf(float(p.head_x), 0.4, knees)
+		p.arm_l_x = lerpf(float(p.arm_l_x), -0.9 * fall, knees)
+		p.arm_r_x = lerpf(float(p.arm_r_x), -0.7 * fall, knees)
+		p.elbow_l = lerpf(float(p.elbow_l), -0.3, knees)
+		p.elbow_r = lerpf(float(p.elbow_r), -0.3, knees)
+		p.foot_l = lerpf(float(p.foot_l), -0.2, knees)
+		p.foot_r = lerpf(float(p.foot_r), -0.28, knees)
+		p.roll = float(p.roll) * (1.0 - knees)
+		p.dx = float(p.dx) * (1.0 - knees)
+	var dy := float(p.dy)
+	var dz := float(p.dz)
+	var roll_z := float(p.roll)
+	hips.position = Vector3(float(p.dx), hip_height + dy, dz)
+	hips.rotation = Vector3(0, float(p.yaw), roll_z)
+	_plant(leg_l, shin_l, float(p.foot_l) - dz, float(p.lift_l) - dy, -0.1 - roll_z)
+	_plant(leg_r, shin_r, float(p.foot_r) - dz, float(p.lift_r) - dy, 0.1 - roll_z)
+	spine.rotation = Vector3(float(p.spine_x), float(p.spine_y), float(p.spine_z) - roll_z * 0.6)
+	head.rotation = Vector3(float(p.head_x), float(p.head_y), 0)
+	arm_l.rotation = Vector3(float(p.arm_l_x), 0, float(p.arm_l_z))
+	arm_r.rotation = Vector3(float(p.arm_r_x), 0, float(p.arm_r_z))
+	fore_l.rotation.x = float(p.elbow_l)
+	fore_r.rotation.x = float(p.elbow_r)
+	hand_r.rotation.x = float(p.wrist)
+	rig.rotation = Vector3(1.38 * fall * fall, 0, 0)
+	rig.position = Vector3(0, 0.1 * fall, 0)
 
 func flash(amount: float) -> void:
 	if _flash_mat != null: _flash_mat.set_shader_parameter("intensity", amount * 1.6)
+	# un lampo che parte è un colpo appena subito: il corpo lo incassa
+	if amount > _flash_prev + 0.25 and anim != "dead":
+		_hit_t = 1.0
+		_hit_side = -_hit_side
+	_flash_prev = amount

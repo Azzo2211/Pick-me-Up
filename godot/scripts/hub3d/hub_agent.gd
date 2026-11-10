@@ -37,6 +37,7 @@ func setup(hub: HubWorld, hero: Dictionary, appearance: Dictionary) -> void:
 	model = CharacterModel.new()
 	add_child(model)
 	model.build_hero(hero, appearance)
+	model.calm = true # alla base si cammina, non si corre
 	model.phase = rng.randf_range(0, 10)
 	body = StaticBody3D.new()
 	body.collision_layer = 4
@@ -63,6 +64,7 @@ func setup_villager(hub: HubWorld, seed_value: int) -> void:
 	model = CharacterModel.new()
 	add_child(model)
 	model.build_villager(seed_value)
+	model.calm = true
 	model.phase = rng.randf_range(0, 10)
 	activity = "idle"
 
