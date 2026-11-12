@@ -1685,6 +1685,9 @@ func _sync_agents(state: RiftwardState) -> void:
 		if activity == "training":
 			slot = training_index
 			training_index += 1
+		if activity == "working":
+			var post := str(state.data.assignments.get(id, {}).get("post", ""))
+			agent.work_site = str(state.WORK_POSTS.get(post, {}).get("site", ""))
 		agent.set_activity(activity, slot, hero)
 	for id in agents.keys():
 		if not keep.has(id):

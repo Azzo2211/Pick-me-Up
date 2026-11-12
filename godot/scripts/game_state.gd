@@ -98,6 +98,37 @@ const STAT_LABELS := {"str": ["STR", "Forza"], "int": ["INT", "Intelligenza"], "
 const STAT_ORDER := ["str", "int", "sta", "agi"]
 const TRAITS := ["Nervi saldi", "Istinto protettivo", "Passo leggero", "Tenace", "Occhio clinico", "Testardo", "Frugale", "Socievole", "Solitario", "Mano ferma", "Memoria lunga"]
 
+# --- Mestieri, lavori e vita quotidiana -------------------------------------------
+## Regole del proprietario (2026-11-12). Gli eroi avevano una vita prima del Rift: molti
+## portano un mestiere (hero.trade: nome, competenza da 1 a 10). I popolani (1★–2★) ce
+## l'hanno sempre; più la rarità sale, più l'eroe tende al combattimento, ma non è una
+## regola fissa: anche un 7★ può essere fabbro o cuoco. Chi è messo a un posto di lavoro
+## resta alla base (non può stare in squadra) e migliora col tempo. Il cibo compare da
+## solo: il cuoco serve a fare pasti migliori (precisazione del proprietario).
+const TRADE_CHANCE := {1: 1.0, 2: 1.0, 3: 0.55, 4: 0.45, 5: 0.38, 6: 0.32, 7: 0.28}
+const TRADE_MAX_LEVEL := 10
+## Posti di lavoro: mestieri adatti, edificio dove si vede chi ci lavora, effetto.
+const WORK_POSTS := {
+	"cucina": {"name": "Cucina", "trades": ["Cuoco", "Locandiere"], "site": "dormitory", "text": "Pasti migliori: a ogni pasto più morale e meno stanchezza per tutti."},
+	"forgia": {"name": "Forgia", "trades": ["Fabbro"], "site": "armory", "text": "Lavora il ferro: alza il grado massimo di armi e armature."},
+	"falegnameria": {"name": "Falegnameria", "trades": ["Carpentiere"], "site": "armory", "text": "Lavora il legno: aiuta su armi e amuleti."},
+	"conceria": {"name": "Conceria", "trades": ["Conciatore", "Cacciatore"], "site": "armory", "text": "Lavora la pelle: aiuta su armature e amuleti."},
+	"infermeria": {"name": "Infermeria", "trades": ["Erborista", "Accolito"], "site": "dormitory", "text": "Le ferite guariscono prima nel Dormitorio."},
+	"emporio": {"name": "Emporio", "trades": ["Mercante", "Bottegaio"], "site": "", "text": "Tratta con i mercanti: sconto sui prezzi in Oro del Negozio."},
+	"archivio": {"name": "Archivio", "trades": ["Archivista", "Cartografo"], "site": "", "text": "Studia la Torre: più esperienza dalle missioni."},
+	"scorte": {"name": "Scorte", "trades": ["Contadino", "Minatore"], "site": "", "text": "Ogni giorno porta materiali alla base."},
+	"ronda": {"name": "Ronda", "trades": ["Guardia cittadina"], "site": "", "text": "Tiene l'ordine nella base: il morale non scende sotto una soglia."},
+}
+const WORK_ORDER := ["cucina", "forgia", "falegnameria", "conceria", "infermeria", "emporio", "archivio", "scorte", "ronda"]
+## Chi serve per ogni lavoro di forgia: [mestiere principale, aiuto]. La competenza vale
+## principale + metà dell'aiuto e decide il grado massimo (vedi forge_skill_cap).
+const FORGE_CRAFT := {"weapon": ["forgia", "falegnameria"], "armor": ["forgia", "conceria"], "charm": ["conceria", "falegnameria"]}
+## Tempo di gioco (regola del proprietario): 1 minuto vero = 3 minuti di gioco.
+const GAME_TIME_SCALE := 3.0
+const GAME_DAY_MINUTES := 1440.0
+## Ore dei pasti (ora di gioco). Il cibo c'è sempre; il cuoco lo rende migliore.
+const MEAL_HOURS := [7, 13, 20]
+
 # --- Abilità particolari --------------------------------------------------------
 ## Regola del proprietario (2026-11-12): le abilità possono essere comuni o uniche, alcuni
 ## eroi nascono senza abilità particolari, altri le hanno dall'evocazione. La tecnica della
@@ -308,6 +339,8 @@ func new_world(seed_text: String = "") -> void:
 			"base_level": 1, "seen_floor": 1,
 			"materials": {"ore": 8, "leather": 6, "wood": 10, "herbs": 4, "cores": 0, "medicine": 2},
 			"last_saved": Time.get_unix_time_from_system(),
+			# orologio di gioco in minuti: il primo giorno comincia alle 8 del mattino
+			"game_minutes": 480.0,
 		},
 		"heroes": [], "party": [], "relationships": {}, "stages": {}, "events": [], "ledger": [], "memorial": [], "inventory": [],
 		"facilities": _default_facilities(),
@@ -435,6 +468,10 @@ func _migrate() -> void:
 	data.version = SAVE_VERSION
 	# ritratto dipinto di ogni eroe: salvato, così carta e personaggio 3D restano gli stessi
 	assign_portraits()
+	# mestieri e orologio di gioco (regole del proprietario): chi aveva un mestiere scritto lo tiene
+	data.world.get_or_add("game_minutes", 480.0)
+	for hero in data.heroes:
+		if not hero.has("trade"): hero["trade"] = _born_trade(str(hero.get("id", "")), int(hero.get("native_rarity", 1)), str(hero.get("job", hero.get("profession", ""))), true)
 	if not data.active_mission.is_empty():
 		# Chiudere il gioco durante una missione non la annulla: conta come sconfitta.
 		var results := []
@@ -680,6 +717,9 @@ func generate_hero(seed_text: String, rarity: int, forced_role: String = "") -> 
 			hero.equipment.armor.defense = 4
 			hero.skills[0] = {"name": "Mestiere: " + job, "level": 1, "xp": 0}
 	hero.skills.append_array(_born_skills(id, rarity, role))
+	# mestiere di prima del Rift: i popolani sempre, gli altri solo alcuni
+	hero.trade = _born_trade(id, rarity, str(hero.profession))
+	if hero.trade.is_empty(): hero.profession = ""
 	hero.assessment = _assessment(hero)
 	# Aspetto: colori dal generatore personaggi (categoria scelta da mestiere o classe),
 	# pezzi del foglio (archetipo, volto, capigliatura, corporatura, età) dall'id.
@@ -710,6 +750,24 @@ func _born_skills(hero_id: String, rarity: int, role: String) -> Array:
 	var output := []
 	for n in names: output.append({"name": n, "level": 1, "xp": 0})
 	return output
+
+## Mestiere con cui nasce un eroe (estrazione a parte). Quasi tutti sono lavoratori normali
+## (competenza 1–4, i popolani un po' di più); ogni tanto nasce un talento. `always`: per
+## gli eroi dei salvataggi vecchi, che un mestiere scritto nella scheda l'avevano già.
+func _born_trade(hero_id: String, rarity: int, trade_name: String, always: bool = false) -> Dictionary:
+	if trade_name.is_empty(): return {}
+	var rng := rng_for(hero_id + ":trade")
+	if rng.randf() >= float(TRADE_CHANCE.get(rarity, 0.3)) and not always: return {}
+	var level := 1 + int(floor(pow(rng.randf(), 1.8) * 4.0))
+	if rarity <= COMMONER_MAX_RARITY: level += 1
+	if rng.randf() < 0.08: level += 3
+	return {"name": trade_name, "level": clampi(level, 1, TRADE_MAX_LEVEL), "xp": 0.0}
+
+## "Fabbro Lv.3", oppure "" se l'eroe non ha un mestiere.
+static func trade_label(hero: Dictionary) -> String:
+	var trade: Dictionary = hero.get("trade", {})
+	if trade.is_empty(): return ""
+	return "%s Lv.%d" % [str(trade.name), int(trade.get("level", 1))]
 
 ## Abilità particolari dell'eroe (senza la tecnica di classe).
 static func particular_skills(hero: Dictionary) -> Array:
@@ -1074,11 +1132,11 @@ func hero_by_id(hero_id: String) -> Dictionary:
 		if hero.id == hero_id: return hero
 	return {}
 
-## Stato leggibile dell'eroe nella base: "party", "training", "resting", "injured", "idle", "dead".
+## Stato leggibile dell'eroe nella base: "party", "training", "resting", "working", "injured", "idle", "dead".
 func hero_activity(hero: Dictionary) -> String:
 	if hero.is_empty() or hero.state != "ALIVE": return "dead"
 	var assignment: Dictionary = data.assignments.get(str(hero.id), {})
-	if not assignment.is_empty(): return "training" if assignment.facility == "training" else "resting"
+	if not assignment.is_empty(): return "training" if assignment.facility == "training" else "working" if assignment.facility == "work" else "resting"
 	if not hero.get("injuries", []).is_empty(): return "injured"
 	if data.party.has(hero.id): return "party"
 	return "idle"
@@ -1101,6 +1159,8 @@ func assign_party(slot: int, hero_id: String) -> bool:
 	var displaced: String = data.party[slot]
 	if previous >= 0: data.party[previous] = displaced if previous != slot else ""
 	data.party[slot] = hero_id
+	# chi entra in squadra lascia il posto di lavoro
+	if str(data.assignments.get(hero_id, {}).get("facility", "")) == "work": data.assignments.erase(hero_id)
 	save_and_notify()
 	return true
 
@@ -1301,13 +1361,17 @@ func unassign_hero(hero_id: String) -> void:
 func advance_time(seconds: float) -> bool:
 	if seconds <= 0.0 or data.is_empty(): return false
 	var minutes := seconds / 60.0
-	var changed := false
+	var changed := _advance_clock(minutes)
 	var finished := []
+	var heal_bonus := 1.0 + 0.08 * post_level("infermeria")
 	for hero_id in data.assignments.keys():
 		var hero := hero_by_id(hero_id)
 		var assignment: Dictionary = data.assignments[hero_id]
 		if hero.is_empty() or hero.state != "ALIVE":
 			finished.append(hero_id)
+			continue
+		if assignment.facility == "work":
+			_work_progress(hero, minutes)
 			continue
 		if assignment.facility == "training":
 			add_xp(hero, training_xp_per_minute(hero) * minutes)
@@ -1326,7 +1390,7 @@ func advance_time(seconds: float) -> bool:
 			hero.morale = clampf(float(hero.morale) + 1.0 * rate * minutes, 0.0, 100.0)
 			var injuries: Array = hero.injuries
 			if not injuries.is_empty():
-				injuries[0].minutes = float(injuries[0].minutes) - minutes * rate
+				injuries[0].minutes = float(injuries[0].minutes) - minutes * rate * heal_bonus
 				if float(injuries[0].minutes) <= 0.0:
 					var healed: Dictionary = injuries.pop_front()
 					add_event("DORMITORIO", hero.name + " è guarito", "%s risolta." % healed.name, "good")
@@ -1340,6 +1404,150 @@ func advance_time(seconds: float) -> bool:
 			done.fatigue = roundi(float(done.fatigue))
 			done.morale = roundi(float(done.morale))
 	return changed
+
+# =============================================================================
+# Tempo di gioco, pasti e lavori alla base
+# =============================================================================
+
+## Minuti di gioco passati dall'inizio (1 minuto vero = 3 di gioco).
+func game_minutes() -> float:
+	return float(data.world.get("game_minutes", 480.0))
+
+func game_day() -> int:
+	return int(game_minutes() / GAME_DAY_MINUTES) + 1
+
+## "Giorno 3 · 14:20"
+func game_clock_text() -> String:
+	var minute_of_day := int(fmod(game_minutes(), GAME_DAY_MINUTES))
+	return "Giorno %d · %02d:%02d" % [game_day(), minute_of_day / 60, minute_of_day % 60]
+
+## Fa avanzare l'orologio; a ogni ora dei pasti serve il pasto, a ogni nuovo giorno arrivano le scorte.
+func _advance_clock(real_minutes: float) -> bool:
+	var before := game_minutes()
+	var after := before + real_minutes * GAME_TIME_SCALE
+	data.world.game_minutes = after
+	# l'orologio in alto cambia a ogni minuto di gioco
+	var changed := int(after) != int(before)
+	var day_before := int(before / GAME_DAY_MINUTES)
+	for day in range(day_before, int(after / GAME_DAY_MINUTES) + 1):
+		for hour in MEAL_HOURS:
+			var at: float = day * GAME_DAY_MINUTES + hour * 60.0
+			if at > before and at <= after:
+				_serve_meal(hour)
+				changed = true
+		if day > day_before:
+			_daily_supplies()
+			changed = true
+	return changed
+
+## Il cibo compare da solo (precisazione del proprietario): nessuno resta senza. Con qualcuno
+## in cucina il pasto è migliore: più morale e meno stanchezza per tutti, in base alla sua bravura.
+func _serve_meal(hour: int) -> void:
+	var level := post_level("cucina")
+	if level <= 0: return
+	var floor_morale := 35 + 2 * post_level("ronda")
+	for hero in get_alive_heroes():
+		hero.morale = clampf(float(hero.morale) + ceilf(level / 2.0), 0.0, 100.0)
+		hero.fatigue = clampf(float(hero.fatigue) - level, 0.0, 100.0)
+		if post_level("ronda") > 0: hero.morale = maxf(float(hero.morale), minf(float(floor_morale), 55.0))
+	if hour == MEAL_HOURS[MEAL_HOURS.size() - 1]:
+		var cook := post_worker("cucina")
+		add_event("BASE", "Cena servita", "%s ha cucinato per tutti (%s): +%d morale e -%d stanchezza a ogni pasto." % [cook.name, trade_label(cook), ceili(level / 2.0), level], "good")
+
+## A ogni nuovo giorno di gioco chi è alle Scorte porta materiali: ferro il minatore, erbe e legno il contadino.
+func _daily_supplies() -> void:
+	var worker := post_worker("scorte")
+	if worker.is_empty(): return
+	var level := int(worker.trade.get("level", 1))
+	var amount := 1 + level / 3
+	var keys: Array = ["ore"] if str(worker.trade.name) == "Minatore" else ["herbs", "wood"]
+	var parts := []
+	for key in keys:
+		grant(key, amount, "Scorte del giorno", "work")
+		parts.append("%s +%d" % [str(MATERIALS[key].name), amount])
+	add_event("BASE", "Scorte del giorno", "%s porta alla base: %s." % [worker.name, ", ".join(parts)], "info")
+
+## Chi lavora migliora col tempo: un livello ogni (4 + 2 × livello) ore di gioco al suo posto.
+func _work_progress(hero: Dictionary, real_minutes: float) -> void:
+	var trade: Dictionary = hero.get("trade", {})
+	if trade.is_empty() or int(trade.get("level", 1)) >= TRADE_MAX_LEVEL: return
+	trade.xp = float(trade.get("xp", 0.0)) + real_minutes * GAME_TIME_SCALE
+	var need := (4.0 + 2.0 * int(trade.level)) * 60.0
+	if float(trade.xp) >= need:
+		trade.xp = float(trade.xp) - need
+		trade.level = int(trade.level) + 1
+		add_event("BASE", "%s migliora nel mestiere" % hero.name, "Ora è %s." % trade_label(hero), "good")
+
+## Eroe che occupa un posto di lavoro ({} se è vuoto).
+func post_worker(post: String) -> Dictionary:
+	for hero_id in data.assignments:
+		var assignment: Dictionary = data.assignments[hero_id]
+		if str(assignment.get("facility", "")) == "work" and str(assignment.get("post", "")) == post:
+			var hero := hero_by_id(hero_id)
+			if not hero.is_empty() and hero.state == "ALIVE": return hero
+	return {}
+
+## Bravura di chi occupa il posto (0 se è vuoto).
+func post_level(post: String) -> int:
+	var worker := post_worker(post)
+	return 0 if worker.is_empty() else int(worker.get("trade", {}).get("level", 0))
+
+## Posto di lavoro adatto al mestiere dell'eroe ("" se non ne ha uno).
+static func post_for(hero: Dictionary) -> String:
+	var trade_name := str(hero.get("trade", {}).get("name", ""))
+	for post in WORK_ORDER:
+		if (WORK_POSTS[post].trades as Array).has(trade_name): return post
+	return ""
+
+func can_work(hero: Dictionary, post: String) -> Dictionary:
+	if hero.is_empty() or str(hero.get("state", "")) != "ALIVE": return {"ok": false, "message": "Eroe non disponibile"}
+	if not WORK_POSTS.has(post): return {"ok": false, "message": "Posto sconosciuto"}
+	if post_for(hero) != post: return {"ok": false, "message": "Non è il suo mestiere"}
+	if data.party.has(hero.id): return {"ok": false, "message": "È in squadra: toglilo dalla squadra per metterlo al lavoro"}
+	if not hero.injuries.is_empty(): return {"ok": false, "message": "È ferito: prima deve guarire"}
+	return {"ok": true, "message": ""}
+
+## Mette un eroe al suo posto di lavoro (chi c'era prima torna libero).
+func assign_work(hero_id: String, post: String) -> Dictionary:
+	var hero := hero_by_id(hero_id)
+	var check := can_work(hero, post)
+	if not check.ok: return check
+	var previous := post_worker(post)
+	if not previous.is_empty(): data.assignments.erase(str(previous.id))
+	data.assignments[hero_id] = {"facility": "work", "post": post, "since": now()}
+	add_event("BASE", "%s al lavoro" % hero.name, "%s · %s. %s" % [str(WORK_POSTS[post].name), trade_label(hero), str(WORK_POSTS[post].text)], "info")
+	save_and_notify()
+	return {"ok": true, "message": "%s ora lavora: %s." % [hero.name, str(WORK_POSTS[post].name)]}
+
+## Sconto sui prezzi in Oro del Negozio (emporio): 2% per livello, massimo 20%.
+func shop_discount() -> float:
+	return minf(0.2, 0.02 * post_level("emporio"))
+
+## Prezzo di un'offerta con lo sconto dell'emporio (solo l'Oro).
+func shop_price(offer_id: String) -> Dictionary:
+	var price: Dictionary = SHOP_OFFERS.get(offer_id, {}).get("price", {}).duplicate()
+	if price.has("gold"): price.gold = roundi(float(price.gold) * (1.0 - shop_discount()))
+	return price
+
+## Esperienza in più dalle missioni (archivio): 1,5% per livello.
+func mission_xp_bonus() -> float:
+	return 1.0 + 0.015 * post_level("archivio")
+
+## Bravura di chi lavora a un pezzo: principale + metà dell'aiuto (vedi FORGE_CRAFT).
+func forge_skill(recipe_id: String) -> float:
+	var crew: Array = FORGE_CRAFT.get(recipe_id, [])
+	if crew.is_empty(): return 0.0
+	return post_level(str(crew[0])) + 0.5 * post_level(str(crew[1]))
+
+## Grado massimo che i lavoratori della base sanno fare: senza nessuno al massimo E,
+## poi D (bravura 1), C (3), B (5), A (7), S (9). Regola del proprietario: i lavoratori
+## inesperti fanno pezzi di grado basso.
+func forge_skill_cap(recipe_id: String) -> int:
+	var skill := forge_skill(recipe_id)
+	var cap := 1
+	for step in [[1.0, 2], [3.0, 3], [5.0, 4], [7.0, 5], [9.0, 6]]:
+		if skill >= float(step[0]): cap = int(step[1])
+	return cap
 
 # =============================================================================
 # Evocazione, fusione e promozione
@@ -1588,14 +1796,18 @@ func forge_difficulty_unlocked(difficulty: String) -> bool:
 
 ## Margine in più nel minigioco: +5% di tolleranza per ogni livello dell'Armeria oltre il primo.
 func forge_window_bonus() -> float:
-	return 1.0 + 0.05 * maxf(0.0, float(facility_level("armory") - 1))
+	# un fabbro al lavoro guida la mano: +2% per ogni suo livello
+	return 1.0 + 0.05 * maxf(0.0, float(facility_level("armory") - 1)) + 0.02 * post_level("forgia")
 
 ## Grado che corrisponde a una precisione (0..1), limitato dalla difficoltà.
-func forge_grade_index(precision: float, difficulty: String) -> int:
+func forge_grade_index(precision: float, difficulty: String, recipe_id: String = "") -> int:
 	var index := 0
 	for i in FORGE_GRADE_THRESHOLDS.size():
 		if precision >= float(FORGE_GRADE_THRESHOLDS[i]): index = i
-	return mini(index, int(FORGE_DIFFICULTIES.get(difficulty, FORGE_DIFFICULTIES.normal).max_grade))
+	index = mini(index, int(FORGE_DIFFICULTIES.get(difficulty, FORGE_DIFFICULTIES.normal).max_grade))
+	# il grado non supera quello che sanno fare fabbro, carpentiere e conciatore al lavoro
+	if not recipe_id.is_empty(): index = mini(index, forge_skill_cap(recipe_id))
+	return index
 
 func forge_pending() -> Dictionary:
 	return data.get("forge_pending", {})
@@ -1631,7 +1843,7 @@ func finish_forge(precision: float) -> Dictionary:
 		add_event("ARMERIA", "Forgia fallita: " + str(recipe.name), "Precisione %d%%: il pezzo si è rotto, i materiali sono persi." % roundi(precision * 100.0), "danger")
 		save_and_notify()
 		return {"ok": true, "failed": true, "precision": roundi(precision * 100.0)}
-	var grade_index := forge_grade_index(precision, difficulty)
+	var grade_index := forge_grade_index(precision, difficulty, str(pending.recipe))
 	var grade: String = GRADES[grade_index]
 	var quality := 0.95 + precision * 0.1
 	var mult: float = float(FORGE_GRADE_MULT[grade_index]) * quality
@@ -1726,7 +1938,8 @@ func shop_buy(offer_id: String) -> Dictionary:
 	if shop_remaining(offer_id) <= 0: return {"ok": false, "message": "Esaurito per oggi"}
 	for key in offer.items:
 		if MATERIALS.has(key) and resource_amount(key) >= material_cap(): return {"ok": false, "message": "Scorte piene di %s: potenzia il Magazzino" % MATERIALS[key].name}
-	if not pay(offer.price, "Negozio · " + str(offer.name), "shop"): return {"ok": false, "message": "Non hai abbastanza " + cost_text(offer.price)}
+	var price := shop_price(offer_id)
+	if not pay(price, "Negozio · " + str(offer.name), "shop"): return {"ok": false, "message": "Non hai abbastanza " + cost_text(price)}
 	for key in offer.items: grant(key, int(offer.items[key]), "Negozio · " + str(offer.name), "shop")
 	var shop := _shop_state()
 	shop.bought[offer_id] = int(shop.bought.get(offer_id, 0)) + 1
@@ -1863,7 +2076,7 @@ func floor_rewards(floor_index: int, attempt: int, first_clear: bool) -> Diction
 	# la Prova del Guardiano paga di più: è il muro di ogni scaglione
 	var trial_bonus := 1.6 if is_trial_floor(floor_index) else 1.0
 	# Santuario del Nexus (isola della Base Lv.10): +10% esperienza
-	var xp_bonus := 1.1 if has_island("santuario") else 1.0
+	var xp_bonus := (1.1 if has_island("santuario") else 1.0) * mission_xp_bonus()
 	var rewards := {"gold": roundi((7200 + floor_index * 2600) * retry_multiplier * trial_bonus), "xp": roundi((95 + floor_index * 34) * retry_multiplier * trial_bonus * xp_bonus)}
 	# Gemme a ogni piano vinto: tante al primo completamento (doppie alla Prova
 	# del Guardiano), poche quando lo si ripete, così farmare non sostituisce salire.

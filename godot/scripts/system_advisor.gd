@@ -12,7 +12,7 @@ class_name SystemAdvisor
 ##   tone      "danger", "warn", "good" o "info"
 ##   title     riga breve
 ##   text      spiegazione con i numeri veri
-##   action    dove porta il pulsante: "panel:<struttura>", "squad", "tower", "dungeon",
+##   action    dove porta il pulsante: "panel:<struttura>", "squad", "tower", "dungeon", "work",
 ##             "roster", "journal", "shop", "" (nessun pulsante)
 ##   button    testo del pulsante
 
@@ -24,6 +24,8 @@ const TIPS := [
 	"Guardiani e Avanguardie davanti, Lancieri e Supporti al centro, Ranger o Maghi dietro: fuori ruolo un eroe rende meno.",
 	"I Popolani 1★–2★ ti dicono da soli quale classe si adatta a loro: di solito conviene ascoltarli, il morale sale.",
 	"Nel Centro di Fusione un eroe può assorbirne un altro: il sacrificato se ne va per sempre, chi resta prende parte delle sue statistiche e a volte una sua abilità.",
+	"Molti eroi avevano un mestiere prima del Rift. Al Cristallo, nella scheda Lavori, puoi metterli al loro posto: un cuoco fa pasti che rimettono in forze, fabbro, carpentiere e conciatore alzano il grado di ciò che forgi.",
+	"Il tempo della base scorre tre volte più in fretta del tuo: un'ora vera sono tre ore di gioco. Il cibo non manca mai, ma solo un cuoco lo rende buono.",
 	"I dungeon giornalieri al Portale sono missioni facili: mostri deboli e tanti materiali. Ognuno si può completare due volte al giorno.",
 	"Alcuni eroi nascono con abilità particolari, comuni o uniche, altri senza. Con la fusione un eroe può impararne una dal sacrificato.",
 	"Al livello massimo della sua rarità un eroe smette di crescere: serve una promozione con le Pietre.",
@@ -192,6 +194,15 @@ static func _hero_advice(gs: Node, out: Array) -> void:
 	var trainable := idle.filter(func(h): return int(h.level) < gs.level_cap(h) and h.injuries.is_empty() and float(h.fatigue) < 60)
 	if free_training > 0 and not trainable.is_empty():
 		_add(out, "training_free", 52, "good", "Posti liberi in Addestramento", "%d %s liber%s e %s senza niente da fare (%s). Si allena anche a gioco chiuso." % [free_training, "posto" if free_training == 1 else "posti", "o" if free_training == 1 else "i", "un eroe" if trainable.size() == 1 else "%d eroi" % trainable.size(), _names(trainable, 2)], "panel:training", "Addestramento")
+	# posti di lavoro liberi con qualcuno del mestiere che non sta facendo niente
+	for post in ["cucina", "forgia", "conceria", "falegnameria", "infermeria", "emporio", "archivio", "scorte", "ronda"]:
+		if not gs.post_worker(post).is_empty(): continue
+		if post in ["forgia", "conceria", "falegnameria"] and not gs.facility_built("armory"): continue
+		var able := idle.filter(func(h): return gs.post_for(h) == post and bool(gs.can_work(h, post).ok))
+		if able.is_empty(): continue
+		able.sort_custom(func(a, b): return int(a.trade.level) > int(b.trade.level))
+		_add(out, "work_" + post, 47 if post in ["cucina", "forgia"] else 34, "info", "%s senza nessuno" % str(gs.WORK_POSTS[post].name), "%s sa fare questo mestiere (%s) e non ha niente da fare. %s" % [str(able[0].name), gs.trade_label(able[0]), str(gs.WORK_POSTS[post].text)], "work", "Lavori")
+		break
 	# promozioni pronte
 	var promotable := alive.filter(func(h): return bool(gs.promotion_requirements(h).ok))
 	if not promotable.is_empty():
@@ -280,7 +291,7 @@ static func _economy_advice(gs: Node, out: Array) -> void:
 	var bought: Dictionary = shop.get("bought", {}) if int(shop.get("day", -1)) == gs.shop_day() else {}
 	for offer_id in gs.SHOP_OFFERS:
 		var offer: Dictionary = gs.SHOP_OFFERS[offer_id]
-		if str(offer.tab) == "daily" and int(bought.get(offer_id, 0)) < int(offer.limit) and gs.can_afford(offer.price): daily_left += 1
+		if str(offer.tab) == "daily" and int(bought.get(offer_id, 0)) < int(offer.limit) and gs.can_afford(gs.shop_price(offer_id)): daily_left += 1
 	if daily_left >= 3:
 		_add(out, "shop_daily", 24, "info", "Offerte del giorno", "Nel Negozio ci sono %d offerte del giorno ancora disponibili: si rinnovano a mezzanotte." % daily_left, "shop", "Negozio")
 	var unread: int = gs.unread_events()

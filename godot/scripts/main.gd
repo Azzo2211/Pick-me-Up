@@ -207,7 +207,7 @@ func _round_button(text: String, callback: Callable, kind: String) -> Button:
 func _update_hud() -> void:
 	for key in resource_labels: resource_labels[key].text = GameState.display_resource(key)
 	master_label.text = "Master " + str(GameState.data.world.master_name)
-	master_sub.text = "Base Lv.%d · Piano %d%s" % [GameState.base_level(), int(GameState.data.world.current_floor), "  · sviluppo" if GameState.is_dev_unlimited() else ""]
+	master_sub.text = "Base Lv.%d · Piano %d · %s%s" % [GameState.base_level(), int(GameState.data.world.current_floor), GameState.game_clock_text(), "  · sviluppo" if GameState.is_dev_unlimited() else ""]
 	var unread := GameState.unread_events()
 	journal_badge.visible = unread > 0
 	journal_badge_label.text = str(mini(unread, 99))
@@ -224,6 +224,9 @@ func _advisor_action(action: String) -> void:
 			"dungeon":
 				panels.gate_tab = "dungeon"
 				open_panel("gate")
+			"work":
+				panels.crystal_tab = "work"
+				open_panel("crystal")
 			"tower": _open_tower()
 			"roster": open_roster()
 			"journal": _show_journal()

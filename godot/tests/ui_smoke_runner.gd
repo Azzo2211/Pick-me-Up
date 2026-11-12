@@ -167,6 +167,22 @@ func _run() -> void:
 			await create_timer(0.1).timeout
 			dungeon_limit += 0.1
 	_check(main.battle == null and state.resource_amount("ore") > ore_before and state.dungeon_runs_left("miniera") == state.DUNGEON_RUNS_PER_DAY - 1, "dungeon giornaliero vinto: ferro in magazzino e un ingresso in meno")
+	# Lavori alla base: scheda al Cristallo, un eroe al suo posto compare "Al lavoro"
+	main.close_all_modals()
+	main.panels.crystal_tab = "work"
+	main.open_panel("crystal")
+	await _frames(3)
+	_check(main.side_body.get_child_count() >= state.WORK_ORDER.size(), "scheda Lavori al Cristallo con i posti di lavoro")
+	var worker_found := false
+	for hero in state.get_alive_heroes():
+		var post: String = RiftwardState.post_for(hero)
+		if not post.is_empty() and not state.data.party.has(hero.id) and hero.injuries.is_empty():
+			main.panels._assign_work(str(hero.id), post)
+			worker_found = state.hero_activity(hero) == "working" and str(state.post_worker(post).get("id", "")) == str(hero.id)
+			break
+	_check(worker_found, "un eroe col mestiere giusto va al suo posto di lavoro")
+	main.panels.crystal_tab = "summon"
+	_check(main.master_sub.text.contains("Giorno"), "orologio di gioco nella barra in alto")
 	# Base Lv.10: edifici al massimo, tre isole collegate da ponti e raggiungibili a piedi
 	main.close_all_modals()
 	state.dev_max_base()

@@ -10,6 +10,8 @@ var hero_id := ""
 var hero_name := ""
 ## Firma dell'aspetto con cui è stato costruito: se cambia, la base rifà il personaggio.
 var look_sig := ""
+## Edificio davanti a cui sta chi lavora ("" = gira per la base).
+var work_site := ""
 var model: CharacterModel
 var activity := ""
 var slot := -1
@@ -150,6 +152,11 @@ func _choose_goal() -> void:
 		"resting":
 			if sites.has("dormitory"):
 				_go(sites.dormitory.door, "enter", Vector3.ZERO)
+				return
+		"working":
+			# chi lavora sta davanti all'edificio del suo posto (cucina al Dormitorio, forgia all'Armeria)
+			if sites.has(work_site):
+				_go(sites[work_site].door, ["idle", "talk", "idle"][rng.randi_range(0, 2)], _jitter(0.7))
 				return
 		"injured":
 			var bench: Array = sites.get("dormitory", {}).get("spots", [])

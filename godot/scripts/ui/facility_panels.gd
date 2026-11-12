@@ -23,6 +23,7 @@ var merge_selected: Array[String] = []
 var merging_tab := "fusion"
 var gate_tab := "mission"
 var dungeon_level := 0
+var crystal_tab := "summon"
 var gate_floor := -1
 var last_summon: Array = []
 var roster_limit := ROSTER_PAGE
@@ -55,7 +56,7 @@ func begin_render() -> void:
 ## Firma di ciò che cambia la struttura del pannello (non i valori delle barre):
 ## se non cambia, il tempo che scorre aggiorna solo barre e numeri.
 func signature(panel: String) -> String:
-	if panel == "crystal": return str(GS.emergency_recruit_status())
+	if panel == "crystal": return str(GS.emergency_recruit_status()) + crystal_tab + str(GS.data.assignments.keys()) + str(GS.data.party)
 	if not panel in ["training", "dormitory", "roster", "gate"]: return "static"
 	var parts := PackedStringArray()
 	parts.append(str(GS.data.assignments.keys()))
@@ -148,6 +149,7 @@ func activity_pill(hero: Dictionary) -> PanelContainer:
 	match GS.hero_activity(hero):
 		"training": return UIKit.pill("In allenamento", UIKit.TEAL)
 		"resting": return UIKit.pill("A riposo", UIKit.SKY)
+		"working": return UIKit.pill("Al lavoro", UIKit.LILAC)
 		"injured": return UIKit.pill("Ferito", UIKit.ROSE)
 		"party": return UIKit.pill("In squadra", UIKit.GOLD)
 		"dead": return UIKit.pill("Caduto", Color("#7d8696"))
@@ -914,7 +916,68 @@ func _auto_party() -> void:
 # Cristallo del Nexus: evocazione ed espansione della base
 # =============================================================================
 
+func _set_crystal_tab(tab: String) -> void:
+	crystal_tab = tab
+	main._render_panel(true)
+
+# --- Lavori alla base ----------------------------------------------------------
+
+## Posti di lavoro: chi ha un mestiere può occuparne uno e aiutare tutta la base.
+func _build_work(body: VBoxContainer) -> void:
+	body.add_child(info_card("Molti eroi avevano un mestiere prima del Rift. Mettili al loro posto: restano alla base (non possono stare in squadra), aiutano tutti e col tempo migliorano. Il cibo c'è sempre: con un cuoco è più buono e rimette in forze. %s." % GS.game_clock_text()))
+	for post in GS.WORK_ORDER:
+		var info: Dictionary = GS.WORK_POSTS[post]
+		var worker := GS.post_worker(post)
+		var card := PanelContainer.new()
+		card.add_theme_stylebox_override("panel", UIKit.tinted(UIKit.LILAC if not worker.is_empty() else Color("#55607a"), 12.0))
+		var v := VBoxContainer.new()
+		v.add_theme_constant_override("separation", 4)
+		var head := HBoxContainer.new()
+		head.add_theme_constant_override("separation", 8)
+		var title := UIKit.title(str(info.name), 19, UIKit.INK)
+		title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		head.add_child(title)
+		head.add_child(UIKit.pill(" · ".join(info.trades), Color("#7d8a9e")))
+		v.add_child(head)
+		v.add_child(UIKit.para(str(info.text), 14))
+		if not worker.is_empty():
+			var line := HBoxContainer.new()
+			line.add_theme_constant_override("separation", 8)
+			var who := UIKit.label("%s · %s" % [str(worker.name), RiftwardState.trade_label(worker)], 15, UIKit.INK, UIKit.body_bold())
+			who.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			line.add_child(who)
+			line.add_child(small_button("Libera", _unassign.bind(str(worker.id)), "ghost"))
+			v.add_child(line)
+		else:
+			v.add_child(UIKit.label("Posto libero", 14, UIKit.MUTED, UIKit.body_bold()))
+		# candidati: chi ha il mestiere giusto, il più bravo per primo
+		var candidates := GS.get_alive_heroes().filter(func(h): return RiftwardState.post_for(h) == post and (worker.is_empty() or str(h.id) != str(worker.id)))
+		candidates.sort_custom(func(a, b): return int(a.trade.level) > int(b.trade.level))
+		for hero in candidates.slice(0, 4):
+			var check := GS.can_work(hero, post)
+			var row := HBoxContainer.new()
+			row.add_theme_constant_override("separation", 8)
+			var portrait: HeroPortrait = HeroPortraitScript.new()
+			portrait.setup(hero, 40)
+			row.add_child(portrait)
+			var name_label := UIKit.label("%s · %s%s" % [str(hero.name), RiftwardState.trade_label(hero), "" if check.ok else "  (%s)" % ("in squadra" if GS.data.party.has(hero.id) else "ferito")], 14, UIKit.INK_SOFT if check.ok else UIKit.MUTED, UIKit.body_font())
+			name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			name_label.clip_text = true
+			row.add_child(name_label)
+			row.add_child(small_button("Metti qui", _assign_work.bind(str(hero.id), post), "violet", "" if check.ok else str(check.message)))
+			v.add_child(row)
+		if candidates.is_empty() and worker.is_empty(): v.add_child(UIKit.label("Nessun eroe con questo mestiere.", 13, UIKit.MUTED, UIKit.body_font()))
+		card.add_child(v)
+		body.add_child(card)
+
+func _assign_work(hero_id: String, post: String) -> void:
+	main.report(GS.assign_work(hero_id, post), "Al lavoro", "%s · %s" % [GS.hero_by_id(hero_id).name, str(GS.WORK_POSTS[post].name)])
+
 func _build_crystal(body: VBoxContainer) -> void:
+	body.add_child(tabs([["summon", "Evocazione e base"], ["work", "Lavori"]], crystal_tab, _set_crystal_tab))
+	if crystal_tab == "work":
+		_build_work(body)
+		return
 	body.add_child(section("Evocazione", "%d eroi vivi" % GS.get_alive_heroes().size()))
 	var emergency := GS.emergency_recruit_status()
 	if emergency.visible:
@@ -1066,9 +1129,18 @@ func _build_armory(body: VBoxContainer) -> void:
 		diff_row.add_child(b)
 	body.add_child(diff_row)
 	body.add_child(section("Ricette"))
+	# chi lavora alla base decide fin dove può arrivare il grado: senza esperti, al massimo E
+	var crew := []
+	for post in ["forgia", "falegnameria", "conceria"]:
+		var worker := GS.post_worker(post)
+		crew.append("%s: %s" % [str(GS.WORK_POSTS[post].name), ("%s (%s)" % [str(worker.name), RiftwardState.trade_label(worker)]) if not worker.is_empty() else "nessuno"])
+	body.add_child(info_card("Al lavoro · " + " · ".join(crew) + ". Il grado non supera quello che sanno fare loro: metti fabbro, carpentiere e conciatore al loro posto dal Cristallo (scheda Lavori).", "info" if GS.post_level("forgia") > 0 else "warn"))
 	for recipe_id in GS.FORGE_RECIPES:
 		var recipe: Dictionary = GS.FORGE_RECIPES[recipe_id]
-		var card := _recipe_card(str(recipe.name), "", GS.forge_cost(recipe_id, forge_difficulty), "Forgia a mano", _forge.bind(recipe_id), "gold")
+		var craft: Array = GS.FORGE_CRAFT.get(recipe_id, [])
+		var cap := mini(GS.forge_skill_cap(recipe_id), int(GS.FORGE_DIFFICULTIES[forge_difficulty].max_grade))
+		var note := "Serve: %s, con l'aiuto di %s. Grado massimo adesso: %s." % [str(GS.WORK_POSTS[str(craft[0])].name).to_lower(), str(GS.WORK_POSTS[str(craft[1])].name).to_lower(), GS.GRADES[cap]] if craft.size() == 2 else ""
+		var card := _recipe_card(str(recipe.name), note, GS.forge_cost(recipe_id, forge_difficulty), "Forgia a mano", _forge.bind(recipe_id), "gold")
 		if not pending.is_empty():
 			for b in card.find_children("*", "Button", true, false):
 				b.disabled = true
@@ -1227,7 +1299,7 @@ func build_roster_screen(content: VBoxContainer) -> void:
 	for role in GS.ROLES: roles.append([role, GS.role_label(role)])
 	var stars := [[0, "Tutte"]]
 	for r in range(1, 8): stars.append([r, "%d★" % r])
-	var states := [["", "Tutti"], ["idle", "Liberi"], ["party", "In squadra"], ["training", "Allenamento"], ["resting", "Riposo"], ["injured", "Feriti"]]
+	var states := [["", "Tutti"], ["idle", "Liberi"], ["party", "In squadra"], ["training", "Allenamento"], ["resting", "Riposo"], ["working", "Al lavoro"], ["injured", "Feriti"]]
 	var sorts := [["rarity", "Rarità"], ["level", "Livello"], ["power", "Potenza"], ["name", "Nome"]]
 	for group in [["RUOLO", roles, roster_role, "role"], ["STELLE", stars, roster_stars, "stars"], ["STATO", states, roster_state, "state"], ["ORDINA", sorts, roster_sort, "sort"]]:
 		filters.add_child(UIKit.eyebrow(group[0]))
@@ -1324,7 +1396,10 @@ func build_dossier(content: VBoxContainer, hero: Dictionary, modal_ref: Array) -
 	if GS.is_commoner(hero):
 		right.add_child(UIKit.label("%s · popolano, di mestiere %s" % [hero.origin, str(hero.get("job", hero.profession)).to_lower()], 15, UIKit.INK_SOFT, UIKit.body_bold()))
 	else:
-		right.add_child(UIKit.label("%s · ex %s" % [hero.origin, str(hero.profession).to_lower()], 15, UIKit.INK_SOFT, UIKit.body_bold()))
+		right.add_child(UIKit.label(("%s · ex %s" % [hero.origin, str(hero.profession).to_lower()]) if not str(hero.get("profession", "")).is_empty() else "%s · nessun mestiere prima del Rift" % hero.origin, 15, UIKit.INK_SOFT, UIKit.body_bold()))
+	if not RiftwardState.trade_label(hero).is_empty():
+		var post := RiftwardState.post_for(hero)
+		right.add_child(UIKit.label("Mestiere: %s%s" % [RiftwardState.trade_label(hero), (" · posto: " + str(GS.WORK_POSTS[post].name)) if not post.is_empty() else ""], 14, UIKit.LILAC, UIKit.body_bold()))
 	right.add_child(UIKit.label("Aspetto: " + look_text(hero), 14, UIKit.ROSE if str(hero.get("appearance", {}).get("eye_color", "")) == "red" else UIKit.MUTED, UIKit.body_font()))
 	right.add_child(bars(hero, true))
 	right.add_child(UIKit.label("Potenza %s · Missioni %d · Vittorie %d · Abbattimenti %d" % [GS.format_number(GS.hero_power(hero)), int(hero.missions), int(hero.victories), int(hero.kills)], 14, UIKit.MUTED, UIKit.body_bold()))
@@ -1340,11 +1415,14 @@ func build_dossier(content: VBoxContainer, hero: Dictionary, modal_ref: Array) -
 		actions.add_theme_constant_override("h_separation", 8)
 		actions.add_theme_constant_override("v_separation", 8)
 		var activity := GS.hero_activity(hero)
-		if activity in ["training", "resting"]:
-			actions.add_child(UIKit.button("Richiama dall'attività", _unassign.bind(str(hero.id)), "ghost", 0))
+		if activity in ["training", "resting", "working"]:
+			actions.add_child(UIKit.button("Richiama dall'attività" if activity != "working" else "Togli dal lavoro", _unassign.bind(str(hero.id)), "ghost", 0))
 		else:
 			actions.add_child(UIKit.button("Allena", _assign.bind(str(hero.id), "training"), "primary", 0))
 			actions.add_child(UIKit.button("Riposa", _assign.bind(str(hero.id), "dormitory"), "sky", 0))
+			var work_post := RiftwardState.post_for(hero)
+			if not work_post.is_empty() and bool(GS.can_work(hero, work_post).ok):
+				actions.add_child(UIKit.button("Al lavoro · %s" % str(GS.WORK_POSTS[work_post].name), _assign_work.bind(str(hero.id), work_post), "violet", 0))
 		var in_party: bool = GS.data.party.has(hero.id)
 		actions.add_child(UIKit.button("Togli dalla squadra" if in_party else "Metti in squadra", _toggle_party.bind(str(hero.id)), "ghost" if in_party else "gold", 0))
 		var req := GS.promotion_requirements(hero)
@@ -1576,10 +1654,12 @@ func _shop_card(offer_id: String) -> PanelContainer:
 	var limit := UIKit.label("Oggi %d/%d" % [remaining, int(offer.limit)], 13, UIKit.MUTED, UIKit.head_medium())
 	limit.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(limit)
-	var price_key: String = offer.price.keys()[0]
-	var buy := UIKit.button(("%s %s" % [GS.format_number(offer.price[price_key]), {"gold": "Oro", "gems": "Gemme"}.get(price_key, price_key)]) if remaining > 0 else "Esaurito", _shop_buy.bind(offer_id), "gold" if price_key == "gold" else "violet", 0)
-	buy.disabled = remaining <= 0 or not GS.can_afford(offer.price)
-	if remaining > 0 and not GS.can_afford(offer.price): buy.tooltip_text = "Non hai abbastanza " + GS.cost_text(offer.price)
+	# prezzo vero: con un mercante all'emporio l'Oro costa meno
+	var price := GS.shop_price(offer_id)
+	var price_key: String = price.keys()[0]
+	var buy := UIKit.button(("%s %s" % [GS.format_number(price[price_key]), {"gold": "Oro", "gems": "Gemme"}.get(price_key, price_key)]) if remaining > 0 else "Esaurito", _shop_buy.bind(offer_id), "gold" if price_key == "gold" else "violet", 0)
+	buy.disabled = remaining <= 0 or not GS.can_afford(price)
+	if remaining > 0 and not GS.can_afford(price): buy.tooltip_text = "Non hai abbastanza " + GS.cost_text(price)
 	v.add_child(buy)
 	card.add_child(v)
 	return card

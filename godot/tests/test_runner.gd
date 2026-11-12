@@ -36,6 +36,7 @@ func _initialize() -> void:
 	_test("armeria: forgia a mano, gradi da F a S e difficoltà", _test_forge_minigame_rules)
 	_test("richiamo d'emergenza contro il blocco", _test_emergency)
 	_test("dungeon giornalieri: materiali, mostri deboli, due vittorie al giorno", _test_dungeons)
+	_test("mestieri e lavori: posti, pasti del cuoco, orologio 1:3", _test_work_and_clock)
 	_test("ricarica JSON: niente piani completati falsi", _test_json_reload)
 	_test("sblocchi di sviluppo non sopravvivono", _test_dev_leak)
 	_test("addestramento offline rispetta la stanchezza", _test_offline_steps)
@@ -428,18 +429,81 @@ func _test_forge_minigame_rules() -> Array:
 	var second_blocked: bool = not game.begin_forge("armor", "normal").ok
 	var bad := game.finish_forge(0.0)
 	var no_pending: bool = game.forge_pending().is_empty() and not game.finish_forge(0.5).ok
-	# Armeria Lv.5: Maestro sbloccato, S con precisione alta e più forte del grado F
+	# Armeria Lv.5: Maestro sbloccato. Senza nessuno alla forgia anche un lavoro perfetto esce di grado E
 	game.data.facilities.armory.level = 5
+	var unskilled := game.forge_item("weapon", "master", 0.97)
+	# con un fabbro esperto e un carpentiere al lavoro si arriva al grado S
+	var smith := game.generate_hero("forge-smith", 1)
+	smith.trade = {"name": "Fabbro", "level": 8, "xp": 0.0}
+	var carpenter := game.generate_hero("forge-carpenter", 1)
+	carpenter.trade = {"name": "Carpentiere", "level": 4, "xp": 0.0}
+	game.data.heroes.append(smith)
+	game.data.heroes.append(carpenter)
+	var posted: bool = game.assign_work(str(smith.id), "forgia").ok and game.assign_work(str(carpenter.id), "falegnameria").ok
 	var great := game.forge_item("weapon", "master", 0.97)
 	var valid: bool = materials_ok and ladder and capped and locked and started.ok and paid and second_blocked
 	# sotto il 25% di precisione il pezzo si rompe: niente oggetto, materiali persi
 	valid = valid and bad.ok and bool(bad.get("failed", false)) and not bad.has("item") and no_pending
 	var poor := game.forge_item("weapon", "normal", 0.3)
 	valid = valid and poor.ok and str(poor.item.grade) == "E"
+	valid = valid and unskilled.ok and str(unskilled.item.grade) == "E" and game.forge_skill_cap("charm") == 2
+	valid = valid and posted and is_equal_approx(game.forge_skill("weapon"), 10.0) and game.forge_skill_cap("weapon") == 6 and game.forge_skill_cap("armor") == 5
 	valid = valid and great.ok and str(great.item.grade) == "S" and int(great.item.power) > int(poor.item.power) * 3
 	valid = valid and game.forge_window_bonus() > 1.0
 	game.free()
 	return [valid, "Forgia a mano non conforme"]
+
+func _test_work_and_clock() -> Array:
+	var game := _fresh("work-seed")
+	var valid := true
+	# orologio: 1 minuto vero = 3 minuti di gioco; il primo giorno parte alle 8
+	valid = valid and game.game_clock_text() == "Giorno 1 · 08:00"
+	game.advance_time(600.0)
+	valid = valid and game.game_clock_text() == "Giorno 1 · 08:30"
+	# mestieri: i popolani ce l'hanno sempre; tra i rari solo alcuni, ma può capitare anche a un 7★
+	var with_trade := {1: 0, 7: 0}
+	for i in 60:
+		for rarity in [1, 7]:
+			var hero := game.generate_hero("work-%d-%d" % [rarity, i], rarity)
+			var trade: Dictionary = hero.trade
+			if not trade.is_empty():
+				with_trade[rarity] += 1
+				valid = valid and int(trade.level) >= 1 and int(trade.level) <= game.TRADE_MAX_LEVEL and not RiftwardState.post_for(hero).is_empty()
+			else: valid = valid and str(hero.profession).is_empty()
+	valid = valid and with_trade[1] == 60 and with_trade[7] > 0 and with_trade[7] < 40
+	# un cuoco al lavoro: a ogni pasto più morale e meno stanchezza; senza cuoco il cibo c'è lo stesso, senza premi
+	var eater: Dictionary = game.data.heroes[0]
+	eater.morale = 50
+	eater.fatigue = 40
+	game.advance_time(3600.0 * 2.0)
+	valid = valid and int(eater.morale) == 50 and int(eater.fatigue) == 40
+	var cook := game.generate_hero("work-cook", 1)
+	cook.trade = {"name": "Cuoco", "level": 6, "xp": 0.0}
+	game.data.heroes.append(cook)
+	# chi è in squadra non può lavorare; il mestiere deve essere quello giusto
+	valid = valid and not game.assign_work(str(cook.id), "forgia").ok
+	game.assign_party(0, str(cook.id))
+	valid = valid and not game.assign_work(str(cook.id), "cucina").ok
+	game.assign_party(0, str(game.data.heroes[0].id))
+	valid = valid and game.assign_work(str(cook.id), "cucina").ok and game.hero_activity(cook) == "working" and game.post_level("cucina") == 6
+	# dalle 13:30 circa alle 21: un pasto (la cena delle 20)
+	game.data.world.game_minutes = 19.0 * 60.0
+	game.advance_time(3600.0)
+	valid = valid and int(eater.morale) == 53 and int(eater.fatigue) == 34
+	# lavorando si migliora; entrando in squadra si lascia il posto
+	game.advance_time(3600.0 * 6.0)
+	valid = valid and int(cook.trade.level) == 7
+	game.assign_party(0, str(cook.id))
+	valid = valid and game.post_worker("cucina").is_empty() and game.hero_activity(cook) == "party"
+	# emporio: sconto sull'Oro del Negozio; archivio: più esperienza
+	var merchant := game.generate_hero("work-merchant", 2)
+	merchant.trade = {"name": "Mercante", "level": 5, "xp": 0.0}
+	game.data.heroes.append(merchant)
+	var full_price := int(game.shop_price("mat_ore").gold)
+	game.assign_work(str(merchant.id), "emporio")
+	valid = valid and int(game.shop_price("mat_ore").gold) == roundi(full_price * 0.9) and is_equal_approx(game.mission_xp_bonus(), 1.0)
+	game.free()
+	return [valid, "Mestieri, posti di lavoro, pasti o orologio non conformi"]
 
 func _test_dungeons() -> Array:
 	var game := _fresh("dungeon-seed")
