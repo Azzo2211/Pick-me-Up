@@ -11,6 +11,10 @@ Qui ogni Claude (o altro agente) che lavora sul repository scrive **cosa sta fac
 
 ---
 
+## 2026-11-12 · Design + Programming + UI · Regole del proprietario: allineare il gioco al documento (#18) — in corso
+Il proprietario ha mandato le regole aggiornate. Lavoro a blocchi: correzioni (Lv max 99, 7ª stella solo da evocazione, Armeria dopo il Piano 3, piani 1–4 annientamento, statistiche STR/INT/HP/DEX, materiali di grado C, forgia che può fallire), allenamento a scelta, mestieri e vita quotidiana, emozioni e intesa in battaglia, moderatrice, Merge a due eroi.
+- Sto toccando soprattutto: `godot/scripts/game_state.gd`, `godot/scripts/battle/battle_scene.gd`, `godot/scripts/ui/facility_panels.gd`, `godot/scripts/system_advisor.gd`, `godot/scripts/ui/advisor_card.gd`, `godot/scripts/main.gd`, test e documenti. Per favore non modificateli finché la voce non passa a "fatto".
+
 ## 2026-11-12 · Programming + UI · Consigli del Sistema (#17) — fatto
 Richiesta del proprietario: un assistente che non si chatta ma dà consigli sul gioco e su altre cose.
 - **Logica** (`godot/scripts/system_advisor.gd`, nuovo): guarda lo stato e propone consigli ordinati per urgenza: squadra bloccata o incompleta, stanchi e feriti, eroi fuori ruolo, squadra migliore disponibile, Prova del Guardiano in arrivo, piano su cui si è bloccati, popolani senza classe, posti liberi in Addestramento e nel Dormitorio, promozioni e fusioni pronte, espansione della base, cantieri e potenziamenti, pity vicino al 5★, scorte piene, offerte del giorno, Diario. Più un "Lo sapevi?" sulle regole del gioco. Legge soltanto: non cambia mai il salvataggio (c'è un test).
