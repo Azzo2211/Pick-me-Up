@@ -22,12 +22,16 @@ const TICK_SECONDS := 1.0
 const AUTOSAVE_SECONDS := 20.0
 
 # --- Rarità ------------------------------------------------------------------
-const RARITY_CAPS := {1: 10, 2: 20, 3: 30, 4: 50, 5: 70, 6: 99, 7: 120}
+## Livello massimo per rarità. Regola del proprietario (2026-11-12): il livello massimo è 99.
+const RARITY_CAPS := {1: 10, 2: 20, 3: 30, 4: 50, 5: 70, 6: 99, 7: 99}
+const MAX_LEVEL := 99
 const RARITY_NAMES := {1: "Comune", 2: "Non comune", 3: "Raro", 4: "Epico", 5: "Leggendario", 6: "Mitico", 7: "Trascendente"}
 ## Pietre di promozione richieste per salire dalla rarità indicata alla successiva.
-const PROMOTION_STONES := {1: 1, 2: 2, 3: 3, 4: 5, 5: 12, 6: 30}
-## Piano minimo già superato per promuovere dalla rarità indicata (6★ e 7★ sono endgame).
-const PROMOTION_FLOOR_GATE := {5: 30, 6: 60}
+## La promozione arriva al massimo a 6★: la 7ª stella si ottiene solo evocando (regola del proprietario).
+const PROMOTION_STONES := {1: 1, 2: 2, 3: 3, 4: 5, 5: 12}
+const PROMOTION_MAX_RARITY := 6
+## Piano minimo già superato per promuovere dalla rarità indicata (la 6★ è endgame).
+const PROMOTION_FLOOR_GATE := {5: 30}
 
 # --- Evocazione --------------------------------------------------------------
 const SUMMON_POOLS := {
@@ -87,6 +91,10 @@ const ROLE_PITCH := {
 	"Mage": "Imparo in fretta e ho la testa per i libri: potrei studiare da Mago.",
 	"Support": "So prendermi cura degli altri: lasciami fare il Supporto.",
 }
+## Statistiche principali (regole del proprietario): chiave interna → [sigla, nome].
+## Le chiavi restano quelle dei salvataggi: "sta" è HP (punti vita), "agi" è DEX (destrezza).
+const STAT_LABELS := {"str": ["STR", "Forza"], "int": ["INT", "Intelligenza"], "sta": ["HP", "Punti vita"], "agi": ["DEX", "Destrezza"]}
+const STAT_ORDER := ["str", "int", "sta", "agi"]
 const TRAITS := ["Nervi saldi", "Istinto protettivo", "Passo leggero", "Tenace", "Occhio clinico", "Testardo", "Frugale", "Socievole", "Solitario", "Mano ferma", "Memoria lunga"]
 
 # --- Base e strutture ---------------------------------------------------------
@@ -123,7 +131,7 @@ const FACILITIES := {
 	"dormitory": {"name": "Dormitorio", "short": "Dormitorio", "unlock": 1, "build_cost": 0, "upgrade_cost": 7000, "description": "Gli eroi riposano, recuperano la stanchezza, il morale e guariscono dalle ferite."},
 	"merging": {"name": "Centro di Fusione", "short": "Fusione", "unlock": 1, "build_cost": 0, "upgrade_cost": 12000, "description": "La cupola azzurra dove gli eroi si fondono e vengono promossi di rarità."},
 	"gate": {"name": "Portale delle Missioni", "short": "Portale", "unlock": 1, "build_cost": 0, "upgrade_cost": 15000, "description": "Il varco sospeso verso la Torre. Da qui parte la squadra."},
-	"armory": {"name": "Armeria", "short": "Armeria", "unlock": 2, "build_cost": 25000, "upgrade_cost": 14000, "description": "Forgia e assegna armi e armature agli eroi."},
+	"armory": {"name": "Armeria", "short": "Armeria", "unlock": 1, "unlock_floor": 3, "build_cost": 25000, "upgrade_cost": 14000, "description": "Forgia e assegna armi e armature agli eroi."},
 	"warehouse": {"name": "Magazzino", "short": "Magazzino", "unlock": 3, "build_cost": 40000, "upgrade_cost": 16000, "description": "Deposito di materiali ed equipaggiamento. Aumenta le scorte massime."},
 	"workshop": {"name": "Laboratorio", "short": "Laboratorio", "unlock": 3, "build_cost": 45000, "upgrade_cost": 18000, "description": "Raffina i materiali grezzi in componenti per la forgia e l'alchimia."},
 	"alchemy": {"name": "Centro Alchemico", "short": "Alchimia", "unlock": 4, "build_cost": 80000, "upgrade_cost": 26000, "description": "Distilla tonici che curano ferite e risollevano il morale."},
@@ -131,16 +139,16 @@ const FACILITIES := {
 const FACILITY_ORDER := ["training", "dormitory", "merging", "gate", "armory", "warehouse", "workshop", "alchemy"]
 
 const MATERIALS := {
-	"ore": {"name": "Minerale", "icon": "⬢"}, "leather": {"name": "Pelle", "icon": "◒"}, "wood": {"name": "Legno", "icon": "♣"},
+	"ore": {"name": "Ferro (C)", "icon": "⬢"}, "leather": {"name": "Pelle (C)", "icon": "◒"}, "wood": {"name": "Assi di legno (C)", "icon": "♣"},
 	"herbs": {"name": "Erbe", "icon": "✿"}, "cores": {"name": "Nuclei", "icon": "✹"}, "medicine": {"name": "Medicine", "icon": "✚"},
 }
 
 # --- Torre -------------------------------------------------------------------
 const STAGES := {
 	1: {"type": "Subjugation", "name": "La strada spezzata", "biome": "Bosco cinereo", "objective": "Elimina tutte le minacce", "duration": 60.0, "color": "#3c7968", "description": "Predoni del Rift hanno chiuso l'unica via verso la torre.", "waves": [[0.0, "raider", 3], [10.0, "hound", 2]]},
-	2: {"type": "Survival", "name": "Campana nella nebbia", "biome": "Borgo evacuato", "objective": "Sopravvivi per 45 secondi", "duration": 45.0, "color": "#346b86", "description": "La campana attira sciami dalle case vuote. Munizioni e disciplina decidono la sopravvivenza.", "waves": [[0.0, "raider", 3], [9.0, "archer", 2], [20.0, "hound", 4], [31.0, "brute", 2]]},
-	3: {"type": "Exploration", "name": "Osservatorio sommerso", "biome": "Rovine allagate", "objective": "Metti in sicurezza 3 punti d'interesse", "duration": 70.0, "color": "#365c8c", "description": "Le rovine nascondono informazioni persistenti sul climax dello Stream.", "waves": [[0.0, "hound", 3], [15.0, "raider", 3], [30.0, "archer", 2]]},
-	4: {"type": "Defense", "name": "L'ultima lanterna", "biome": "Santuario in rovina", "objective": "Proteggi il faro del Rift", "duration": 50.0, "color": "#94713c", "description": "Il faro deve restare integro mentre l'Archivio decodifica le coordinate.", "waves": [[0.0, "raider", 4], [12.0, "archer", 2], [25.0, "brute", 2], [37.0, "hound", 4]]},
+	2: {"type": "Subjugation", "name": "Campana nella nebbia", "biome": "Borgo evacuato", "objective": "Elimina tutte le minacce", "duration": 75.0, "color": "#346b86", "description": "La campana ha attirato predoni tra le case vuote. Ripulisci il borgo.", "waves": [[0.0, "raider", 3], [12.0, "archer", 2], [24.0, "hound", 2]]},
+	3: {"type": "Subjugation", "name": "Osservatorio sommerso", "biome": "Rovine allagate", "objective": "Elimina tutte le minacce", "duration": 80.0, "color": "#365c8c", "description": "Segugi del Rift si sono annidati nelle rovine allagate.", "waves": [[0.0, "hound", 3], [14.0, "raider", 3], [28.0, "archer", 2]]},
+	4: {"type": "Subjugation", "name": "L'ultima lanterna", "biome": "Santuario in rovina", "objective": "Elimina tutte le minacce", "duration": 85.0, "color": "#94713c", "description": "L'ultimo presidio prima del Custode: i predoni hanno portato un bruto.", "waves": [[0.0, "raider", 4], [12.0, "archer", 2], [26.0, "brute", 1], [36.0, "hound", 2]]},
 	5: {"type": "Boss", "name": "Custode delle radici", "biome": "Cuore del bosco", "objective": "Abbatti il Custode", "duration": 90.0, "color": "#537d3d", "description": "La minaccia nascosta dello Stream attende sotto la torre.", "waves": [[0.0, "boss", 1], [0.0, "raider", 2], [22.0, "hound", 3], [45.0, "archer", 2]]},
 }
 const STAGE_TYPE_CYCLE := ["Subjugation", "Survival", "Exploration", "Defense"]
@@ -268,10 +276,12 @@ func new_world(seed_text: String = "") -> void:
 
 func _default_facilities() -> Dictionary:
 	var output := {}
-	for id in FACILITY_ORDER:
-		var built: bool = int(FACILITIES[id].unlock) <= 1
-		output[id] = {"level": 1 if built else 0}
+	for id in FACILITY_ORDER: output[id] = {"level": 1 if facility_starts_built(id) else 0}
 	return output
+
+## Strutture già in piedi in una partita nuova (l'Armeria arriva dopo il Piano 3).
+static func facility_starts_built(id: String) -> bool:
+	return int(FACILITIES[id].unlock) <= 1 and not FACILITIES[id].has("unlock_floor")
 
 func _migrate() -> void:
 	var from_version := int(data.get("version", 1))
@@ -302,7 +312,7 @@ func _migrate() -> void:
 		for key in ["shop_claims", "shop_history", "cosmetics"]: data.erase(key)
 	else:
 		var facilities: Dictionary = data.get_or_add("facilities", {})
-		for id in FACILITY_ORDER: facilities.get_or_add(id, {"level": 1 if int(FACILITIES[id].unlock) <= 1 else 0})
+		for id in FACILITY_ORDER: facilities.get_or_add(id, {"level": 1 if facility_starts_built(id) else 0})
 	_normalize_types()
 	for hero in data.heroes: _normalize_hero(hero)
 	if from_version < 3:
@@ -317,6 +327,18 @@ func _migrate() -> void:
 			item["id"] = "I-%05d" % int(data.item_counter)
 		item.get_or_add("slot", "main")
 		item.get_or_add("grade", "D")
+	# Regole del proprietario (2026-11-12): i piani 1–4 sono annientamenti abbastanza facili
+	for early in [2, 3, 4]:
+		var early_record: Dictionary = data.get("stages", {}).get(str(early), {})
+		if not early_record.is_empty() and not bool(early_record.get("cleared", false)) and str(early_record.get("descriptor", {}).get("type", "")) != "Subjugation":
+			data.stages.erase(str(early))
+			_materialize_stage(early).attempts = int(early_record.get("attempts", 0))
+	for hero in data.heroes:
+		if int(hero.get("level", 1)) > level_cap(hero):
+			hero.level = level_cap(hero)
+			hero.xp = 0
+		# le vecchie valutazioni dicevano quanto l'eroe impara: ora lo scopre il giocatore
+		hero.assessment = _assessment(hero)
 	for stage_key in data.get("stages", {}):
 		var stage_record: Dictionary = data.stages[stage_key]
 		if not stage_record.has("descriptor"): continue
@@ -760,17 +782,19 @@ func _starter_equipment(role: String) -> Dictionary:
 	var armor := 18 if role == "Guardian" else 12 if role in ["Vanguard", "Lancer"] else 7
 	return {"main": {"name": names.get(role, "Arma"), "grade": "D", "power": 15}, "sub": {"name": "Scudo" if role == "Guardian" else "Focus" if role in ["Mage", "Support"] else "Faretra" if role == "Ranger" else "Off-hand", "grade": "D", "block": 18 if role == "Guardian" else 0, "ammo": 24 if role == "Ranger" else 0}, "armor": {"name": "Equipaggiamento da campo", "grade": "D", "defense": armor}, "accessory": {}}
 
+## Valutazione mostrata nella scheda. Non dice mai quanto in fretta l'eroe impara o
+## quanto può crescere (potenziale): deve scoprirlo il giocatore (regola del proprietario).
 func _assessment(hero: Dictionary) -> Array:
 	var output := []
-	if hero.potential >= 90: output.append("Ceiling impossibile da stimare")
-	elif hero.potential >= 75: output.append("Margine di crescita eccezionale")
-	elif hero.potential >= 58: output.append("Apprendimento sopra la media")
-	else: output.append("Crescita metodica, non esplosiva")
 	var best_stat := "str"
 	for key in hero.stats:
 		if hero.stats[key] > hero.stats[best_stat]: best_stat = key
-	output.append("Affinità evidente: " + {"str": "Forza", "int": "Intelletto", "sta": "Stamina", "agi": "Agilità"}[best_stat])
+	output.append("Affinità evidente: %s (%s)" % [STAT_LABELS[best_stat][0], STAT_LABELS[best_stat][1]])
 	return output
+
+## Valutazione aggiornata alle statistiche di adesso (per la scheda).
+func hero_assessment(hero: Dictionary) -> Array:
+	return _assessment(hero)
 
 ## Livelli di stanchezza: da "min" in su l'eroe subisce questi malus, in missione
 ## e nella potenza. hp/atk/def moltiplicano vita, attacco/magia e difesa; acc e
@@ -937,7 +961,19 @@ func facility_built(id: String) -> bool:
 
 ## Sbloccata ma non ancora costruita: nella base appare come cantiere.
 func facility_available(id: String) -> bool:
-	return not facility_built(id) and base_level() >= int(FACILITIES[id].unlock)
+	return not facility_built(id) and base_level() >= int(FACILITIES[id].unlock) and floor_cleared(int(FACILITIES[id].get("unlock_floor", 0)))
+
+## Messaggio su cosa manca per aprire il cantiere di una struttura.
+func facility_unlock_text(id: String) -> String:
+	var info: Dictionary = FACILITIES[id]
+	if base_level() < int(info.unlock): return "Serve la Base Lv.%d" % int(info.unlock)
+	if not floor_cleared(int(info.get("unlock_floor", 0))): return "Completa il Piano %d" % int(info.unlock_floor)
+	return ""
+
+## Il piano è stato completato almeno una volta (0 = nessun requisito).
+func floor_cleared(floor_index: int) -> bool:
+	if floor_index <= 0 or dev_override(): return true
+	return bool(data.stages.get(str(floor_index), {}).get("cleared", false))
 
 func facility_max_level() -> int:
 	return mini(base_level(), FACILITY_MAX_LEVEL)
@@ -984,7 +1020,7 @@ func upgrade_facility(id: String) -> Dictionary:
 func build_facility(id: String) -> Dictionary:
 	if not FACILITIES.has(id): return {"ok": false, "message": "Struttura sconosciuta"}
 	if facility_built(id): return {"ok": false, "message": "Già costruita"}
-	if not facility_available(id): return {"ok": false, "message": "Serve la Base Lv.%d" % int(FACILITIES[id].unlock)}
+	if not facility_available(id): return {"ok": false, "message": facility_unlock_text(id)}
 	var cost := {"gold": int(FACILITIES[id].build_cost)}
 	if not pay(cost, "Costruzione " + FACILITIES[id].name, "facility"): return {"ok": false, "message": "Oro insufficiente"}
 	data.facilities[id].level = 1
@@ -1236,6 +1272,7 @@ func merge_heroes(hero_ids: Array) -> Dictionary:
 func promotion_requirements(hero: Dictionary) -> Dictionary:
 	var rarity := int(hero.current_rarity)
 	if rarity >= 7: return {"ok": false, "message": "Rarità massima", "stones": 0}
+	if rarity >= PROMOTION_MAX_RARITY: return {"ok": false, "message": "La 7ª stella si ottiene solo con l'evocazione", "stones": 0}
 	var stones := int(PROMOTION_STONES[rarity])
 	if int(hero.level) < level_cap(hero): return {"ok": false, "message": "Raggiungi prima il Lv.%d" % level_cap(hero), "stones": stones}
 	var gate := int(PROMOTION_FLOOR_GATE.get(rarity, 0))
@@ -1277,6 +1314,8 @@ const FORGE_RECIPES := {
 const GRADES := ["F", "E", "D", "C", "B", "A", "S"]
 ## Precisione minima (0..1) del minigioco di forgia per ogni grado.
 const FORGE_GRADE_THRESHOLDS := [0.0, 0.25, 0.40, 0.55, 0.70, 0.82, 0.92]
+## Sotto questa precisione il lavoro fallisce e i materiali sono persi (regola del proprietario).
+const FORGE_FAIL_PRECISION := 0.25
 ## Moltiplicatore delle statistiche per grado (D = valori di prima).
 const FORGE_GRADE_MULT := [0.55, 0.75, 1.0, 1.35, 1.75, 2.2, 2.8]
 ## Difficoltà della forgia: più è difficile, più il minigioco è veloce e stretto,
@@ -1345,6 +1384,11 @@ func finish_forge(precision: float) -> Dictionary:
 		return {"ok": false, "message": "Ricetta sconosciuta"}
 	precision = clampf(precision, 0.0, 1.0)
 	var difficulty := str(pending.difficulty)
+	if precision < FORGE_FAIL_PRECISION:
+		data.erase("forge_pending")
+		add_event("ARMERIA", "Forgia fallita: " + str(recipe.name), "Precisione %d%%: il pezzo si è rotto, i materiali sono persi." % roundi(precision * 100.0), "danger")
+		save_and_notify()
+		return {"ok": true, "failed": true, "precision": roundi(precision * 100.0)}
 	var grade_index := forge_grade_index(precision, difficulty)
 	var grade: String = GRADES[grade_index]
 	var quality := 0.95 + precision * 0.1
@@ -1404,9 +1448,9 @@ const SHOP_OFFERS := {
 	"daily_forge": {"tab": "daily", "name": "Kit di forgia", "icon": "ore", "color": "#ffbb4d", "price": {"gold": 3200}, "items": {"ore": 5, "leather": 3}, "limit": 1},
 	"daily_cores": {"tab": "daily", "name": "Nuclei instabili", "icon": "cores", "color": "#b57cff", "price": {"gold": 6000}, "items": {"cores": 2}, "limit": 1},
 	"daily_gems": {"tab": "daily", "name": "Cambio in Gemme", "icon": "gems", "color": "#46dcf2", "price": {"gold": 20000}, "items": {"gems": 60}, "limit": 1},
-	"mat_ore": {"tab": "material", "name": "Minerale", "icon": "ore", "color": "#9aa6b6", "price": {"gold": 700}, "items": {"ore": 5}, "limit": 5},
-	"mat_leather": {"tab": "material", "name": "Pelle", "icon": "leather", "color": "#c08a5a", "price": {"gold": 700}, "items": {"leather": 5}, "limit": 5},
-	"mat_wood": {"tab": "material", "name": "Legno", "icon": "wood", "color": "#6f8f3e", "price": {"gold": 500}, "items": {"wood": 5}, "limit": 5},
+	"mat_ore": {"tab": "material", "name": "Ferro (C)", "icon": "ore", "color": "#9aa6b6", "price": {"gold": 700}, "items": {"ore": 5}, "limit": 5},
+	"mat_leather": {"tab": "material", "name": "Pelle (C)", "icon": "leather", "color": "#c08a5a", "price": {"gold": 700}, "items": {"leather": 5}, "limit": 5},
+	"mat_wood": {"tab": "material", "name": "Assi di legno (C)", "icon": "wood", "color": "#6f8f3e", "price": {"gold": 500}, "items": {"wood": 5}, "limit": 5},
 	"mat_herbs": {"tab": "material", "name": "Erbe", "icon": "herbs", "color": "#4fe3a3", "price": {"gold": 500}, "items": {"herbs": 5}, "limit": 5},
 	"mat_medicine": {"tab": "material", "name": "Medicine", "icon": "medicine", "color": "#ff4f74", "price": {"gold": 1400}, "items": {"medicine": 3}, "limit": 3},
 	"mat_cores": {"tab": "material", "name": "Nuclei", "icon": "cores", "color": "#b57cff", "price": {"gold": 3000}, "items": {"cores": 2}, "limit": 3},
@@ -1641,6 +1685,10 @@ func finalize_mission(result: Dictionary) -> Dictionary:
 			data.world.current_floor = floor + 1
 			_materialize_stage(floor + 1)
 		add_event("MISSION", "Piano %d completato" % floor, "%s Oro · %d XP per superstite." % [format_number(rewards.gold), rewards.xp], "good")
+		if first_clear:
+			for id in FACILITY_ORDER:
+				if int(FACILITIES[id].get("unlock_floor", 0)) == floor and facility_available(id):
+					add_event("BASE", "Nuovo cantiere: " + FACILITIES[id].name, "Il Piano %d è superato: nella base si apre il cantiere. %s" % [floor, FACILITIES[id].description], "good")
 	else:
 		add_event("MISSION", "Missione non completata", "Il Piano %d resta identico per il prossimo tentativo." % floor, "warn")
 	for hero_result in result.get("hero_results", []):

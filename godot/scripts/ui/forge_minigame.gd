@@ -56,6 +56,7 @@ var shake := 0.0
 
 var precision := 0.0
 var result_item: Dictionary = {}
+var failed := false          # precisione troppo bassa: il pezzo si è rotto
 var _result_shown := 0.0
 var _close_button: Button
 
@@ -120,9 +121,10 @@ func _finish() -> void:
 	precision = clampf(heat_score * 0.2 + hammer_avg * 0.6 + quench_score * 0.2, 0.0, 1.0)
 	var result := GameState.finish_forge(precision)
 	result_item = result.get("item", {})
+	failed = bool(result.get("failed", false))
 	_result_shown = 0.0
 	_close_button.visible = true
-	shake = 0.5 if int(_grade_index()) >= 5 else 0.0
+	shake = 0.5 if failed or int(_grade_index()) >= 5 else 0.0
 
 func _grade_index() -> int:
 	return maxi(0, GameState.GRADES.find(str(result_item.get("grade", "F"))))
@@ -403,6 +405,16 @@ func _draw_bar() -> void:
 func _draw_result(p: Rect2) -> void:
 	var head := UIKit.head_font()
 	var body := UIKit.body_bold()
+	if failed:
+		# lavoro fallito: il pezzo si rompe, i materiali sono persi
+		var cf := p.get_center() + Vector2(0, -40)
+		var g := clampf(_result_shown / 0.35, 0.0, 1.0)
+		draw_arc(cf, 90.0 * g, 0.0, TAU, 64, UIKit.ROSE, 4.0)
+		draw_line(cf + Vector2(-38, -38) * g, cf + Vector2(38, 38) * g, UIKit.ROSE, 8.0)
+		draw_line(cf + Vector2(38, -38) * g, cf + Vector2(-38, 38) * g, UIKit.ROSE, 8.0)
+		draw_string(head, Vector2(p.position.x, cf.y + 132), "Lavoro fallito", HORIZONTAL_ALIGNMENT_CENTER, p.size.x, 28, UIKit.ROSE)
+		draw_string(body, Vector2(p.position.x, cf.y + 164), "Precisione %d%%: il pezzo si è rotto e i materiali sono persi." % roundi(precision * 100.0), HORIZONTAL_ALIGNMENT_CENTER, p.size.x, 17, UIKit.INK_SOFT)
+		return
 	var index := _grade_index()
 	var color := Color(GRADE_COLORS[index])
 	var grow := clampf(_result_shown / 0.35, 0.0, 1.0)

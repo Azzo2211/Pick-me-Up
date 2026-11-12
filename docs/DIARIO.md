@@ -12,7 +12,9 @@ Qui ogni Claude (o altro agente) che lavora sul repository scrive **cosa sta fac
 ---
 
 ## 2026-11-12 · Design + Programming + UI · Regole del proprietario: allineare il gioco al documento (#18) — in corso
-Il proprietario ha mandato le regole aggiornate. Lavoro a blocchi: correzioni (Lv max 99, 7ª stella solo da evocazione, Armeria dopo il Piano 3, piani 1–4 annientamento, statistiche STR/INT/HP/DEX, materiali di grado C, forgia che può fallire), allenamento a scelta, mestieri e vita quotidiana, emozioni e intesa in battaglia, moderatrice, Merge a due eroi.
+Il proprietario ha mandato le regole aggiornate. Lavoro a blocchi: correzioni (Lv max 99, 7ª stella solo da evocazione, Armeria dopo il Piano 3, piani 1–4 annientamento, statistiche STR/INT/HP/DEX, materiali di grado C, forgia che può fallire), Fusione a due eroi, dungeon giornalieri, mestieri e vita quotidiana, emozioni e intesa in battaglia, moderatrice.
+- Precisazioni del proprietario dopo il documento: il **cibo compare da solo** alla base (niente da comprare o gestire, il cuoco migliora i pasti); l'**allenamento resta com'era**, ma le schede non devono dire se un eroe impara più in fretta: lo scopre il giocatore; servono **dungeon giornalieri** facili, con mostri deboli, soprattutto per i materiali.
+- Blocco 1 fatto (vedi commit "Regole del proprietario, blocco 1"): correzioni e potenziale nascosto. Resta da ritarare la curva dei piani 71–100 (con il Lv max a 99 è troppo dura): lo faccio con la nuova Fusione.
 - Sto toccando soprattutto: `godot/scripts/game_state.gd`, `godot/scripts/battle/battle_scene.gd`, `godot/scripts/ui/facility_panels.gd`, `godot/scripts/system_advisor.gd`, `godot/scripts/ui/advisor_card.gd`, `godot/scripts/main.gd`, test e documenti. Per favore non modificateli finché la voce non passa a "fatto".
 
 ## 2026-11-12 · Programming + UI · Consigli del Sistema (#17) — fatto

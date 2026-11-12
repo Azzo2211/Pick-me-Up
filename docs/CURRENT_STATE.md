@@ -79,15 +79,16 @@ godot --headless --path godot --import                    # reimport the glb fil
 
 ## Implemented systems
 - Real economy by default; development mode (infinite resources, hidden values) is an option in Settings. Settings also switch the base light (dusk, day, night).
-- Base levels 1–5 (Nexus crystal). Each base level raises the facility level cap by one and opens new construction plots; facilities must then be built.
-- Facilities: Training, Dormitory, Merging, Gate (Lv.1); Armory (Base Lv.2); Warehouse and Workshop (Base Lv.3); Alchemy (Base Lv.4).
+- Base levels 1–10 (Nexus crystal). Each base level raises the facility level cap by one and opens new construction plots; facilities must then be built. From Lv.6 the base adds islands (Campi, Dimore, Santuario).
+- Facilities: Training, Dormitory, Merging, Gate (Lv.1); Armory (after Floor 3); Warehouse and Workshop (Base Lv.3); Alchemy (Base Lv.4).
 - Timed training (XP over real time, offline up to 8 h), timed rest (fatigue, morale, injuries heal).
-- XP and level-ups capped by rarity; promotions with stones (6★ needs Floor 30, 7★ needs Floor 60).
+- XP and level-ups capped by rarity, maximum level 99; promotions with stones up to 6★ (6★ needs Floor 30). The 7th star only comes from the Transcendent summon.
+- Stats shown as STR / INT / HP / DEX. A hero's learning speed and growth margin are never shown: the player finds them out.
 - Summon pools: Normal 78/19/3 for 1–3★ (10.000 Gold), High-grade 93,5/5,5/1 for 3–5★ with soft pity 70 and hard pity 100 (500 Gems), Transcendent 78/20/1,8/0,2 for 4–7★ (4.000 Gems, unlocks after Floor 20). Summons are revealed as cards that flip.
 - Fusion of three same-rarity heroes up to 5★.
-- Tower: floors 1–5 hand-made, 6–100 generated deterministically from the world seed; boss every 5 floors; retries keep the same floor, rewards shrink per attempt.
+- Tower: floors 1–5 hand-made (1–4 easy annihilation missions, 5 the first Guardian), 6–100 generated deterministically from the world seed; boss every 5 floors; retries keep the same floor, rewards shrink per attempt.
 - Battle: party of 5 (2 Front / 2 Mid / 1 Rear), 20 ticks/s, decisions at 5 Hz, Utility-style target scoring, ranged kiting, ammo, healing (never on enemies, never hitting allies), fear at low courage, boss slam, objectives (Subjugation, Survival, Exploration with a hero running to free points, Defense won if the beacon survives the timer, Boss), macro orders only, permadeath.
-- Armory forging and equipping, Workshop refining, Alchemy tonics.
+- Armory forging (minigame, grades E–S, below 25% precision the piece breaks and the materials are lost) and equipping, Workshop refining, Alchemy tonics. Building materials: Ferro (C), Pelle (C), Assi di legno (C).
 - Shop with in-game currencies only: daily offers, material packs (Gold) and Gem offers (Stones, chest, Gold). Each offer has a daily limit that resets at midnight UTC; nothing in the shop revives heroes or protects from permadeath.
 - 1★ and 2★ heroes are commoners summoned at random with a job (`COMMONER_JOBS` in `game_state.gd`: farmer, smith, merchant, archivist, town guard…). Their stats come from the job. They recommend a class that suits their stats and job (`class_advice`, with a second choice and an in-character line) but the player chooses it in the dossier (`choose_class`): the class brings its skill and starter weapons. Until then they fight with their job tool as the recommended class. The starter squad and older saves count as having chosen. From 3★ the Nexus gives a class.
 - Hero looks follow the user's character sheet (Guard, Merchant, Scholar, Villager): `hero.look` = archetype, face (3 per archetype; the rarer the hero, the likelier the handsome face), hairstyle (4 per archetype and sex, 13 meshes), body (slim, average, athletic, muscular, chubby) and age (greying hair, wrinkles). Commoners take the archetype of their job, others of their class (Ranger dresses as a hunter). Clothes change when a commoner picks a class; face and hair stay. Colours come from the character generator, with the category chosen by job or class.

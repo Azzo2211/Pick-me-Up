@@ -327,8 +327,8 @@ func _build_training(body: VBoxContainer) -> void:
 	if assigned.is_empty(): body.add_child(UIKit.para("Nessuno si sta allenando. Scegli qualcuno qui sotto.", 15))
 	for hero in assigned:
 		var extra := VBoxContainer.new()
+		# niente esperienza al minuto: dice quanto l'eroe impara, e quello deve scoprirlo il giocatore
 		extra.add_child(bars(hero, true))
-		extra.add_child(UIKit.label("circa %d esperienza al minuto" % roundi(GS.training_xp_per_minute(hero)), 13, UIKit.TEAL, UIKit.body_bold()))
 		body.add_child(hero_row(hero, [small_button("Richiama", _unassign.bind(str(hero.id)), "ghost")], extra, false, UIKit.TEAL))
 	body.add_child(section("Disponibili"))
 	var free := GS.get_alive_heroes().filter(func(h): return not GS.data.assignments.has(h.id))
@@ -474,7 +474,7 @@ func _do_merge() -> void:
 	else: main.toast("Fusione bloccata", str(result.message), "warn")
 
 func _build_promotion(body: VBoxContainer) -> void:
-	body.add_child(info_card("Un eroe al livello massimo della sua rarità può essere promosso con le Pietre. Le promozioni a 6★ e 7★ sono durissime: servono i Piani 30 e 60."))
+	body.add_child(info_card("Un eroe al livello massimo della sua rarità può essere promosso con le Pietre, fino a 6★ (per la 6★ serve il Piano 30). La 7ª stella non si ottiene con la promozione: solo dall'evocazione. Il livello massimo è 99."))
 	body.add_child(stat_tile("Pietre disponibili", GS.display_resource("stones"), UIKit.VIOLET))
 	var heroes := GS.get_alive_heroes()
 	heroes.sort_custom(func(a, b): return float(a.level) / GS.level_cap(a) > float(b.level) / GS.level_cap(b))
@@ -588,7 +588,7 @@ func _line_label(line: String) -> String:
 	return {"Front": "Prima linea", "Mid": "Centro", "Rear": "Retroguardia"}.get(line, line)
 
 func _type_label(type: String) -> String:
-	return {"Subjugation": "Sterminio", "Survival": "Sopravvivenza", "Exploration": "Esplorazione", "Defense": "Difesa", "Boss": "Guardiano"}.get(type, type)
+	return {"Subjugation": "Annientamento", "Survival": "Sopravvivenza", "Exploration": "Esplorazione", "Defense": "Difesa", "Boss": "Guardiano"}.get(type, type)
 
 func _set_gate_tab(tab: String) -> void:
 	gate_tab = tab
@@ -942,7 +942,7 @@ func _build_plot(id: String, body: VBoxContainer, footer: VBoxContainer) -> void
 		b.disabled = not GS.can_afford(cost)
 		footer.add_child(b)
 	else:
-		body.add_child(info_card("Si sblocca con la Base Lv.%d." % int(info.unlock), "warn"))
+		body.add_child(info_card(GS.facility_unlock_text(id) + ".", "warn"))
 
 func _build_facility(id: String) -> void:
 	var result := GS.build_facility(id)
@@ -964,7 +964,7 @@ func _recipe_card(title: String, description: String, costs: Dictionary, button_
 	return card
 
 func _build_armory(body: VBoxContainer) -> void:
-	body.add_child(info_card("Le armi si forgiano a mano: scalda il metallo, martella i punti al momento giusto e tempra la lama. Più sei preciso, più alto è il grado (da F a S). Le difficoltà alte sono più veloci ma arrivano ai gradi migliori; ogni livello dell'Armeria allarga un po' le zone buone."))
+	body.add_child(info_card("Le armi si forgiano a mano: scalda il metallo, martella i punti al momento giusto e tempra la lama. Più sei preciso, più alto è il grado (da E a S); sotto il 25% di precisione il pezzo si rompe e i materiali sono persi. Le difficoltà alte sono più veloci ma arrivano ai gradi migliori; ogni livello dell'Armeria allarga un po' le zone buone."))
 	var pending := GS.forge_pending()
 	if not pending.is_empty():
 		var recipe_name := str(GS.FORGE_RECIPES.get(str(pending.recipe), {}).get("name", "Oggetto"))
@@ -1251,10 +1251,8 @@ func build_dossier(content: VBoxContainer, hero: Dictionary, modal_ref: Array) -
 	grid.columns = 4
 	grid.add_theme_constant_override("h_separation", 8)
 	grid.add_theme_constant_override("v_separation", 8)
-	grid.add_child(stat_tile("Forza", str(hero.stats.str), UIKit.ROSE))
-	grid.add_child(stat_tile("Intelletto", str(hero.stats.int), UIKit.VIOLET))
-	grid.add_child(stat_tile("Stamina", str(hero.stats.sta), UIKit.TEAL))
-	grid.add_child(stat_tile("Agilità", str(hero.stats.agi), UIKit.SKY))
+	var stat_colors := {"str": UIKit.ROSE, "int": UIKit.VIOLET, "sta": UIKit.TEAL, "agi": UIKit.SKY}
+	for key in GS.STAT_ORDER: grid.add_child(stat_tile("%s · %s" % [GS.STAT_LABELS[key][0], GS.STAT_LABELS[key][1]], str(hero.stats[key]), stat_colors[key]))
 	right.add_child(grid)
 	if hero.state == "ALIVE":
 		var actions := HFlowContainer.new()
@@ -1300,7 +1298,7 @@ func build_dossier(content: VBoxContainer, hero: Dictionary, modal_ref: Array) -
 	var nv := VBoxContainer.new()
 	nv.add_theme_constant_override("separation", 4)
 	nv.add_child(UIKit.label("VALUTAZIONE DEL SISTEMA", 15, UIKit.LILAC, UIKit.head_font()))
-	for line in hero.assessment: nv.add_child(UIKit.para("◆ " + str(line), 15, UIKit.INK))
+	for line in GS.hero_assessment(hero): nv.add_child(UIKit.para("◆ " + str(line), 15, UIKit.INK))
 	for memory in hero.memories.slice(0, 3): nv.add_child(UIKit.para("“%s”" % memory, 15, UIKit.INK_SOFT))
 	notes.add_child(nv)
 	content.add_child(notes)

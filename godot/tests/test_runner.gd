@@ -344,6 +344,11 @@ func _test_promotion_gate() -> Array:
 	game.debug_clear_floors(30)
 	var ok := game.promote_hero(hero.id)
 	var valid: bool = blocked and ok.ok and int(hero.current_rarity) == 6 and int(game.data.world.stones) == 99 - 12
+	# la 7ª stella non si ottiene con la promozione; il livello massimo è 99
+	hero.level = game.level_cap(hero)
+	game.debug_clear_floors(60)
+	valid = valid and not game.promote_hero(hero.id).ok and int(hero.current_rarity) == 6
+	valid = valid and game.RARITY_CAPS[7] == 99 and game.RARITY_CAPS[6] == 99
 	game.free()
 	return [valid, "Promozione 6★ non conforme"]
 
@@ -351,7 +356,10 @@ func _test_armory() -> Array:
 	var game := _fresh("armory-seed")
 	game.data.world.gold = 500000
 	var blocked: bool = not game.forge_item("weapon").ok
-	game.data.world.base_level = 2
+	# l'Armeria si apre dopo il Piano 3, anche con la base al Lv.1
+	blocked = blocked and not game.facility_available("armory")
+	game.debug_clear_floors(3)
+	blocked = blocked and game.base_level() == 1 and game.facility_available("armory")
 	game.build_facility("armory")
 	var forged := game.forge_item("weapon")
 	var hero: Dictionary = game.data.heroes[0]
@@ -365,6 +373,7 @@ func _test_forge_minigame_rules() -> Array:
 	var game := _fresh("forge-seed")
 	game.data.world.gold = 2000000
 	game.data.world.base_level = 5
+	game.debug_clear_floors(3)
 	game.build_facility("armory")
 	var materials_ok := true
 	for key in ["ore", "wood", "leather", "cores"]: game.grant(key, 200, "test", "test")
@@ -384,8 +393,11 @@ func _test_forge_minigame_rules() -> Array:
 	game.data.facilities.armory.level = 5
 	var great := game.forge_item("weapon", "master", 0.97)
 	var valid: bool = materials_ok and ladder and capped and locked and started.ok and paid and second_blocked
-	valid = valid and bad.ok and str(bad.item.grade) == "F" and no_pending
-	valid = valid and great.ok and str(great.item.grade) == "S" and int(great.item.power) > int(bad.item.power) * 4
+	# sotto il 25% di precisione il pezzo si rompe: niente oggetto, materiali persi
+	valid = valid and bad.ok and bool(bad.get("failed", false)) and not bad.has("item") and no_pending
+	var poor := game.forge_item("weapon", "normal", 0.3)
+	valid = valid and poor.ok and str(poor.item.grade) == "E"
+	valid = valid and great.ok and str(great.item.grade) == "S" and int(great.item.power) > int(poor.item.power) * 3
 	valid = valid and game.forge_window_bonus() > 1.0
 	game.free()
 	return [valid, "Forgia a mano non conforme"]

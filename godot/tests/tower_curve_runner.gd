@@ -14,13 +14,14 @@ extends SceneTree
 ##       piani 1–4 dello scaglione) e stampa i valori per TOWER_TIER_POWER
 
 ## Squadra di riferimento per scaglione: rarità dei 5 eroi, livello, grado dell'equipaggiamento (0 = D … 4 = S).
-## Il livello si ferma al massimo della rarità. Tabella di Game Design: vedi docs/GAME_SYSTEMS.md.
+## Il livello si ferma al massimo della rarità (99 al massimo, regola del proprietario).
+## Tabella di Game Design: vedi docs/GAME_SYSTEMS.md.
 const REFERENCE := [
 	[[1, 1, 1, 1, 2], 5, 0], [[2, 1, 2, 1, 2], 14, 0], [[2, 2, 3, 2, 3], 22, 1], [[3, 3, 3, 3, 3], 29, 1],
 	[[4, 3, 4, 3, 4], 36, 2], [[4, 4, 4, 4, 4], 44, 2], [[5, 4, 5, 4, 5], 52, 3], [[5, 5, 5, 5, 5], 60, 3],
 	[[5, 5, 5, 5, 5], 68, 3], [[6, 5, 6, 5, 6], 74, 4], [[6, 6, 6, 6, 6], 80, 4], [[6, 6, 6, 6, 6], 86, 4],
-	[[6, 6, 6, 6, 6], 92, 4], [[7, 6, 7, 6, 7], 98, 4], [[7, 7, 7, 7, 7], 103, 4], [[7, 7, 7, 7, 7], 107, 4],
-	[[7, 7, 7, 7, 7], 111, 4], [[7, 7, 7, 7, 7], 114, 4], [[7, 7, 7, 7, 7], 117, 4], [[7, 7, 7, 7, 7], 120, 4],
+	[[6, 6, 6, 6, 6], 92, 4], [[7, 6, 7, 6, 7], 98, 4], [[7, 7, 7, 7, 7], 99, 4], [[7, 7, 7, 7, 7], 99, 4],
+	[[7, 7, 7, 7, 7], 99, 4], [[7, 7, 7, 7, 7], 99, 4], [[7, 7, 7, 7, 7], 99, 4], [[7, 7, 7, 7, 7], 99, 4],
 ]
 const ROLES := ["Guardian", "Vanguard", "Lancer", "Support", "Ranger"]
 

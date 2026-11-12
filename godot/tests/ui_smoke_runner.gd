@@ -95,6 +95,9 @@ func _run() -> void:
 	forge_game.active = true
 	forge_game._strike(Vector2.ZERO, false)
 	_check(forge_game.heat_score >= 0.0 and forge_game._bar_mark >= 0.0, "minigioco di forgia: il colpo ferma il calore")
+	# un lavoro decente (con meno del 25% di precisione il pezzo si romperebbe)
+	forge_game.heat_score = 1.0
+	forge_game.quench_score = 1.0
 	forge_game._start_phase("result")
 	await _frames(2)
 	_check(state.data.inventory.size() == 1 and state.forge_pending().is_empty(), "forgia in Armeria")

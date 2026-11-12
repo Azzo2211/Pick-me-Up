@@ -195,7 +195,7 @@ static func _hero_advice(gs: Node, out: Array) -> void:
 	if not promotable.is_empty():
 		_add(out, "promotion", 68, "good", "Promozione pronta", "%s %s al livello massimo e hai le Pietre per promuover%s di una stella." % [_names(promotable), "è" if promotable.size() == 1 else "sono", "l" + _end(promotable)], "panel:merging", "Fusione")
 	else:
-		var capped := alive.filter(func(h): return int(h.level) >= gs.level_cap(h) and int(h.current_rarity) < 7)
+		var capped := alive.filter(func(h): return int(h.level) >= gs.level_cap(h) and int(h.current_rarity) < gs.PROMOTION_MAX_RARITY)
 		if not capped.is_empty():
 			var need: Dictionary = gs.promotion_requirements(capped[0])
 			_add(out, "capped", 40, "info", "Eroi al livello massimo", "%s non cresce%s più: per la promozione %s." % [_names(capped), "" if capped.size() == 1 else "no", str(need.message).to_lower()], "panel:merging", "Fusione")

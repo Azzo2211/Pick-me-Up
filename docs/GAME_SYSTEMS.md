@@ -25,6 +25,9 @@ Current implemented roles:
 
 Heroes are persistent individuals with identity/seed, role, personality, potential/growth, skills, equipment, morale, fatigue, relationships, wounds, and memories/events.
 
+- **Statistiche principali** (regola del proprietario, 2026-11-12): STR (forza), INT (intelligenza), HP (punti vita), DEX (destrezza). Nel salvataggio restano le chiavi di prima (`str`, `int`, `sta` = HP, `agi` = DEX); sigle e nomi in `GameState.STAT_LABELS`.
+- **Potenziale nascosto** (regola del proprietario, 2026-11-12): quanto in fretta un eroe impara e quanto può crescere (`potential`, `growth`) non è scritto da nessuna parte nel gioco, né nella scheda né nella valutazione del Sistema né nell'Addestramento (niente "esperienza al minuto"). Il giocatore lo scopre guardando come crescono. Si vede solo in modalità sviluppo con i valori nascosti accesi.
+
 ## Progression and rarity
 Modeled rarity/level caps:
 - 1★ → Lv.10
@@ -33,7 +36,9 @@ Modeled rarity/level caps:
 - 4★ → Lv.50
 - 5★ → Lv.70
 - 6★ → Lv.99
-- 7★ → Lv.120
+- 7★ → Lv.99
+
+Livello massimo 99 per tutti (regola del proprietario, 2026-11-12; prima la 7★ arrivava al Lv.120). I salvataggi con eroi oltre il 99 vengono riportati al 99.
 
 Higher-rarity and endgame systems can be expanded progressively as the full game develops. Do not expose unfinished systems merely because data structures already exist.
 
@@ -44,7 +49,7 @@ Higher-rarity and endgame systems can be expanded progressively as the full game
 - Death, tombstones/memorial state, attempts, rewards, wounds, morale, fatigue, and persistent consequences are part of the game's identity.
 
 ## Missions and tower
-Mission archetypes: Subjugation, Survival, Exploration, Defense and Boss. Floors 1–5 are hand-made; floors 6–100 are generated deterministically from the world seed (boss every 5 floors). Rewards: Gold, XP and Gems every clear (reduced on retries; Gems: 120+10×floor on first clear, 15+1.5×floor on replays, ×2 on Guardian floors), Stones on first clear of boss floors, materials as loot. Heroes below 30% HP at the end get a timed injury.
+Mission archetypes: Subjugation (in gioco "Annientamento"), Survival, Exploration, Defense and Boss. Floors 1–5 are hand-made: **floors 1–4 are fairly easy annihilation missions** and floor 5 is the first Guardian, very hard even for 1★ heroes at Lv.8 (regola del proprietario, 2026-11-12; older saves rebuild floors 2–4 if not cleared yet); floors 6–100 are generated deterministically from the world seed (boss every 5 floors). Rewards: Gold, XP and Gems every clear (reduced on retries; Gems: 120+10×floor on first clear, 15+1.5×floor on replays, ×2 on Guardian floors), Stones on first clear of boss floors, materials as loot. Heroes below 30% HP at the end get a timed injury.
 
 ### Difficoltà della Torre: scaglioni di 5 piani e Prova del Guardiano
 Decisione del proprietario (2026-11-05, issue #13): salire deve essere **molto difficile**, e ogni 5 piani la difficoltà deve salire con una missione speciale.
@@ -71,9 +76,12 @@ Decisione del proprietario (2026-11-05, issue #13): salire deve essere **molto d
 | 6 (26–30) | 4★ | 44 | B |
 | 7–9 (31–45) | 4★–5★ | 52–68 | A |
 | 10–13 (46–65) | 5★–6★ | 74–92 | S |
-| 14–20 (66–100) | 6★–7★ | 98–120 | S |
+| 14 (66–70) | 6★–7★ | 98 | S |
+| 15–20 (71–100) | 7★ | 99 (massimo) | S |
 
-Misurato con la simulazione (6 battaglie per piano, 2026-11-05): con la squadra di riferimento i piani normali di uno scaglione si vincono da 0 a 6 volte su 6 a seconda del tipo di missione, quasi sempre con caduti; la prova la vince 0–2 volte su 6 la squadra di riferimento e 3–5 volte su 6 la squadra dello scaglione **successivo**. Gli ultimi piani (91–100) sono duri anche per una squadra completa di 7★ al Lv.120.
+Misurato con la simulazione (6 battaglie per piano, 2026-11-05): con la squadra di riferimento i piani normali di uno scaglione si vincono da 0 a 6 volte su 6 a seconda del tipo di missione, quasi sempre con caduti; la prova la vince 0–2 volte su 6 la squadra di riferimento e 3–5 volte su 6 la squadra dello scaglione **successivo**.
+
+**Da ritarare (2026-11-12):** la tabella era tarata con la 7★ fino al Lv.120. Con il massimo a 99 la squadra smette di salire di livello dal Piano 71 e gli scaglioni 15–20 sono troppo duri (simulazione: piani 76–100 vinti 0–1 volte su 4). Oltre il Lv.99 gli eroi cresceranno con la nuova Fusione (statistiche dall'eroe sacrificato); la curva degli ultimi scaglioni si ritara insieme a quella.
 
 These are the **currently implemented contents**, not the final scope of the game. Riftward is intended to continue expanding with more floors, mission types, systems and content while preserving the core identity and progression logic.
 
@@ -81,7 +89,8 @@ These are the **currently implemented contents**, not the final scope of the gam
 Locked reference values:
 - Normal summon: 10,000 Gold — 1★ 78% · 2★ 19% · 3★ 3%.
 - High-grade summon: 500 Gems — 3★ 93.5% · 4★ 5.5% · 5★ 1% (soft pity from pull 70, hard pity at 100).
-- Transcendent summon: 3,000 Gems, unlocked after Floor 20 — 5★ 98% · 6★ 1.8% · 7★ 0.2%.
+- Transcendent summon: 4,000 Gems, unlocked after Floor 20 — 4★ 78% · 5★ 20% · 6★ 1.8% · 7★ 0.2%. È l'unico modo di avere un eroe 7★.
+- Materiali da costruzione e forgia (regola del proprietario, 2026-11-12): **Ferro (C)**, **Pelle (C)**, **Assi di legno (C)** (chiavi `ore`, `leather`, `wood`), più Erbe, Nuclei e Medicine.
 - No account energy system. Real economy by default; development mode is optional (Settings).
 - Starting resources: 60,000 Gold, 1,500 Gems, 1 Stone.
 - Shop (`GameState.SHOP_OFFERS`): only Gold and Gems, prices and quantities always shown, daily purchase limits (reset at midnight UTC). Purchases are refused when the Warehouse cap for that material is full. No item may undo risk (no revive, no death protection).
@@ -98,7 +107,7 @@ Locked reference values:
 - Dormitory: beds = 5 + 2 × (level − 1) (+6 con l'Isola delle Dimore); restores fatigue and morale, heals injuries over time; heroes leave when fully recovered.
 - XP curve: `30 + 14 × level^1.45`; level-ups add stats from the hidden growth value.
 - Fusion: three heroes of the same rarity, 1★–4★ → the core gains one star (so fusion reaches 5★ at most). 6★/7★ only through Transcendent summon or promotion.
-- Promotion at level cap with Stones: 1★→2★ 1, 2★→3★ 2, 3★→4★ 3, 4★→5★ 5, 5★→6★ 12 (Floor 30), 6★→7★ 30 (Floor 60).
+- Promotion at level cap with Stones: 1★→2★ 1, 2★→3★ 2, 3★→4★ 3, 4★→5★ 5, 5★→6★ 12 (Floor 30). **La promozione arriva al massimo a 6★**: la 7ª stella non si ottiene promuovendo, solo con l'Eco Trascendente (regola del proprietario, 2026-11-12).
 
 ## Consigli del Sistema
 Decisione del proprietario (2026-11-12): un assistente che **non si chatta** ma osserva e consiglia da solo, sul gioco e su altre cose utili (`godot/scripts/system_advisor.gd`, riquadro `godot/scripts/ui/advisor_card.gd`). Legge soltanto lo stato e non cambia il salvataggio; l'unica azione è la "Formazione consigliata", che il giocatore sceglie con un pulsante (esclude gli sfiniti, penalizza feriti e molto stanchi). Quando non c'è niente di urgente mostra un suggerimento sulle regole ("Lo sapevi?").
@@ -111,9 +120,11 @@ Newer base/hub decisions in `GAME_VISION.md` override older facility visualizati
 
 ### Armeria: forgia a mano (novembre 2026)
 Richiesta del proprietario: le armi non escono più a caso, si forgiano a mano con un minigioco di precisione.
+- **Si sblocca dopo il Piano 3** (regola del proprietario, 2026-11-12): il cantiere compare alla Base Lv.1 appena il Piano 3 è superato (`FACILITIES.armory.unlock_floor`, `facility_unlock_text`). Prima serviva la Base Lv.2.
+- **Il lavoro può fallire**: sotto il 25% di precisione (`FORGE_FAIL_PRECISION`) il pezzo si rompe e i materiali pagati sono persi.
 - **Tre fasi**: *Scalda* (ferma il cursore nella zona incandescente della barra), *Martella* (sulla lama compaiono dei punti, un anello si stringe su ognuno: colpisci quando combacia con il bordo; con il mouse conta anche la mira), *Tempra* (come Scalda, zona più stretta e cursore più veloce).
 - **Precisione** = calore 20% + media dei colpi di martello 60% + tempra 20%.
-- **Gradi da F a S** (`GRADES`): F <25%, E 25%, D 40%, C 55%, B 70%, A 82%, S 92% (`FORGE_GRADE_THRESHOLDS`). Statistiche per grado: ×0,55 / 0,75 / 1 / 1,35 / 1,75 / 2,2 / 2,8 sui valori base (arma 18 attacco, armatura 14 difesa, amuleto 30 vita), più fino al +10% per la precisione.
+- **Gradi da E a S** (`GRADES`): sotto il 25% il lavoro fallisce, E 25%, D 40%, C 55%, B 70%, A 82%, S 92% (`FORGE_GRADE_THRESHOLDS`). Il grado F resta solo per gli oggetti vecchi. Statistiche per grado: ×0,55 / 0,75 / 1 / 1,35 / 1,75 / 2,2 / 2,8 sui valori base (arma 18 attacco, armatura 14 difesa, amuleto 30 vita), più fino al +10% per la precisione.
 - **Difficoltà** (`FORGE_DIFFICULTIES`): Facile (max C, 4 punti, oro ×0,8), Normale (max B, 5 punti), Difficile (max A, 6 punti, oro ×1,35, Armeria Lv.3), Maestro (max S, 7 punti, oro ×1,8, Armeria Lv.5). Più è difficile, più tutto è veloce e le zone sono strette.
 - **Livello dell'Armeria**: sblocca le difficoltà e allarga le zone buone del 5% per livello oltre il primo.
 - I materiali si pagano all'inizio; se il gioco si chiude a metà, il lavoro resta sull'incudine e si riprende dall'Armeria senza pagare di nuovo. Gli oggetti vecchi (D–S) restano validi.
