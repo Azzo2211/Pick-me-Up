@@ -100,6 +100,9 @@ Locked reference values:
 - Fusion: three heroes of the same rarity, 1★–4★ → the core gains one star (so fusion reaches 5★ at most). 6★/7★ only through Transcendent summon or promotion.
 - Promotion at level cap with Stones: 1★→2★ 1, 2★→3★ 2, 3★→4★ 3, 4★→5★ 5, 5★→6★ 12 (Floor 30), 6★→7★ 30 (Floor 60).
 
+## Consigli del Sistema
+Decisione del proprietario (2026-11-12): un assistente che **non si chatta** ma osserva e consiglia da solo, sul gioco e su altre cose utili (`godot/scripts/system_advisor.gd`, riquadro `godot/scripts/ui/advisor_card.gd`). Legge soltanto lo stato e non cambia il salvataggio; l'unica azione è la "Formazione consigliata", che il giocatore sceglie con un pulsante (esclude gli sfiniti, penalizza feriti e molto stanchi). Quando non c'è niente di urgente mostra un suggerimento sulle regole ("Lo sapevi?").
+
 ## Facilities
 Facilities are both gameplay systems and physical places in the Godot hub.
 Important rule: **system availability and visual presence must stay coherent**. A facility that has not been built/unlocked should not appear as a finished physical building unless the user explicitly wants a construction/preview representation.

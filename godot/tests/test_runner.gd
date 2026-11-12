@@ -49,6 +49,7 @@ func _initialize() -> void:
 	_test("aspetto a pezzi: archetipo, volto, capelli, età", _test_modular_look)
 	_test("kit 3D: corpi vestiti, teste, capelli e accessori", _test_character_kit)
 	_test("pacchetto animazioni: 40 clip sullo scheletro", _test_motion_pack)
+	_test("consigli del Sistema: squadra bloccata, formazione consigliata, nessun cambio di stato", _test_system_advisor)
 	print("\nRisultato: %d passati, %d falliti" % [passed, failed])
 	quit(0 if failed == 0 else 1)
 
@@ -711,3 +712,24 @@ func _test_floor_gems() -> Array:
 	ok = ok and int(game.floor_rewards(3, 1, true).gems) > int(game.floor_rewards(3, 2, false).gems)
 	game.free()
 	return [ok, "Qualche piano non dà gemme"]
+
+func _test_system_advisor() -> Array:
+	var game := _fresh("advisor-seed")
+	var before := JSON.stringify(game.data)
+	var list: Array = SystemAdvisor.advice(game)
+	# leggere i consigli non cambia il gioco
+	var valid: bool = JSON.stringify(game.data) == before
+	for item in list:
+		valid = valid and item.has("id") and item.has("title") and not str(item.text).is_empty()
+	# uno sfinito in squadra blocca la partenza: è il consiglio più urgente
+	var first := game.hero_by_id(str(game.data.party[0]))
+	first.fatigue = 95
+	list = SystemAdvisor.advice(game)
+	valid = valid and not list.is_empty() and str(list[0].id) == "party_spent"
+	# la formazione consigliata lascia fuori lo sfinito
+	var best: Dictionary = SystemAdvisor.recommended_party(game)
+	valid = valid and not best.ids.has(str(first.id))
+	SystemAdvisor.apply_recommended_party(game)
+	valid = valid and not game.data.party.has(str(first.id))
+	valid = valid and not str(SystemAdvisor.tip().text).is_empty()
+	return [valid, "consigli %d, primo %s" % [list.size(), str(list[0].id) if not list.is_empty() else "-"]]

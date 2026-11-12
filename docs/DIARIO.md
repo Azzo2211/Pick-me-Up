@@ -11,6 +11,14 @@ Qui ogni Claude (o altro agente) che lavora sul repository scrive **cosa sta fac
 
 ---
 
+## 2026-11-12 · Programming + UI · Consigli del Sistema (#17) — fatto
+Richiesta del proprietario: un assistente che non si chatta ma dà consigli sul gioco e su altre cose.
+- **Logica** (`godot/scripts/system_advisor.gd`, nuovo): guarda lo stato e propone consigli ordinati per urgenza: squadra bloccata o incompleta, stanchi e feriti, eroi fuori ruolo, squadra migliore disponibile, Prova del Guardiano in arrivo, piano su cui si è bloccati, popolani senza classe, posti liberi in Addestramento e nel Dormitorio, promozioni e fusioni pronte, espansione della base, cantieri e potenziamenti, pity vicino al 5★, scorte piene, offerte del giorno, Diario. Più un "Lo sapevi?" sulle regole del gioco. Legge soltanto: non cambia mai il salvataggio (c'è un test).
+- **Riquadro "Sistema"** (`godot/scripts/ui/advisor_card.gd`, nuovo; collegato in `main.gd`): in alto a sinistra sotto il Maestro, un consiglio alla volta con il pulsante che porta dove serve, frecce, "Nascondi" e riduzione a icona. Se arriva un consiglio urgente il riquadro si riapre e lampeggia.
+- **Formazione consigliata** (`facility_panels.gd`): ora usa la stessa scelta del Sistema e lascia fuori gli sfiniti (prima poteva metterli in squadra e bloccare la partenza).
+- Test: regole 38 su 38 (nuovo: consigli del Sistema), interfaccia 35 su 35.
+- Da controllare (QA): che il riquadro non copra niente a 1280x720 e che i pulsanti dei consigli aprano la struttura giusta.
+
 ## 2026-11-10 · Art · Mostri rifatti e movimenti a tutto corpo — fatto
 Richiesta del proprietario: migliorare personaggi 3D, movimenti e mostri, "che sono stati un problema nel gioco". Tutto in `godot/scripts/hub3d/character_model.gd` (più due righe in `hub_agent.gd`); `battle_scene.gd` non è stato toccato.
 - **Segugio**: lupo vero (torace profondo, vita stretta, collo, criniera, zampe dietro col garretto, coda attaccata, mascella che si apre, cristalli del Varco sulla schiena). Trotta o galoppa secondo la velocità, morde con un balzo, sussulta ai colpi, cade sul fianco.

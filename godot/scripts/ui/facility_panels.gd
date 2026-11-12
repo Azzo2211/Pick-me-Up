@@ -825,26 +825,9 @@ func _clear_slot(slot: int) -> void:
 	GS.remove_party(slot)
 
 func _auto_party() -> void:
-	var available := GS.get_alive_heroes().filter(func(h): return h.injuries.is_empty())
-	available.sort_custom(func(a, b): return GS.hero_power(a) > GS.hero_power(b))
-	var chosen: Array[String] = []
-	for i in GS.PARTY_SIZE:
-		var line: String = GS.FORMATION_LINES[i]
-		var pick := ""
-		for hero in available:
-			if chosen.has(str(hero.id)): continue
-			if str(GS.ROLES[hero.role].line) == line:
-				pick = str(hero.id)
-				break
-		if pick.is_empty():
-			for hero in available:
-				if not chosen.has(str(hero.id)):
-					pick = str(hero.id)
-					break
-		chosen.append(pick)
-	for i in GS.PARTY_SIZE: GS.data.party[i] = chosen[i] if i < chosen.size() else ""
-	GS.save_and_notify()
-	main.toast("Squadra composta", "Gli eroi più forti per ogni linea.", "good")
+	# stessa scelta del consigliere del Sistema: esclude sfiniti, penalizza feriti e stanchi
+	SystemAdvisor.apply_recommended_party(GS)
+	main.toast("Squadra composta", "Gli eroi più forti e in forma per ogni linea.", "good")
 
 # =============================================================================
 # Cristallo del Nexus: evocazione ed espansione della base

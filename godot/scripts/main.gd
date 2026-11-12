@@ -31,6 +31,8 @@ var master_sub: Label
 var journal_badge: PanelContainer
 var journal_badge_label: Label
 var hint_label: PanelContainer
+## Consigli del Sistema (in alto a sinistra, sotto il Maestro).
+var advisor: AdvisorCard
 var battle: Node
 var busy := false
 var current_view := "hub"
@@ -163,6 +165,10 @@ func _build_hud() -> void:
 	recenter.offset_top = -68
 	recenter.offset_bottom = -18
 	hud.add_child(recenter)
+	advisor = AdvisorCard.new()
+	advisor.position = Vector2(18, TOP_BAR_HEIGHT + 14)
+	advisor.action_requested.connect(_advisor_action)
+	hud.add_child(advisor)
 	hint_label = PanelContainer.new()
 	hint_label.add_theme_stylebox_override("panel", UIKit.ornate("hud", 8.0).set_padding(16.0, 6.0))
 	hint_label.add_child(UIKit.label("Tocca un edificio per entrarci · trascina per muovere la vista", 15, UIKit.INK_SOFT, UIKit.body_font()))
@@ -205,6 +211,20 @@ func _update_hud() -> void:
 	var unread := GameState.unread_events()
 	journal_badge.visible = unread > 0
 	journal_badge_label.text = str(mini(unread, 99))
+	if advisor != null: advisor.refresh()
+
+## Pulsante di un consiglio del Sistema: porta alla struttura o schermata giusta.
+func _advisor_action(action: String) -> void:
+	if busy: return
+	close_all_modals()
+	if action.begins_with("panel:"): open_panel(action.trim_prefix("panel:"))
+	else:
+		match action:
+			"squad": _open_squad()
+			"tower": _open_tower()
+			"roster": open_roster()
+			"journal": _show_journal()
+			"shop": open_shop()
 
 # =============================================================================
 # Pannello laterale
