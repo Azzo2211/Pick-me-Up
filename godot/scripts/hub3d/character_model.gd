@@ -779,7 +779,8 @@ func _build_kit(look: Dictionary, role: String, rarity: int, outfit: String, pro
 	# il modello dell'utente è un uomo: le donne con lo stesso vestito restano dal kit
 	var model := _user_model(outfit, role)
 	if not fem and not model.is_empty() and _build_user_body(look, role, rarity, outfit, model, prop): return
-	var height := clampf(float(look.get("height", 1.0)), 0.93, 1.07)
+	# i nani dei ritratti sono bassi davvero; gli altri restano entro pochi centimetri
+	var height := 0.84 if look.get("dwarf", false) else clampf(float(look.get("height", 1.0)), 0.93, 1.07)
 	if int(look.get("age", 28)) < 18: height *= 0.97
 	# le articolazioni restano quelle del kit: le corporature sono chiavi di forma
 	_build_rig({"scale": (0.95 if fem else 1.0) * height, "shoulder": 0.2, "hip": 0.1})
@@ -853,6 +854,11 @@ func _build_user_body(look: Dictionary, role: String, rarity: int, outfit: Strin
 		mi.material_overlay = _flash()
 		_meshes.append(mi)
 	_user_hair(look, model, CharacterKitScript.palette(look, outfit, rarity))
+	# copricapo e tratti del ritratto anche sul modello dell'utente, adattati alla sua testa
+	var head_b := _b("head")
+	head_b.push(Transform3D(Basis.from_scale(fit.get("scale", Vector3(0.84, 0.9, 0.74))), fit.get("pos", Vector3(0.0, 0.001, 0.01))))
+	_portrait_details(head_b, look)
+	head_b.pop()
 	if role == "Villager":
 		attack_style = "melee"
 	elif not prop.is_empty():
@@ -883,7 +889,7 @@ static var user_hair_fit := {
 
 ## Capelli dell'eroe (stesso taglio e colore di sempre) sul modello dell'utente.
 func _user_hair(look: Dictionary, model: String, pal: Array) -> void:
-	var kind := str(look.get("hair_kind", "short"))
+	var kind := _hair_under(look)
 	var fit: Dictionary = user_hair_fit.get(model, {})
 	if kind == "none" or not fit.has("scale"): return
 	var mesh := CharacterKitScript.part("hair_" + kind)
@@ -1035,17 +1041,178 @@ func _kit_head(look: Dictionary, pal: Array, outfit: String) -> void:
 	hm.set_shader_parameter("hair_color", hair_col)
 	hm.set_shader_parameter("tie_color", (pal[CharacterKitScript.ACCENT] as Color))
 	hm.next_pass = _kit_line(hair_col)
-	_kit_piece("hair_" + str(look.get("hair_kind", "short")), hm)
+	var hair_kind := _hair_under(look)
+	if hair_kind != "none":
+		var hair_mi := _kit_piece("hair_" + hair_kind, hm)
+		# sotto fazzoletti e cappelli i capelli si schiacciano un po', così non bucano la stoffa
+		if hair_mi != null and _covers_hair(look): hair_mi.scale = HAIR_PRESSED
 	var beard := int(look.get("beard", 0))
 	if beard >= 2:
-		_kit_piece("beard_goatee" if int(look.get("face", 1)) == 0 else "beard_short", _kit_material(_kit_pal(pal, CharacterKitScript.DARK, hair_col.darkened(0.08))))
+		_kit_piece("beard_short" if beard >= 3 or int(look.get("face", 1)) != 0 else "beard_goatee", _kit_material(_kit_pal(pal, CharacterKitScript.DARK, hair_col.darkened(0.08))))
+	_portrait_details(_b("head"), look)
 	if look.get("glasses", false):
 		# niente contorno: ingrosserebbe la montatura sottile
 		var gm := _kit_material(_kit_pal(pal, CharacterKitScript.DARK, Color("#3a2c24")))
 		gm.next_pass = null
 		_kit_piece("glasses", gm)
-	if outfit == "villager" and int(look.get("seed", 0)) % 3 == 0 and str(look.get("hair_kind", "")) in ["crop", "short", "bun", "tied_back"]:
+	if outfit == "villager" and str(look.get("portrait", "")).is_empty() and int(look.get("seed", 0)) % 3 == 0 and str(look.get("hair_kind", "")) in ["crop", "short", "bun", "tied_back"]:
 		_kit_piece("headband", _kit_material(_kit_pal(pal, CharacterKitScript.LIGHT, Color("#e9e2d2"))))
+
+const HAIR_PRESSED := Vector3(0.97, 0.92, 0.97)
+
+func _covers_hair(look: Dictionary) -> bool:
+	return str(look.get("headwear", "")) in ["kerchief", "bandana", "hat", "hood", "veil"]
+
+## Taglio dei capelli sotto il copricapo: sotto cappelli, fazzoletti e cappucci i tagli
+## gonfi bucherebbero la stoffa, quindi si usa il loro parente più aderente; i capelli
+## lunghi e le trecce restano e spuntano da sotto, come nei ritratti.
+func _hair_under(look: Dictionary) -> String:
+	var kind := str(look.get("hair_kind", "short"))
+	if kind == "none" or CharacterKitScript.part("hair_" + kind) == null: return "none" if kind == "none" else "short"
+	var wear := str(look.get("headwear", ""))
+	if not wear in ["kerchief", "bandana", "hat", "hood", "veil"]: return kind
+	if wear == "hood" or wear == "veil": return {"messy": "short", "wavy": "short", "layered": "medium", "bun": "tied_back"}.get(kind, kind)
+	return {"messy": "crop", "wavy": "crop", "short": "crop", "slicked": "crop", "layered": "bob", "medium": "bob", "bun": "tied_back"}.get(kind, kind)
+
+## Tutto ciò che nel ritratto dipinto si porta in testa o sul viso, più orecchie da elfo,
+## tratti da uomo-bestia e barba lunga: il personaggio 3D si riconosce dall'immagine
+## (richiesta del proprietario, 2026-11-12). Misure nello spazio della testa del kit:
+## cranio da y 0,01 a 0,27, largo ±0,108, viso verso +z (0,09).
+func _portrait_details(b: MeshBuilder, look: Dictionary) -> void:
+	var skin: Color = look.get("skin", Color("#f1d2b6"))
+	var hair: Color = look.get("hair", Color("#3a2a20"))
+	# ingombro dei capelli che stanno sotto: fazzoletti e cappelli gli stanno attorno, senza buchi
+	var hair_mesh := CharacterKitScript.part("hair_" + _hair_under(look))
+	var box := hair_mesh.get_aabb() if hair_mesh != null else AABB(Vector3(-0.108, 0.008, -0.121), Vector3(0.216, 0.264, 0.212))
+	if hair_mesh != null and _covers_hair(look):
+		box = AABB(box.position * HAIR_PRESSED, box.size * HAIR_PRESSED)
+	var half := maxf(0.118, maxf(-box.position.x, box.position.x + box.size.x))
+	var top := maxf(0.272, box.position.y + box.size.y)
+	var front := maxf(0.095, box.position.z + box.size.z)
+	var back := minf(-0.125, box.position.z)
+	var mid_z := (front + back) * 0.5
+	var deep := (front - back) * 0.5
+	if look.get("elf", false):
+		for sx in [-1.0, 1.0]:
+			b.rod("cloth", Vector3(sx * 0.1, 0.135, -0.012), Vector3(sx * 0.19, 0.218, -0.05), 0.026, 0.003, skin.darkened(0.04), 6)
+	match str(look.get("beast", "")):
+		"feline":
+			for sx in [-1.0, 1.0]:
+				b.rod("cloth", Vector3(sx * 0.062, 0.235, -0.02), Vector3(sx * 0.098, 0.335, -0.04), 0.042, 0.004, skin.darkened(0.12), 6)
+			b.sphere("cloth", 0.05, Vector3(0, 0.098, 0.082), skin.lightened(0.12), Vector3(1.15, 0.78, 0.95), 8, 5)
+			b.sphere("cloth", 0.014, Vector3(0, 0.112, 0.128), Color("#3a2a2a"), Vector3(1.2, 0.8, 0.8), 6, 4)
+			b.sphere("cloth", 0.13, Vector3(0, 0.13, -0.05), skin.darkened(0.08), Vector3(1.12, 1.15, 0.9), 10, 7)
+		"lizard":
+			b.sphere("cloth", 0.066, Vector3(0, 0.1, 0.092), skin, Vector3(0.95, 0.7, 1.35), 8, 5)
+			for i in 4:
+				b.rod("cloth", Vector3(0, 0.262 - i * 0.012, 0.02 - i * 0.05), Vector3(0, 0.325 - i * 0.022, -0.012 - i * 0.055), 0.018, 0.002, skin.darkened(0.25), 5)
+			for sx in [-1.0, 1.0]: b.rod("cloth", Vector3(sx * 0.07, 0.24, -0.04), Vector3(sx * 0.12, 0.31, -0.11), 0.016, 0.003, Color("#d9cdb0"), 5)
+		"bull":
+			for sx in [-1.0, 1.0]:
+				b.rod("cloth", Vector3(sx * 0.08, 0.235, 0.0), Vector3(sx * 0.2, 0.275, 0.02), 0.03, 0.02, Color("#d9cdb0"), 6)
+				b.rod("cloth", Vector3(sx * 0.2, 0.275, 0.02), Vector3(sx * 0.235, 0.345, 0.045), 0.02, 0.004, Color("#d9cdb0"), 6)
+			b.sphere("cloth", 0.06, Vector3(0, 0.088, 0.088), skin.lightened(0.1), Vector3(1.15, 0.82, 0.95), 8, 5)
+	if int(look.get("beard", 0)) >= 3:
+		# barba lunga da nano o da vecchio mago: scende sul petto, con i baffi
+		var bc := hair.darkened(0.06)
+		b.sphere("cloth", 0.078, Vector3(0, 0.03, 0.058), bc, Vector3(1.12, 1.05, 0.7), 10, 7)
+		b.sphere("cloth", 0.056, Vector3(0, -0.06, 0.066), bc.darkened(0.07), Vector3(0.95, 1.6, 0.6), 8, 6)
+		b.sphere("cloth", 0.03, Vector3(0, -0.15, 0.07), bc.darkened(0.12), Vector3(0.9, 1.4, 0.7), 6, 5)
+		for sx in [-1.0, 1.0]: b.rod("cloth", Vector3(sx * 0.008, 0.094, 0.103), Vector3(sx * 0.07, 0.07, 0.085), 0.018, 0.008, bc.lightened(0.06), 5)
+	var col: Color = look.get("head_color", Color("#6b4a2e"))
+	var gold := Color("#d9b65a")
+	match str(look.get("headwear", "")):
+		"kerchief":
+			# fazzoletto annodato dietro la nuca: copre la testa dalla fronte in su
+			var kr := half + 0.012
+			b.sphere("cloth", kr, Vector3(0, 0.186, mid_z), col, Vector3(1.0, (top + 0.03 - 0.186) / kr, (deep + 0.014) / kr), 14, 8, true)
+			b.sphere("cloth", kr, Vector3(0, 0.186, mid_z), col.darkened(0.07), Vector3(1.03, 0.16, (deep + 0.016) / kr), 14, 6)
+			b.sphere("cloth", 0.034, Vector3(0, 0.15, back - 0.02), col.darkened(0.05), Vector3(1.4, 0.9, 0.9), 6, 4)
+			for sx in [-1.0, 1.0]: b.rod("cloth", Vector3(sx * 0.012, 0.14, back - 0.02), Vector3(sx * 0.06, 0.04, back - 0.035), 0.024, 0.006, col, 5)
+		"bandana":
+			# bandana stretta sulla fronte, nodo di lato
+			var br := half + 0.008
+			b.sphere("cloth", br, Vector3(0, 0.198, mid_z), col, Vector3(1.0, (top + 0.026 - 0.198) / br, (deep + 0.01) / br), 14, 8, true)
+			b.sphere("cloth", br, Vector3(0, 0.2, mid_z), col.darkened(0.12), Vector3(1.03, 0.15, (deep + 0.012) / br), 14, 6)
+			b.sphere("cloth", 0.028, Vector3(half * 0.8, 0.185, back + 0.03), col.darkened(0.05), Vector3.ONE, 6, 4)
+			b.rod("cloth", Vector3(half * 0.8, 0.18, back + 0.025), Vector3(half * 0.8 + 0.04, 0.07, back - 0.01), 0.02, 0.005, col, 5)
+		"hood":
+			_cloth_shell(b, col, half + 0.016, top, mid_z, deep)
+		"veil":
+			# velo: calotta chiara con il bordo d'oro, scende dietro e ai lati fino alle spalle
+			_cloth_shell(b, col, half + 0.01, top, mid_z, deep)
+			b.sphere("metal", half + 0.012, Vector3(0, 0.196, mid_z), gold, Vector3(1.0, 0.07, (deep + 0.014) / (half + 0.012)), 14, 6)
+		"goggles":
+			var leather := Color("#5a3d28")
+			b.torus("cloth", 0.134, 0.013, Vector3(0, 0.215, -0.022), leather, Vector3(0.14, 0, 0), 16, 5)
+			for sx in [-1.0, 1.0]:
+				b.cylinder("metal", 0.034, 0.034, 0.03, Vector3(sx * 0.046, 0.236, 0.108), Color("#b08d4a"), 10, Vector3(PI * 0.5 - 0.25, 0, 0))
+				b.cylinder("dull", 0.026, 0.026, 0.034, Vector3(sx * 0.046, 0.237, 0.11), Color("#5d7d86"), 10, Vector3(PI * 0.5 - 0.25, 0, 0))
+		"hat":
+			# il cappello si alza quanto serve per stare sopra i capelli
+			b.push(Transform3D(Basis.from_scale(Vector3.ONE * clampf((half + 0.012) / 0.15, 1.0, 1.25)), Vector3(0, maxf(0.0, top - 0.288) * 0.6, 0)))
+			_hat(b, str(look.get("hat", "beret")), col)
+			b.pop()
+		"circlet":
+			b.torus("metal", 0.136, 0.007, Vector3(0, 0.218, -0.02), col, Vector3(0.16, 0, 0), 18, 5)
+			b.sphere("metal", 0.014, Vector3(0, 0.2, 0.113), col.lightened(0.15), Vector3(1, 1.2, 0.7), 6, 4)
+			for sx in [-1.0, 1.0]: b.sphere("metal", 0.011, Vector3(sx * 0.12, 0.2, 0.03), col.lightened(0.1), Vector3.ONE, 6, 4)
+		"patch":
+			if col.get_luminance() > 0.6:
+				# benda chiara sugli occhi
+				b.cylinder("cloth", 0.116, 0.116, 0.04, Vector3(0, 0.148, -0.012), col, 16, Vector3.ZERO, false)
+			else:
+				b.sphere("cloth", 0.03, Vector3(0.043, 0.146, 0.092), col, Vector3(1.0, 0.85, 0.45), 8, 5)
+				b.torus("cloth", 0.118, 0.005, Vector3(0, 0.165, -0.014), col, Vector3(0.0, 0, -0.3), 18, 4)
+		"flowers":
+			for k in 3:
+				var at := Vector3(-0.118 + k * 0.012, 0.215 - k * 0.04, 0.045 - k * 0.03)
+				b.sphere("cloth", 0.024, at, col, Vector3(1.0, 0.55, 1.0), 6, 4)
+				b.sphere("cloth", 0.009, at + Vector3(-0.012, 0.004, 0.006), Color("#e2b84f"), Vector3.ONE, 5, 3)
+
+## Cappuccio o velo: calotta attorno ai capelli, drappo dietro la nuca e due lembi ai lati del viso.
+func _cloth_shell(b: MeshBuilder, col: Color, radius: float, top: float, mid_z: float, deep: float) -> void:
+	b.sphere("cloth", radius, Vector3(0, 0.172, mid_z), col, Vector3(1.0, (top + 0.032 - 0.172) / radius, (deep + 0.016) / radius), 14, 8, true)
+	b.sphere("cloth", radius, Vector3(0, 0.06, mid_z - 0.05), col.darkened(0.06), Vector3(1.04, 1.5, (deep - 0.02) / radius), 12, 7)
+	for sx in [-1.0, 1.0]:
+		b.sphere("cloth", 0.062, Vector3(sx * (radius - 0.03), 0.085, 0.0), col.darkened(0.03), Vector3(0.5, 1.8, 1.05), 8, 6)
+
+## Cappelli dei ritratti: basco, paglia, falda larga, tricorno, punta, pelliccia, cuoco, visiera.
+func _hat(b: MeshBuilder, kind: String, col: Color) -> void:
+	var band := col.darkened(0.25)
+	match kind:
+		"straw":
+			b.cylinder("cloth", 0.3, 0.31, 0.014, Vector3(0, 0.236, -0.02), col, 18, Vector3(0.1, 0, 0))
+			b.cylinder("cloth", 0.115, 0.135, 0.1, Vector3(0, 0.285, -0.025), col.lightened(0.05), 12, Vector3(0.1, 0, 0))
+			b.cylinder("cloth", 0.137, 0.137, 0.022, Vector3(0, 0.25, -0.022), Color("#6b3a2a"), 12, Vector3(0.1, 0, 0))
+		"brim":
+			b.cylinder("cloth", 0.27, 0.28, 0.016, Vector3(0, 0.238, -0.02), col, 18, Vector3(0.14, 0, 0.06))
+			b.cylinder("cloth", 0.11, 0.138, 0.12, Vector3(0, 0.295, -0.03), col.lightened(0.04), 12, Vector3(0.14, 0, 0.06))
+			b.cylinder("cloth", 0.14, 0.14, 0.022, Vector3(0, 0.252, -0.025), band, 12, Vector3(0.14, 0, 0.06))
+			b.rod("cloth", Vector3(0.11, 0.26, -0.06), Vector3(0.2, 0.4, -0.2), 0.022, 0.004, Color("#a33b3b"), 5)
+		"tricorn":
+			b.extrude("cloth", PackedVector2Array([Vector2(0, 0.3), Vector2(0.27, -0.17), Vector2(-0.27, -0.17)]), 0.228, 0.262, col, true, true, Vector3(0, 0, -0.02))
+			b.cylinder("cloth", 0.125, 0.142, 0.085, Vector3(0, 0.295, -0.03), col.lightened(0.04), 12)
+			b.extrude("cloth", PackedVector2Array([Vector2(0, 0.31), Vector2(0.28, -0.18), Vector2(-0.28, -0.18)]), 0.262, 0.272, Color("#d9b65a"), true, false, Vector3(0, 0, -0.02))
+		"witch":
+			b.cylinder("cloth", 0.27, 0.28, 0.016, Vector3(0, 0.238, -0.02), col, 18, Vector3(0.12, 0, 0))
+			b.cylinder("cloth", 0.045, 0.14, 0.2, Vector3(0, 0.34, -0.035), col.lightened(0.04), 12, Vector3(-0.1, 0, 0))
+			b.cylinder("cloth", 0.0, 0.047, 0.13, Vector3(0, 0.485, -0.075), col.lightened(0.08), 10, Vector3(-0.55, 0, 0))
+			b.cylinder("cloth", 0.142, 0.142, 0.022, Vector3(0, 0.252, -0.024), band, 12, Vector3(0.12, 0, 0))
+		"fur":
+			b.rock("cloth", 0.17, Vector3(0, 0.25, -0.025), col.lightened(0.06), Vector3(1.04, 0.62, 1.06), 31, 0.1, false)
+			b.torus("cloth", 0.15, 0.03, Vector3(0, 0.215, -0.022), col.lightened(0.16), Vector3(0.08, 0, 0), 16, 6)
+		"chef":
+			b.cylinder("cloth", 0.14, 0.14, 0.055, Vector3(0, 0.235, -0.022), col.darkened(0.04), 12, Vector3(0.08, 0, 0))
+			b.sphere("cloth", 0.165, Vector3(0, 0.305, -0.03), col, Vector3(1.05, 0.62, 1.05), 12, 7)
+		"cap":
+			b.cylinder("cloth", 0.16, 0.14, 0.07, Vector3(0, 0.262, -0.025), col, 14, Vector3(0.1, 0, 0))
+			b.cylinder("cloth", 0.141, 0.141, 0.024, Vector3(0, 0.225, -0.022), Color("#d9b65a"), 14, Vector3(0.1, 0, 0))
+			b.cylinder("cloth", 0.11, 0.11, 0.01, Vector3(0, 0.205, 0.07), band, 12, Vector3(0.3, 0, 0), true, 0, PI, true, 0.0)
+		_:
+			# basco o berretto morbido, calato da una parte
+			b.sphere("cloth", 0.168, Vector3(0.018, 0.25, -0.03), col, Vector3(1.08, 0.5, 1.1), 12, 7, false, Vector3(0, 0, -0.16))
+			b.torus("cloth", 0.14, 0.014, Vector3(0, 0.212, -0.022), band, Vector3(0.1, 0, 0), 16, 5)
 
 func _kit_pal(pal: Array, slot: int, color: Color) -> Array:
 	var out := pal.duplicate()

@@ -214,4 +214,13 @@ static func look(id: String) -> Dictionary:
 		"long_hair": flags.contains("L"),
 		"greenskin": flags.contains("Q"),
 		"beast": beast,
+		# tratti guardati sulle immagini (tools/character_kit/portrait_traits.py): taglio dei capelli
+		# del kit 3D, copricapo, barba lunga, colori dei vestiti
+		"style": str(e.get("style", "")),
+		"head": str(e.get("head", "")),
+		"head_color": Color(str(e.get("head_color", "#6b4a2e"))),
+		"hat": str(e.get("hat", "")),
+		"long_beard": bool(e.get("long_beard", false)),
+		"cloth": str(e.get("cloth", "")),
+		"cloth2": str(e.get("cloth2", "")),
 	}

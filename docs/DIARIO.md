@@ -11,6 +11,16 @@ Qui ogni Claude (o altro agente) che lavora sul repository scrive **cosa sta fac
 
 ---
 
+## 2026-11-12 · Art + Programming · Personaggi 3D uguali ai ritratti, tutti nella base, grafica più viva — fatto
+Richiesta del proprietario: "migliora tutta la grafica… allinea le immagini ai personaggi 3D, ogni personaggio dell'immagine devi metterlo anche nella base".
+- **Stessa persona in carta e in 3D**: ogni eroe ha un ritratto fisso salvato (`hero.portrait_id`, `GameState.assign_portraits`; i salvataggi vecchi tengono gli stessi volti). `appearance_for` prende dal ritratto sesso, pelle, taglio dei capelli, barba, occhiali, cicatrice, età, corporatura, elfi, nani, pelleverde, uomini-bestia e copricapo. Prima il 3D seguiva solo il generatore: pelle, barba, occhiali e capelli spesso non c'entravano col ritratto.
+- **Catalogo dei ritratti** (`godot/assets/portraits/portraits.json`): per ognuno dei 300 volti, guardati uno per uno, taglio dei capelli del kit, copricapo con colore e tipo di cappello, barba lunga, colori dei vestiti. Strumento nuovo `tools/character_kit/portrait_traits.py` (il file ora ha un volto per riga).
+- **Modello 3D** (`godot/scripts/hub3d/character_model.gd`): `_portrait_details` modella fazzoletti, bandane, cappucci, veli, otto cappelli, occhialoni, cerchietti, bende, fiori, barbe lunghe, orecchie da elfo e teste da uomo-bestia attorno ai capelli; i capelli sotto un copricapo si schiacciano un po' (`HAIR_PRESSED`). Vale anche sui corpi dell'utente (il viso dipinto resta il loro).
+- **Tutti nella base** (`hub_world.gd`): fino a 80 eroi (prima 30), squadra sempre per prima; il personaggio si rifà se cambiano classe, stelle o ritratto.
+- **Luce e colore** (`world_look.gd`, `mist.gdshader`, `battle_scene.gd`): sole più caldo, ombre più fredde, colori più pieni, alone "screen", mare di nubi acceso dal sole, lucciole a crepuscolo e notte, in battaglia foschia ridotta al 42%.
+- Test: regole 40 su 40 (nuovo: ritratto e 3D corrispondono, il ritratto resta fisso), interfaccia 37 su 37. Strumenti: `tests/portrait_match_runner.gd`, `tests/graphics_compare_runner.gd`.
+- Da controllare (QA): prestazioni della base con più di 40 eroi su un PC lento; cappelli a falda in battaglia (barre della vita); se il crepuscolo più saturo piace al proprietario.
+
 ## 2026-11-12 · Design + Programming + UI · Regole del proprietario: allineare il gioco al documento (#18) — in corso
 Il proprietario ha mandato le regole aggiornate. Lavoro a blocchi: correzioni (Lv max 99, 7ª stella solo da evocazione, Armeria dopo il Piano 3, piani 1–4 annientamento, statistiche STR/INT/HP/DEX, materiali di grado C, forgia che può fallire), Fusione a due eroi, dungeon giornalieri, mestieri e vita quotidiana, emozioni e intesa in battaglia, moderatrice.
 - Precisazioni del proprietario dopo il documento: il **cibo compare da solo** alla base (niente da comprare o gestire, il cuoco migliora i pasti); l'**allenamento resta com'era**, ma le schede non devono dire se un eroe impara più in fretta: lo scopre il giocatore; servono **dungeon giornalieri** facili, con mostri deboli, soprattutto per i materiali.

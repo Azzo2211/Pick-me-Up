@@ -147,7 +147,6 @@ void fragment() {
 static var _recolor_shader: Shader
 ## Ritratto dipinto di ogni eroe (id → pNNN). Non sta nel salvataggio: si ricalcola
 ## seguendo l'ordine del roster, così due eroi vivi non hanno lo stesso volto.
-static var _painted: Dictionary = {}
 
 var hero_name := "Hero"
 var role := "Guardian"
@@ -347,26 +346,10 @@ func _painted_material() -> ShaderMaterial:
 	mat.set_shader_parameter("grey", 1.0 if dead else 0.0)
 	return mat
 
-## Ritratto dipinto dell'eroe, scelto dal catalogo come prima (sesso del nome,
-## categoria, colore dei capelli); unico tra gli eroi del roster.
+## Ritratto dipinto dell'eroe: quello salvato nell'eroe (unico nel roster, lo assegna
+## GameState.assign_portraits); il personaggio 3D segue lo stesso ritratto.
 static func painted_for(hero: Dictionary) -> String:
-	if PortraitLibraryScript.count() == 0: return ""
-	var id := str(hero.get("id", ""))
-	if _painted.has(id): return _painted[id]
-	var gs = Engine.get_main_loop().root.get_node_or_null("GameState") if Engine.get_main_loop() is SceneTree else null
-	var roster: Array = []
-	if gs != null and gs.get("data") is Dictionary: roster = (gs.data as Dictionary).get("heroes", [])
-	for other in roster:
-		if other is Dictionary and not _painted.has(str(other.get("id", ""))): _assign_painted(other)
-	if not _painted.has(id): _assign_painted(hero)
-	return _painted.get(id, "")
-
-static func _assign_painted(hero: Dictionary) -> void:
-	var used := {}
-	for pid in _painted.values(): used[pid] = int(used.get(pid, 0)) + 1
-	var gen: Dictionary = hero.get("appearance", {})
-	_painted[str(hero.get("id", ""))] = PortraitLibraryScript.pick(str(hero.get("id", "x")), RiftwardState.is_feminine(hero),
-		str(hero.get("category", gen.get("category", ""))), str(gen.get("hair_color", "")), used, str(gen.get("eye_color", "")) == "red")
+	return RiftwardState.portrait_id(hero)
 
 func _on_photo(tex: Texture2D) -> void:
 	if tex == null or not is_instance_valid(self): return

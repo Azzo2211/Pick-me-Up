@@ -13,6 +13,7 @@ signal time_ticked
 
 const CharacterGeneratorScript := preload("res://scripts/characters/character_generator.gd")
 const HeroLookScript := preload("res://scripts/characters/hero_look.gd")
+const PortraitLibraryScript := preload("res://scripts/portrait_library.gd")
 const SAVE_PATH := "user://riftward_save.json"
 const SAVE_VERSION := 3
 const PARTY_SIZE := 5
@@ -432,6 +433,8 @@ func _migrate() -> void:
 		for key in ["portrait", "portrait_v"]: hero.erase(key)
 	while data.party.size() < PARTY_SIZE: data.party.append("")
 	data.version = SAVE_VERSION
+	# ritratto dipinto di ogni eroe: salvato, così carta e personaggio 3D restano gli stessi
+	assign_portraits()
 	if not data.active_mission.is_empty():
 		# Chiudere il gioco durante una missione non la annulla: conta come sconfitta.
 		var results := []
@@ -512,7 +515,9 @@ func _apply_offline_progress() -> void:
 
 ## Scrittura sicura: file temporaneo, copia di sicurezza, poi sostituzione.
 func save_game() -> void:
-	if data.is_empty() or is_test_mode: return
+	if data.is_empty(): return
+	assign_portraits()
+	if is_test_mode: return
 	data.world.last_saved = Time.get_unix_time_from_system()
 	var tmp := SAVE_PATH + ".tmp"
 	var file := FileAccess.open(tmp, FileAccess.WRITE)
@@ -814,13 +819,62 @@ static func outfit_kind(hero: Dictionary) -> String:
 	if bool(hero.get("commoner", false)) and not bool(hero.get("class_chosen", true)) and COMMONER_JOBS.has(job): return str(COMMONER_JOBS[job].look)
 	return str(HeroLookScript.CLASS_OUTFIT.get(str(hero.get("role", "Guardian")), "villager"))
 
+# --- Ritratto dipinto e personaggio 3D ------------------------------------------
+## Richiesta del proprietario (2026-11-12): le immagini e i personaggi 3D devono
+## corrispondere. Ogni eroe del roster ha un ritratto dipinto fisso (hero.portrait_id);
+## il ritratto decide ciò che nell'immagine non si può cambiare (sesso, pelle, taglio dei
+## capelli, barba, occhiali, copricapo, corporatura, orecchie da elfo, uomini-bestia) e il
+## personaggio 3D lo segue. Colore di capelli e occhi restano quelli dell'eroe quando il
+## ritratto li può mostrare (ricolorati), altrimenti valgono quelli dipinti.
+
+static var _portrait_picks: Dictionary = {}
+
+## Ritratto dipinto dell'eroe (id del catalogo, "" se non ne ha). Gli eroi del roster lo hanno
+## salvato; per gli altri (anteprime, prove) si sceglie sul momento, senza escludere i volti già usati.
+static func portrait_id(hero: Dictionary) -> String:
+	var saved := str(hero.get("portrait_id", ""))
+	if not saved.is_empty() and PortraitLibraryScript.has(saved): return saved
+	if str(hero.get("role", "")) == "Villager" or PortraitLibraryScript.count() == 0: return ""
+	var id := str(hero.get("id", ""))
+	var key := "%s|%s" % [id, str(hero.get("name", ""))]
+	if not _portrait_picks.has(key): _portrait_picks[key] = _pick_portrait(hero, {})
+	return _portrait_picks[key]
+
+static func _pick_portrait(hero: Dictionary, used: Dictionary) -> String:
+	var gen: Dictionary = hero.get("appearance", {})
+	return PortraitLibraryScript.pick(str(hero.get("id", "x")), is_feminine(hero), str(hero.get("category", gen.get("category", ""))),
+		str(gen.get("hair_color", "")), used, str(gen.get("eye_color", "")) == "red")
+
+## Dà un ritratto a ogni eroe del roster che non ce l'ha, nell'ordine del roster e preferendo
+## i volti non ancora usati (come faceva la carta prima, quindi i volti di una partita già
+## iniziata restano gli stessi), e lo salva nell'eroe.
+func assign_portraits() -> void:
+	if not data.has("heroes") or PortraitLibraryScript.count() == 0: return
+	var missing := false
+	var used := {}
+	for hero in data.heroes:
+		var pid := str(hero.get("portrait_id", ""))
+		if pid.is_empty() or not PortraitLibraryScript.has(pid): missing = true
+		else: used[pid] = int(used.get(pid, 0)) + 1
+	if not missing: return
+	for hero in data.heroes:
+		var pid := str(hero.get("portrait_id", ""))
+		if not pid.is_empty() and PortraitLibraryScript.has(pid): continue
+		pid = _pick_portrait(hero, used)
+		hero["portrait_id"] = pid
+		if not pid.is_empty(): used[pid] = int(used.get(pid, 0)) + 1
+
 ## Tratti fisici del modello 3D (e quindi della carta), sempre uguali per lo stesso eroe.
 ## Pezzi dal foglio dei personaggi (archetipo, volto, capigliatura, corporatura, età),
-## colori di pelle, capelli e occhi dal generatore personaggi.
+## colori di pelle, capelli e occhi dal generatore personaggi; dove c'è il ritratto
+## dipinto, i tratti che si vedono nell'immagine vengono da lì (vedi sopra).
 static func appearance_for(hero: Dictionary) -> Dictionary:
 	var id := str(hero.get("id", "x"))
 	var h: int = abs(id.hash())
 	var fem: bool = is_feminine(hero)
+	var pid := portrait_id(hero)
+	var painted: Dictionary = PortraitLibraryScript.look(pid) if not pid.is_empty() else {}
+	if not painted.is_empty() and str(painted.sex) in ["m", "f"]: fem = str(painted.sex) == "f"
 	var hue := float(hero.get("hue", 40)) / 360.0
 	var gen: Dictionary = hero.get("appearance", {})
 	if gen.is_empty(): gen = CharacterGeneratorScript.generate(id + ":appearance")
@@ -832,6 +886,8 @@ static func appearance_for(hero: Dictionary) -> Dictionary:
 	var archetype := str(piece.get("archetype", "villager"))
 	var family := str(gen.get("hair_color", ""))
 	var hair := Color(str(gen.get("hair_hex", HAIR_COLORS[(h / 3) % HAIR_COLORS.size()])))
+	# l'età la dice il volto dipinto: anziano o no
+	if not painted.is_empty(): age = maxi(age, 56) if bool(painted.old) else mini(age, 44)
 	# capelli che ingrigiscono con l'età
 	if age >= 46 and not family in ["white", "silver"]: hair = hair.lerp(Color("#cfc9c4"), clampf((age - 44) / 26.0, 0.0, 0.75))
 	var beard := 0
@@ -842,26 +898,52 @@ static func appearance_for(hero: Dictionary) -> Dictionary:
 		if face == 2 and age >= 26 and beard == 0 and (h / 17) % 2 == 0: beard = 1
 	var body := str(piece.get("body", "average"))
 	var job := str(hero.get("job", ""))
-	return {
+	var skin := Color(str(gen.get("skin_hex", SKIN_TONES[(h / 11) % SKIN_TONES.size()])))
+	var hair_kind := str(piece.get("hair", "short"))
+	var glasses: bool = bool(gen.get("glasses", false)) or (archetype == "scholar" and face == 1)
+	var scar: bool = (bool(gen.get("scar", false)) or str(gen.get("face_detail", "")) == "scar") and face != 0
+	var height := 1.0 + (float(gen.get("height_scale", 1.0)) - 1.0) * 0.35
+	var extra := {}
+	if not painted.is_empty():
+		# il ritratto mostra i capelli dell'eroe solo se è dipinto così o si ricolora bene:
+		# altrimenti valgono i capelli dipinti, e il 3D li segue
+		var painted_family := str(painted.hair_color)
+		if painted_family != "bald" and not PortraitLibraryScript.shows_hair(pid, family):
+			family = painted_family
+			hair = painted.hair
+		skin = painted.skin
+		beard = 3 if bool(painted.long_beard) else int(painted.beard)
+		glasses = bool(painted.glasses)
+		scar = bool(painted.scar)
+		if not str(painted.style).is_empty(): hair_kind = str(painted.style)
+		if bool(painted.bald): hair_kind = "none"
+		if bool(painted.heavy): body = "chubby"
+		if bool(painted.dwarf):
+			height = 0.84
+			if body != "chubby": body = "muscular"
+		extra = {"elf": bool(painted.elf), "dwarf": bool(painted.dwarf), "beast": str(painted.beast), "greenskin": bool(painted.greenskin),
+			"headwear": str(painted.head), "head_color": painted.head_color, "hat": str(painted.hat),
+			"cloth": str(painted.cloth), "cloth2": str(painted.cloth2)}
+	var output := {
 		"hair": hair,
 		"hair_color": family,
-		"skin": Color(str(gen.get("skin_hex", SKIN_TONES[(h / 11) % SKIN_TONES.size()]))),
+		"skin": skin,
 		"eyes": Color(str(gen.get("eye_hex", EYE_COLORS[(h / 7) % EYE_COLORS.size()]))),
 		"eye_color": str(gen.get("eye_color", "")),
 		"fem": fem,
 		"archetype": archetype,
 		"outfit_kind": outfit_kind(hero),
 		"face": face,
-		"hair_kind": str(piece.get("hair", "short")),
+		"hair_kind": hair_kind,
 		"body": body,
 		"age": age,
 		"beard": beard,
-		# il volto "calmo" dello studioso porta gli occhiali, come nel foglio
-		"glasses": bool(gen.get("glasses", false)) or (archetype == "scholar" and face == 1),
-		"scar": (bool(gen.get("scar", false)) or str(gen.get("face_detail", "")) == "scar") and face != 0,
+		# senza ritratto: il volto "calmo" dello studioso porta gli occhiali, come nel foglio
+		"glasses": glasses,
+		"scar": scar,
 		"freckles": str(gen.get("face_detail", "")) == "freckles",
 		"eye_size": 1.0 + (float(gen.get("eye_size", 1.0)) - 1.0) * 0.3,
-		"height": 1.0 + (float(gen.get("height_scale", 1.0)) - 1.0) * 0.35,
+		"height": height,
 		"outfit": Color(str(gen.get("outfit_hex", OUTFIT_COLORS[(h / 13) % OUTFIT_COLORS.size()]))),
 		"accent": Color.from_hsv(hue, 0.52, 0.58),
 		"category": str(gen.get("category", "")),
@@ -870,9 +952,11 @@ static func appearance_for(hero: Dictionary) -> Dictionary:
 		# attrezzo del mestiere in mano finché non ha una classe
 		"prop": str(COMMONER_JOBS.get(job, {}).get("prop", "")) if bool(hero.get("commoner", false)) and not bool(hero.get("class_chosen", true)) else "",
 		# disegno 2D di riserva (carte quando il 3D non è disponibile)
-		"hair_style": {"long_straight": 2, "long_wavy": 2, "braid": 3, "tied_back": 3, "bun": 3, "messy": 1, "short": 0, "crop": 0, "slicked": 0}.get(str(piece.get("hair", "")), 5 if fem else 0),
-		"portrait": "",
+		"hair_style": {"long_straight": 2, "long_wavy": 2, "braid": 3, "tied_back": 3, "bun": 3, "messy": 1, "short": 0, "crop": 0, "slicked": 0}.get(hair_kind, 5 if fem else 0),
+		"portrait": pid,
 	}
+	output.merge(extra)
+	return output
 
 func _starter_equipment(role: String) -> Dictionary:
 	var names := {"Guardian": "Spada da presidio", "Vanguard": "Lama mercenaria", "Lancer": "Lancia d'acciaio", "Ranger": "Arco laminato", "Mage": "Verga di quarzo", "Support": "Mazza cerimoniale"}

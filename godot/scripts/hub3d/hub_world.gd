@@ -33,7 +33,10 @@ const POND_ANGLE := 0.96
 const POND_EDGE_GAP := 2.2
 const POND_RADIUS := 1.6
 const SPOKES := [4.9742, 0.2618, 1.8326, 3.4034]
-const MAX_AGENTS := 30
+## Tutti gli eroi vivi stanno nella base (richiesta del proprietario: ogni personaggio delle
+## carte deve esserci anche in 3D). Il tetto serve solo a non affossare i computer lenti:
+## oltre questo numero restano fuori gli ultimi arrivati, mai la squadra.
+const MAX_AGENTS := 80
 
 ## Siti delle strutture: angolo (gradi) e distanza dal centro. L'ingresso guarda la piazza.
 const SITES := {
@@ -139,14 +142,70 @@ func _apply_light(preset: String) -> void:
 	look = WorldLook.setup(self, preset, {}, 140.0)
 	sun = look.sun
 	_tint_world()
+	_build_fireflies(preset)
 	if look.has("sky"): (look.sky as ShaderMaterial).set_shader_parameter("aurora", 1.0 if current_base_level >= 5 else 0.0)
+
+## Lucciole sopra l'isola al crepuscolo e di notte: puntini caldi che vagano piano tra gli alberi.
+var _fireflies: CPUParticles3D
+
+func _build_fireflies(preset: String) -> void:
+	if _fireflies != null and is_instance_valid(_fireflies): _fireflies.queue_free()
+	_fireflies = null
+	if preset == "day": return
+	var f := CPUParticles3D.new()
+	f.name = "Lucciole"
+	f.amount = 90 if preset == "night" else 60
+	f.lifetime = 7.0
+	f.preprocess = 7.0
+	f.randomness = 1.0
+	f.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	f.emission_box_extents = Vector3(17.0, 1.1, 17.0)
+	f.position = Vector3(0, 1.6, 0)
+	f.direction = Vector3(1, 0.2, 0.4)
+	f.spread = 180.0
+	f.initial_velocity_min = 0.08
+	f.initial_velocity_max = 0.32
+	f.gravity = Vector3(0, 0.02, 0)
+	f.scale_amount_min = 0.5
+	f.scale_amount_max = 1.1
+	# si accendono e si spengono piano
+	var fade := Gradient.new()
+	fade.set_color(0, Color(1, 1, 1, 0))
+	fade.add_point(0.25, Color(1, 1, 1, 1))
+	fade.add_point(0.7, Color(1, 1, 1, 0.9))
+	fade.set_color(fade.get_point_count() - 1, Color(1, 1, 1, 0))
+	f.color_ramp = fade
+	var dot := QuadMesh.new()
+	dot.size = Vector2(0.22, 0.22)
+	var dm := StandardMaterial3D.new()
+	dm.albedo_texture = WorldMaterials.soft_texture(32, Color(1, 1, 1, 1))
+	dm.albedo_color = Color("#ffe08a") if preset == "dusk" else Color("#c8ffb0")
+	dm.emission_enabled = true
+	dm.emission = dm.albedo_color
+	dm.emission_energy_multiplier = 2.4
+	dm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	dm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	dm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	dm.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	dm.vertex_color_use_as_albedo = true
+	dm.disable_fog = true
+	dot.material = dm
+	f.mesh = dot
+	f.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(f)
+	_fireflies = f
 
 ## Nebbie e acqua seguono i colori della luce scelta.
 func _tint_world() -> void:
 	var p: Dictionary = look.get("preset", {})
+	# da che parte sta il sole, sul piano: i banchi di nubi si accendono da quel lato
+	var toward_sun := Vector3(-0.47, 0.0, 0.88)
+	if sun != null and is_instance_valid(sun): toward_sun = sun.transform.basis.z
 	for m in _mists:
 		m.set_shader_parameter("color_low", p.get("mist_low", Color("#3b2c48")))
 		m.set_shader_parameter("color_high", p.get("mist_high", Color("#c79486")))
+		m.set_shader_parameter("color_glow", p.get("mist_glow", Color("#ffb070")))
+		m.set_shader_parameter("sun_xz", Vector2(toward_sun.x, toward_sun.z))
 	for m in _waters:
 		m.set_shader_parameter("base_color", p.get("water_base", Color("#1a2133")))
 		m.set_shader_parameter("sky_color", p.get("water_sky", Color("#9e666b")))
@@ -1593,6 +1652,10 @@ func facing_target_for(id: String, spot_index: int) -> Vector3:
 
 func _sync_agents(state: RiftwardState) -> void:
 	var alive := state.get_alive_heroes()
+	if alive.size() > MAX_AGENTS:
+		# prima la squadra, poi gli altri nell'ordine del roster
+		var squad := alive.filter(func(h): return state.data.party.has(h.id))
+		alive = squad + alive.filter(func(h): return not state.data.party.has(h.id))
 	var keep := {}
 	var training_index := 0
 	for hero in alive:
@@ -1600,12 +1663,22 @@ func _sync_agents(state: RiftwardState) -> void:
 		var id := str(hero.id)
 		keep[id] = true
 		var agent: HubAgent = agents.get(id)
+		# se cambia ciò che si vede (classe scelta, promozione, ritratto) il personaggio si rifà sul posto
+		var look_sig := "%s|%d|%s|%s" % [str(hero.role), int(hero.current_rarity), str(hero.get("class_chosen", true)), RiftwardState.portrait_id(hero)]
+		var respawn_at = null
+		if agent != null and agent.look_sig != look_sig:
+			respawn_at = agent.position
+			agent.queue_free()
+			agents.erase(id)
+			agent = null
 		if agent == null:
 			agent = HubAgentScript.new()
 			agent_root.add_child(agent)
 			agent.setup(self, hero, state.hero_appearance(hero))
+			agent.look_sig = look_sig
 			var start_node: int = plaza_nodes[agents.size() % maxi(1, plaza_nodes.size())] if not plaza_nodes.is_empty() else -1
 			agent.position = node_position(start_node) + Vector3(rng.randf_range(-0.3, 0.3), 0, rng.randf_range(-0.3, 0.3)) if start_node >= 0 else Vector3.ZERO
+			if respawn_at != null: agent.position = respawn_at
 			agents[id] = agent
 		var activity := state.hero_activity(hero)
 		var slot := -1

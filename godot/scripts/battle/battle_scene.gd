@@ -139,7 +139,8 @@ func _build_world() -> void:
 	world = Node3D.new()
 	viewport.add_child(world)
 	var biome := _biome()
-	var overrides := {"fog": biome.fog, "fog_density": biome.fog_density, "fog_height": -6.0, "fog_height_density": 0.0, "sun_rot": Vector3(-42, 150, 0)}
+	# la foschia del bioma resta sullo sfondo: sull'arena i colori devono restare pieni
+	var overrides := {"fog": biome.fog, "fog_density": float(biome.fog_density) * 0.42, "fog_height": -6.0, "fog_height_density": 0.0, "sun_rot": Vector3(-42, 150, 0)}
 	if biome.has("zenith"): overrides["zenith"] = biome.zenith
 	if biome.has("horizon"): overrides["horizon"] = biome.horizon
 	WorldLook.setup(world, str(biome.look), overrides, 70.0)

@@ -13,6 +13,8 @@ const HeroLookScript := preload("res://scripts/characters/hero_look.gd")
 const ROSTER_PAGE := 24
 ## Categorie e colori del generatore personaggi (solo aspetto: non cambiano ruolo o statistiche).
 const CATEGORY_LABELS := {"Swordsman": "spadaccino", "Lancer": "lanciere", "Archer": "arciere", "Rogue": "furfante", "Mage": "mago", "Cleric": "chierico", "Tank": "difensore", "Barbarian": "barbaro", "Ranger": "ramingo", "Alchemist": "alchimista", "Blacksmith": "fabbro", "Merchant": "mercante", "Villager": "popolano", "Noble": "nobile", "Scholar": "studioso", "Beastkin": "uomo-bestia"}
+## Copricapo del ritratto dipinto, come lo porta anche il personaggio 3D.
+const HEADWEAR_LABELS := {"kerchief": "fazzoletto in testa", "bandana": "bandana", "hood": "cappuccio", "veil": "velo", "goggles": "occhialoni", "hat": "cappello", "circlet": "cerchietto", "patch": "benda sull'occhio", "flowers": "fiori tra i capelli"}
 const HAIR_LABELS := {"black": "neri", "brown": "castani", "blond": "biondi", "auburn": "ramati", "copper": "rossi", "silver": "argento", "white": "bianchi", "blue": "blu", "violet": "viola", "pink": "rosa", "green": "verdi", "teal": "verde acqua"}
 const EYE_LABELS := {"brown": "castani", "amber": "ambra", "blue": "azzurri", "green": "verdi", "gray": "grigi", "hazel": "nocciola", "violet": "viola", "gold": "dorati", "pink": "rosa", "teal": "verde acqua", "red": "rossi (1 su 100.000)"}
 
@@ -1394,7 +1396,10 @@ func look_text(hero: Dictionary) -> String:
 	var archetype := str(look.get("archetype", "villager"))
 	var parts := PackedStringArray([HeroLookScript.label(archetype), "volto " + HeroLookScript.face_label(archetype, int(look.get("face", 1)))])
 	var family := str(look.get("hair_color", ""))
-	parts.append("capelli %s %s" % [str(HAIR_LABELS.get(family, family)), str(HeroLookScript.HAIR_LABELS.get(str(look.get("hair_kind", "")), ""))])
+	if str(look.get("hair_kind", "")) == "none": parts.append("testa rasata")
+	else: parts.append(("capelli %s %s" % [str(HAIR_LABELS.get(family, family)), str(HeroLookScript.HAIR_LABELS.get(str(look.get("hair_kind", "")), ""))]).strip_edges())
+	var wear := str(HEADWEAR_LABELS.get(str(look.get("headwear", "")), ""))
+	if not wear.is_empty(): parts.append(wear)
 	parts.append(str(HeroLookScript.BODY_LABELS.get(str(look.get("body", "")), "")))
 	parts.append("%d anni" % int(look.get("age", 0)))
 	var eye := str(look.get("eye_color", ""))

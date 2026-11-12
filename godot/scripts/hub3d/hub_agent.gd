@@ -8,6 +8,8 @@ class_name HubAgent
 var world: HubWorld
 var hero_id := ""
 var hero_name := ""
+## Firma dell'aspetto con cui è stato costruito: se cambia, la base rifà il personaggio.
+var look_sig := ""
 var model: CharacterModel
 var activity := ""
 var slot := -1

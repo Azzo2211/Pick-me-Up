@@ -10,12 +10,12 @@ const PRESETS := {
 	"dusk": {
 		"zenith": Color("#1b2550"), "upper": Color("#4e4f86"), "horizon": Color("#f0a46a"), "horizon_far": Color("#a77790"), "below": Color("#2a2340"),
 		"sun_color": Color("#ffc184"), "cloud": Color("#c98a86"), "stars": 0.25,
-		"sun_rot": Vector3(-36, 152, 0), "sun_energy": 1.75, "light": Color("#ffc896"),
-		"fill_rot": Vector3(-40, -30, 0), "fill_energy": 0.38, "fill": Color("#8e9be0"),
-		"ambient": Color("#8b8fc0"), "ambient_energy": 0.75, "sky_contrib": 0.55,
-		"fog": Color("#9d7f97"), "fog_density": 0.0028, "fog_height": -3.0, "fog_height_density": 0.16,
-		"exposure": 1.12, "saturation": 1.12, "contrast": 1.06,
-		"mist_low": Color("#3b2c48"), "mist_high": Color("#c79486"),
+		"sun_rot": Vector3(-36, 152, 0), "sun_energy": 2.05, "light": Color("#ffc288"),
+		"fill_rot": Vector3(-40, -30, 0), "fill_energy": 0.42, "fill": Color("#8496ee"),
+		"ambient": Color("#8d92c8"), "ambient_energy": 0.78, "sky_contrib": 0.55,
+		"fog": Color("#a88595"), "fog_density": 0.0019, "fog_height": -3.0, "fog_height_density": 0.16,
+		"exposure": 1.16, "saturation": 1.19, "contrast": 1.1,
+		"mist_low": Color("#43346a"), "mist_high": Color("#e2a08c"), "mist_glow": Color("#ffb878"),
 		"water_base": Color("#1a2133"), "water_sky": Color("#9e666b"), "water_foam": Color("#d9ccd9"),
 	},
 	"day": {
@@ -24,9 +24,9 @@ const PRESETS := {
 		"sun_rot": Vector3(-52, 140, 0), "sun_energy": 1.6, "light": Color("#fff1dc"),
 		"fill_rot": Vector3(-40, -30, 0), "fill_energy": 0.3, "fill": Color("#a9c4ff"),
 		"ambient": Color("#a9b8cf"), "ambient_energy": 0.7, "sky_contrib": 0.6,
-		"fog": Color("#a9bbd0"), "fog_density": 0.0016, "fog_height": -3.0, "fog_height_density": 0.1,
-		"exposure": 0.95, "saturation": 1.1, "contrast": 1.08,
-		"mist_low": Color("#7d93b3"), "mist_high": Color("#eef2f8"),
+		"fog": Color("#a9bbd0"), "fog_density": 0.0013, "fog_height": -3.0, "fog_height_density": 0.1,
+		"exposure": 0.98, "saturation": 1.2, "contrast": 1.1,
+		"mist_low": Color("#7d93b3"), "mist_high": Color("#eef2f8"), "mist_glow": Color("#fff6e0"),
 		"water_base": Color("#1d3a57"), "water_sky": Color("#8fb4d8"), "water_foam": Color("#eef4f8"),
 	},
 	"night": {
@@ -36,8 +36,8 @@ const PRESETS := {
 		"fill_rot": Vector3(-40, -30, 0), "fill_energy": 0.22, "fill": Color("#5d6fb8"),
 		"ambient": Color("#4a5888"), "ambient_energy": 0.7, "sky_contrib": 0.4,
 		"fog": Color("#2c3456"), "fog_density": 0.006, "fog_height": -3.0, "fog_height_density": 0.18,
-		"exposure": 1.2, "saturation": 1.0, "contrast": 1.08,
-		"mist_low": Color("#0e1222"), "mist_high": Color("#36406a"),
+		"exposure": 1.24, "saturation": 1.08, "contrast": 1.1,
+		"mist_low": Color("#0e1222"), "mist_high": Color("#36406a"), "mist_glow": Color("#7f93e0"),
 		"water_base": Color("#0a0f1c"), "water_sky": Color("#33427a"), "water_foam": Color("#8f9cc9"),
 	},
 }
@@ -76,12 +76,13 @@ static func setup(parent: Node3D, preset_name: String = "dusk", overrides: Dicti
 	env.fog_sky_affect = 0.12
 	env.fog_height = p.fog_height
 	env.fog_height_density = p.fog_height_density
+	# alone attorno a ciò che brilla (cristallo, portale, lampioni, finestre, magie)
 	env.glow_enabled = true
-	env.glow_intensity = 0.55
-	env.glow_strength = 1.0
-	env.glow_bloom = 0.02
-	env.glow_hdr_threshold = 1.15
-	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
+	env.glow_intensity = 0.7
+	env.glow_strength = 1.05
+	env.glow_bloom = 0.05
+	env.glow_hdr_threshold = 1.0
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
 	env.adjustment_enabled = true
 	env.adjustment_saturation = p.saturation
 	env.adjustment_contrast = p.contrast

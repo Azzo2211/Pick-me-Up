@@ -153,6 +153,15 @@ static func palette(look: Dictionary, outfit: String, rarity: int) -> Array:
 	if look.get("class_chosen", true) and CLASS_TINT.has(role):
 		var tint: Dictionary = CLASS_TINT[role]
 		for slot in tint: cols[slot] = Color(str(tint[slot]))
+	# vestiti del ritratto dipinto: se nell'immagine hanno un colore deciso (viola, rosso,
+	# verde...), la stoffa principale lo prende; grigi e marroni restano quelli del vestito
+	var cloth_hex := str(look.get("cloth", ""))
+	if not cloth_hex.is_empty():
+		var cloth := Color(cloth_hex)
+		if cloth.s >= 0.28 and cloth.v >= 0.16:
+			var tone := Color.from_hsv(cloth.h, clampf(cloth.s * 1.15, 0.3, 0.62), clampf(cloth.v, 0.24, 0.52))
+			if outfit == "guard": cols[ACCENT] = tone
+			else: cols[MAIN] = tone
 	var out: Array = []
 	for i in 16:
 		var c: Color = cols[i]

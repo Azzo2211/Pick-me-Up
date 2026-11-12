@@ -48,6 +48,7 @@ func _initialize() -> void:
 	_test("pacchetto personaggi: aspetto salvato e migrato", _test_character_pack)
 	_test("popolani 1★-2★: mestiere, consiglio e scelta della classe", _test_commoners)
 	_test("aspetto a pezzi: archetipo, volto, capelli, età", _test_modular_look)
+	_test("ritratto dipinto e personaggio 3D corrispondono", _test_portrait_match)
 	_test("kit 3D: corpi vestiti, teste, capelli e accessori", _test_character_kit)
 	_test("pacchetto animazioni: 40 clip sullo scheletro", _test_motion_pack)
 	_test("consigli del Sistema: squadra bloccata, formazione consigliata, nessun cambio di stato", _test_system_advisor)
@@ -771,9 +772,48 @@ func _test_modular_look() -> Array:
 	game._migrate()
 	valid = valid and first.look == before
 	var look := RiftwardState.appearance_for(first)
-	valid = valid and look.eyes == Color(str(first.appearance.eye_hex)) and str(look.hair_kind) == str(before.hair)
+	# il taglio dei capelli lo decide il ritratto dipinto (se c'è), altrimenti il foglio
+	var painted: Dictionary = load("res://scripts/portrait_library.gd").look(RiftwardState.portrait_id(first))
+	var expected_hair := str(before.hair) if painted.is_empty() else ("none" if bool(painted.bald) else str(painted.style))
+	valid = valid and look.eyes == Color(str(first.appearance.eye_hex)) and str(look.hair_kind) == expected_hair
 	game.free()
 	return [valid, "Pezzi dell'aspetto fuori dal foglio o non deterministici"]
+
+func _test_portrait_match() -> Array:
+	var game := _fresh("portrait-match-seed")
+	var library = load("res://scripts/portrait_library.gd")
+	if library.count() == 0: return [true, ""]
+	for i in 30: game.data.heroes.append(game.generate_hero("portrait-match-%d" % i, 1 + i % 7))
+	game.assign_portraits()
+	var valid := true
+	var seen := {}
+	var styles := ["none", "crop", "short", "messy", "wavy", "slicked", "medium", "layered", "bob", "tied_back", "bun", "braid", "long_straight", "long_wavy"]
+	for hero in game.data.heroes:
+		var pid := str(hero.get("portrait_id", ""))
+		# ogni eroe del roster ha il suo ritratto salvato, diverso da quello degli altri
+		valid = valid and library.has(pid) and not seen.has(pid) and RiftwardState.portrait_id(hero) == pid
+		seen[pid] = true
+		# il personaggio 3D segue il ritratto: sesso, pelle, taglio, barba, occhiali, copricapo
+		var painted: Dictionary = library.look(pid)
+		var look := RiftwardState.appearance_for(hero)
+		valid = valid and str(look.portrait) == pid and look.skin == painted.skin and styles.has(str(look.hair_kind))
+		if str(painted.sex) in ["m", "f"]: valid = valid and bool(look.fem) == (str(painted.sex) == "f")
+		valid = valid and bool(look.glasses) == bool(painted.glasses) and str(look.headwear) == str(painted.head)
+		valid = valid and int(look.beard) == (3 if bool(painted.long_beard) else int(painted.beard))
+		# colore dei capelli: quello dell'eroe se il ritratto lo può mostrare, altrimenti quello dipinto
+		if not bool(painted.bald) and not library.shows_hair(pid, str(hero.appearance.hair_color)): valid = valid and str(look.hair_color) == str(painted.hair_color)
+	# i ritratti restano gli stessi anche se un eroe sparisce (fusione) e dopo una migrazione
+	var kept := {}
+	for hero in game.data.heroes: kept[str(hero.id)] = str(hero.portrait_id)
+	game.data.heroes.remove_at(7)
+	game._migrate()
+	for hero in game.data.heroes: valid = valid and str(hero.portrait_id) == str(kept[str(hero.id)])
+	# un salvataggio vecchio (senza ritratti salvati) li riceve nell'ordine del roster
+	for hero in game.data.heroes: hero.erase("portrait_id")
+	game._migrate()
+	for hero in game.data.heroes: valid = valid and library.has(str(hero.get("portrait_id", "")))
+	game.free()
+	return [valid, "Ritratto e personaggio 3D non corrispondono o il ritratto non resta fisso"]
 
 func _test_motion_pack() -> Array:
 	var motion := load("res://scripts/hub3d/motion_library.gd")
