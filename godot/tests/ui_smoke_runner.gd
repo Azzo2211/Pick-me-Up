@@ -63,20 +63,11 @@ func _run() -> void:
 	await _frames(4)
 	_check(state.data.heroes.size() == 16, "evocazione x10 dal Cristallo")
 	main.close_all_modals()
-	var same_rarity := {}
-	for hero in state.get_alive_heroes():
-		if state.data.party.has(hero.id): continue
-		var r := int(hero.current_rarity)
-		if not same_rarity.has(r): same_rarity[r] = []
-		same_rarity[r].append(str(hero.id))
-	var merged := false
-	for r in same_rarity:
-		if same_rarity[r].size() >= 3 and r < 5:
-			main.panels.merge_selected.assign(same_rarity[r].slice(0, 3))
-			main.panels._do_merge()
-			merged = true
-			break
-	_check(merged and main.panels.merge_selected.is_empty(), "fusione dal Centro di Fusione")
+	var spare := state.get_alive_heroes().filter(func(h): return not state.data.party.has(h.id))
+	var heroes_before: int = state.data.heroes.size()
+	main.panels.merge_selected.assign([str(spare[0].id), str(spare[1].id)])
+	main.panels._do_merge()
+	_check(main.panels.merge_selected.is_empty() and state.data.heroes.size() == heroes_before - 1, "fusione dal Centro di Fusione (due eroi, uno sacrificato)")
 	# Espansione base e nuovo cantiere
 	state.debug_clear_floors(5)
 	state.data.world.gold = 300000

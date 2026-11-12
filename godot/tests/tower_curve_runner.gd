@@ -23,6 +23,9 @@ const REFERENCE := [
 	[[6, 6, 6, 6, 6], 92, 4], [[7, 6, 7, 6, 7], 98, 4], [[7, 7, 7, 7, 7], 99, 4], [[7, 7, 7, 7, 7], 99, 4],
 	[[7, 7, 7, 7, 7], 99, 4], [[7, 7, 7, 7, 7], 99, 4], [[7, 7, 7, 7, 7], 99, 4], [[7, 7, 7, 7, 7], 99, 4],
 ]
+## Oltre il Lv.99 gli eroi crescono solo con la Fusione: parte del margine nascosto di
+## fusione già riempita dalla squadra di riferimento negli ultimi scaglioni.
+const MERGE_FILL := {14: 0.2, 15: 0.35, 16: 0.5, 17: 0.65, 18: 0.8, 19: 0.95}
 const ROLES := ["Guardian", "Vanguard", "Lancer", "Support", "Ranger"]
 
 var state
@@ -93,6 +96,13 @@ func _reference_squad(tier: int, variant: int) -> void:
 		hero.class_chosen = true
 		var level := mini(int(row[1]), int(state.RARITY_CAPS[rarity]))
 		for l in level - 1: state._apply_level_up(hero)
+		var fill := float(MERGE_FILL.get(clampi(tier, 0, REFERENCE.size() - 1), 0.0))
+		if fill > 0.0:
+			var points := roundi(RiftwardState.merge_capacity(hero) * fill)
+			var total := 0
+			for key in hero.stats: total += int(hero.stats[key])
+			for key in hero.stats: hero.stats[key] = int(hero.stats[key]) + roundi(points * float(hero.stats[key]) / total)
+			hero.merge_gain = points
 		var grade: int = row[2]
 		hero.equipment.main.power = 18 + grade * 7
 		hero.equipment.main.grade = state.GRADES[grade + 2]

@@ -85,7 +85,8 @@ godot --headless --path godot --import                    # reimport the glb fil
 - XP and level-ups capped by rarity, maximum level 99; promotions with stones up to 6★ (6★ needs Floor 30). The 7th star only comes from the Transcendent summon.
 - Stats shown as STR / INT / HP / DEX. A hero's learning speed and growth margin are never shown: the player finds them out.
 - Summon pools: Normal 78/19/3 for 1–3★ (10.000 Gold), High-grade 93,5/5,5/1 for 3–5★ with soft pity 70 and hard pity 100 (500 Gems), Transcendent 78/20/1,8/0,2 for 4–7★ (4.000 Gems, unlocks after Floor 20). Summons are revealed as cards that flip.
-- Fusion of three same-rarity heroes up to 5★.
+- Fusion of two heroes: one stays and absorbs part of the other's stats (and sometimes one of their skills), the other is sacrificed for good. Stars do not change. Each hero has a hidden limit on how much it can absorb.
+- Skills: every hero has their class technique; some are born with common or unique skills (0–3), others with none. Skills have real effects (life, attack, defence, aim, dodge, crits, heals, fear).
 - Tower: floors 1–5 hand-made (1–4 easy annihilation missions, 5 the first Guardian), 6–100 generated deterministically from the world seed; boss every 5 floors; retries keep the same floor, rewards shrink per attempt.
 - Battle: party of 5 (2 Front / 2 Mid / 1 Rear), 20 ticks/s, decisions at 5 Hz, Utility-style target scoring, ranged kiting, ammo, healing (never on enemies, never hitting allies), fear at low courage, boss slam, objectives (Subjugation, Survival, Exploration with a hero running to free points, Defense won if the beacon survives the timer, Boss), macro orders only, permadeath.
 - Armory forging (minigame, grades E–S, below 25% precision the piece breaks and the materials are lost) and equipping, Workshop refining, Alchemy tonics. Building materials: Ferro (C), Pelle (C), Assi di legno (C).

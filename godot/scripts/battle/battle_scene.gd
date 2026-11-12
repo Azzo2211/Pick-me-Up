@@ -554,6 +554,7 @@ func _create_heroes() -> void:
 			"cadence": (1.35 if role in ["Mage", "Support"] else 1.0) * float(d.get("cadence_mult", 1.0)), "target": -1, "action": "hold", "alive": true,
 			"kills": 0, "damage": 0, "healing": 0, "ammo": int(d.ammo), "max_ammo": int(d.ammo), "status": "", "fear": 0.0,
 			"courage": int(source.personality.courage), "ranged": ranged, "threat": 0,
+			"heal_mult": float(d.get("heal_mult", 1.0)), "fear_resist": float(d.get("fear_resist", 0.0)),
 		}
 		var model := CharacterModel.new()
 		world.add_child(model)
@@ -870,7 +871,7 @@ func _update_hero(hero: Dictionary, delta: float) -> void:
 				_move_towards(hero, ally.pos, delta, speed_mult)
 				return
 			_face(hero, ally.pos)
-			var amount: float = (35.0 + float(hero.source.stats.int) * 1.7) * (0.5 if trial_rules.has("ferite") else 1.0)
+			var amount: float = (35.0 + float(hero.source.stats.int) * 1.7) * float(hero.get("heal_mult", 1.0)) * (0.5 if trial_rules.has("ferite") else 1.0)
 			ally.hp = minf(float(ally.max_hp), float(ally.hp) + amount)
 			hero.healing = int(hero.healing) + roundi(amount)
 			hero.skill_cd = 8.5
@@ -977,8 +978,8 @@ func _deal_damage(attacker: Dictionary, target: Dictionary, coefficient: float) 
 	_hit_fx(attacker, target, crit)
 	if target.hero and float(target.hp) > 0.0:
 		var ratio := float(target.hp) / float(target.max_hp)
-		if ratio < 0.25 and int(target.courage) < 45 and float(target.fear) <= 0.0 and command_state.posture != "ADVANCE":
-			target.fear = 2.5
+		if ratio < 0.25 and int(target.courage) < 45 and float(target.fear) <= 0.0 and command_state.posture != "ADVANCE" and float(target.get("fear_resist", 0.0)) < 1.0:
+			target.fear = 2.5 * (1.0 - float(target.get("fear_resist", 0.0)))
 			_log("%s esita e arretra." % target.name, "warn")
 	if float(target.hp) <= 0.0: _kill(target, attacker)
 

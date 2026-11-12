@@ -16,8 +16,8 @@ func _initialize() -> void:
 	_test("world iniziale: base Lv.1 e party da cinque", _test_initial_world)
 	_test("summon: costi e pool di rarità", _test_summon)
 	_test("pool trascendente 6★/7★ bloccato fino al Piano 20", _test_transcendent)
-	_test("fusione di tre eroi", _test_merge)
-	_test("fusione oltre 5★ rifiutata", _test_merge_cap)
+	_test("fusione di due eroi: uno resta, uno sacrificato", _test_merge)
+	_test("fusione: margine nascosto e abilità", _test_merge_cap)
 	_test("modalità sviluppo opzionale a risorse infinite", _test_dev_unlimited)
 	_test("addestramento nel tempo con level-up e cap", _test_training)
 	_test("dormitorio: recupero e guarigione", _test_dormitory)
@@ -119,32 +119,69 @@ func _test_transcendent() -> Array:
 
 func _test_merge() -> Array:
 	var game := _fresh("merge-seed")
-	var merge_ids: Array[String] = []
-	for index in range(3):
-		var hero := game.generate_hero("merge-candidate-%d" % index, 1, "Ranger")
-		game.data.heroes.append(hero)
-		merge_ids.append(str(hero.id))
-	game.assign_hero(merge_ids[1], "training")
+	var survivor := game.generate_hero("merge-survivor", 3, "Vanguard")
+	var sacrifice := game.generate_hero("merge-sacrifice", 3, "Ranger")
+	sacrifice.equipment.main = {"id": "I-00077", "name": "Arco forgiato [B]", "slot": "main", "grade": "B", "power": 31}
+	game.data.heroes.append(survivor)
+	game.data.heroes.append(sacrifice)
+	game.assign_hero(str(sacrifice.id), "training")
 	var before: int = game.data.heroes.size()
-	var result: Dictionary = game.merge_heroes(merge_ids)
-	var core: Dictionary = game.hero_by_id(merge_ids[0])
-	var valid: bool = bool(result.ok) and game.data.heroes.size() == before - 2
-	valid = valid and not core.is_empty() and int(core.current_rarity) == 2
-	valid = valid and game.hero_by_id(merge_ids[1]).is_empty() and game.hero_by_id(merge_ids[2]).is_empty()
-	valid = valid and not game.data.assignments.has(merge_ids[1])
+	var stats_before: Dictionary = survivor.stats.duplicate()
+	# chi viene sacrificato non può essere in squadra; lo stesso eroe due volte no
+	var in_party: Array = game.data.party.duplicate()
+	var refused: bool = not game.merge_heroes([str(survivor.id), str(in_party[0])]).ok and not game.merge_heroes([str(survivor.id), str(survivor.id)]).ok
+	var result: Dictionary = game.merge_heroes([str(survivor.id), str(sacrifice.id)])
+	var core: Dictionary = game.hero_by_id(str(survivor.id))
+	var valid: bool = refused and bool(result.ok) and game.data.heroes.size() == before - 1
+	valid = valid and int(core.current_rarity) == 3 and game.hero_by_id(str(sacrifice.id)).is_empty()
+	valid = valid and not game.data.assignments.has(str(sacrifice.id))
+	for key in game.STAT_ORDER: valid = valid and int(core.stats[key]) > int(stats_before[key])
+	valid = valid and game.data.inventory.any(func(item): return str(item.get("id", "")) == "I-00077")
+	# anche chi è in squadra può restare (e assorbire)
+	var extra := game.generate_hero("merge-extra", 1, "Guardian")
+	game.data.heroes.append(extra)
+	valid = valid and bool(game.merge_heroes([str(in_party[0]), str(extra.id)]).ok)
 	game.free()
-	return [valid, "Nucleo, rarità o consumo dei donatori non conforme"]
+	return [valid, "Fusione a due non conforme (rarità, sacrificio, statistiche o equipaggiamento)"]
 
 func _test_merge_cap() -> Array:
 	var game := _fresh("merge-cap-seed")
-	var ids: Array[String] = []
-	for index in range(3):
-		var hero := game.generate_hero("merge-cap-%d" % index, 5, "Mage")
-		game.data.heroes.append(hero)
-		ids.append(str(hero.id))
-	var valid: bool = not game.merge_heroes(ids).ok
+	var survivor := game.generate_hero("merge-cap-survivor", 5, "Mage")
+	survivor.potential = 20
+	survivor.skills = [survivor.skills[0]]
+	game.data.heroes.append(survivor)
+	var gained := []
+	var blocked := false
+	for index in 12:
+		var donor := game.generate_hero("merge-cap-%d" % index, 6, "Guardian")
+		donor.skills = [donor.skills[0]]
+		for l in 60: game._apply_level_up(donor)
+		game.data.heroes.append(donor)
+		var check: Dictionary = game.validate_merge_heroes([str(survivor.id), str(donor.id)])
+		if not check.ok:
+			blocked = true
+			break
+		var result: Dictionary = game.merge_heroes([str(survivor.id), str(donor.id)])
+		var total := 0
+		for key in result.gains: total += int(result.gains[key])
+		gained.append(total)
+	var capacity := RiftwardState.merge_capacity(survivor)
+	var valid: bool = blocked and int(survivor.merge_gain) <= capacity and int(survivor.merge_gain) >= capacity - 4
+	valid = valid and gained.size() >= 2 and int(gained[-1]) <= int(gained[0])
+	# abilità: un donatore con un'abilità nuova la può passare anche a margine pieno
+	var teacher := game.generate_hero("merge-teacher", 4, "Vanguard")
+	teacher.skills.append({"name": "Pelle dura", "level": 1, "xp": 0})
+	game.data.heroes.append(teacher)
+	var with_skill: Dictionary = game.validate_merge_heroes([str(survivor.id), str(teacher.id)])
+	valid = valid and with_skill.ok and with_skill.skills.has("Pelle dura")
+	# effetti: Pelle dura Lv.2 vale +12% di vita
+	var probe := game.generate_hero("merge-probe", 3, "Guardian")
+	probe.skills = [probe.skills[0]]
+	var hp_plain: int = game.derived_stats(probe).max_hp
+	probe.skills.append({"name": "Pelle dura", "level": 2, "xp": 0})
+	valid = valid and absi(int(game.derived_stats(probe).max_hp) - roundi(hp_plain * 1.12)) <= 1
 	game.free()
-	return [valid, "La fusione 5★ → 6★ non deve essere possibile"]
+	return [valid, "Margine nascosto della fusione o effetti delle abilità non conformi"]
 
 func _test_dev_unlimited() -> Array:
 	var game := _fresh("dev-unlimited-seed")
@@ -492,10 +529,25 @@ func _test_light_setting() -> Array:
 func _test_traits_skills() -> Array:
 	var game := _fresh("traits-seed")
 	var valid := true
-	for i in 40:
-		var hero := game.generate_hero("trait-%d" % i, 1 + i % 5)
+	var without := 0
+	var with_skills := 0
+	var uniques := 0
+	for i in 80:
+		var rarity := 1 + i % 7
+		var hero := game.generate_hero("trait-%d" % i, rarity)
 		if hero.traits[0] == hero.traits[1]: valid = false
-		if RiftwardState.skill_label(str(hero.skills[1].name)) != "Disciplina da Campo": valid = false
+		# la prima è sempre la tecnica della classe, poi le abilità particolari (anche nessuna)
+		if str(hero.skills[0].name) != str(game.ROLES[hero.role].skill) and not RiftwardState.needs_class(hero): valid = false
+		var particular := RiftwardState.particular_skills(hero)
+		if particular.size() != hero.skills.size() - 1 or particular.size() > game.SKILL_SLOTS: valid = false
+		var names := {}
+		for skill in particular: names[str(skill.name)] = true
+		if names.size() != particular.size(): valid = false
+		if particular.is_empty(): without += 1
+		else: with_skills += 1
+		for skill in particular:
+			if str(game.SKILLS[str(skill.name)].kind) == "unique": uniques += 1
+	valid = valid and without > 0 and with_skills > 0 and uniques > 0
 	valid = valid and RiftwardState.skill_label("Mend") == "Cura"
 	game.free()
 	return [valid, "Tratti duplicati o abilità non tradotte"]

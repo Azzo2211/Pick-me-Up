@@ -23,12 +23,13 @@ const TIPS := [
 	"Ogni 5 piani c'è la Prova del Guardiano: regole speciali, campioni d'élite e un guardiano che si infuria a metà vita. Preparati prima di salire.",
 	"Guardiani e Avanguardie davanti, Lancieri e Supporti al centro, Ranger o Maghi dietro: fuori ruolo un eroe rende meno.",
 	"I Popolani 1★–2★ ti dicono da soli quale classe si adatta a loro: di solito conviene ascoltarli, il morale sale.",
-	"Tre eroi della stessa rarità (fino a 4★) si fondono nel Centro di Fusione: il primo sale di una stella e tiene parte delle statistiche degli altri.",
+	"Nel Centro di Fusione un eroe può assorbirne un altro: il sacrificato se ne va per sempre, chi resta prende parte delle sue statistiche e a volte una sua abilità.",
+	"Alcuni eroi nascono con abilità particolari, comuni o uniche, altri senza. Con la fusione un eroe può impararne una dal sacrificato.",
 	"Al livello massimo della sua rarità un eroe smette di crescere: serve una promozione con le Pietre.",
 	"Ripetere un piano dà meno oro ed esperienza ogni volta: serve per allenarsi, non per arricchirsi.",
 	"Le Gemme arrivano a ogni piano vinto, molte di più al primo completamento e alle Prove del Guardiano.",
 	"Il Giuramento Astrale garantisce un 5★ entro 100 evocazioni, e dalla 70ª le probabilità salgono.",
-	"Nell'Armeria la forgia a mano decide il grado dell'arma: più preciso sei, più alto è il grado (da F a S).",
+	"Nell'Armeria la forgia a mano decide il grado dell'arma: più preciso sei, più alto è il grado (da E a S). Sotto il 25% il pezzo si rompe e i materiali vanno persi.",
 	"Gli eroi feriti guariscono nel tempo; il Centro Alchemico distilla tonici che accelerano la guarigione.",
 	"Il Magazzino alza il limite dei materiali: se le scorte sono piene, i materiali trovati in missione vanno persi.",
 	"Il morale conta in battaglia: vittorie, riposo e la classe giusta lo alzano, i compagni caduti lo abbassano.",
@@ -199,15 +200,12 @@ static func _hero_advice(gs: Node, out: Array) -> void:
 		if not capped.is_empty():
 			var need: Dictionary = gs.promotion_requirements(capped[0])
 			_add(out, "capped", 40, "info", "Eroi al livello massimo", "%s non cresce%s più: per la promozione %s." % [_names(capped), "" if capped.size() == 1 else "no", str(need.message).to_lower()], "panel:merging", "Fusione")
-	# fusioni possibili: tre eroi della stessa rarità fuori squadra
-	var by_rarity := {}
-	for hero in alive:
-		if gs.data.party.has(hero.id) or int(hero.current_rarity) >= 5: continue
-		var r := int(hero.current_rarity)
-		by_rarity[r] = int(by_rarity.get(r, 0)) + 1
-	for r in [4, 3, 2, 1]:
-		if int(by_rarity.get(r, 0)) >= 3:
-			_add(out, "merge_%d" % r, 44, "good", "Fusione possibile", "Hai %d eroi %s fuori squadra: tre di loro possono diventare un %s." % [int(by_rarity[r]), gs.stars(r), gs.stars(r + 1)], "panel:merging", "Fusione")
+	# fusione: chi è al Lv.99 in squadra cresce ancora solo assorbendo altri eroi
+	var spare := alive.filter(func(h): return not gs.data.party.has(h.id))
+	for hero in alive.filter(func(h): return gs.data.party.has(h.id) and int(h.level) >= gs.MAX_LEVEL):
+		if spare.is_empty(): break
+		if bool(gs.validate_merge_heroes([str(hero.id), str(spare[0].id)]).ok):
+			_add(out, "merge_maxed", 44, "good", "Oltre il livello massimo", "%s è al Lv.%d: nel Centro di Fusione può ancora diventare più fort%s assorbendo un eroe che non ti serve." % [hero.name, gs.MAX_LEVEL, "e"], "panel:merging", "Fusione")
 			break
 
 # -----------------------------------------------------------------------------

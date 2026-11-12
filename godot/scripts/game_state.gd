@@ -97,6 +97,39 @@ const STAT_LABELS := {"str": ["STR", "Forza"], "int": ["INT", "Intelligenza"], "
 const STAT_ORDER := ["str", "int", "sta", "agi"]
 const TRAITS := ["Nervi saldi", "Istinto protettivo", "Passo leggero", "Tenace", "Occhio clinico", "Testardo", "Frugale", "Socievole", "Solitario", "Mano ferma", "Memoria lunga"]
 
+# --- Abilità particolari --------------------------------------------------------
+## Regola del proprietario (2026-11-12): le abilità possono essere comuni o uniche, alcuni
+## eroi nascono senza abilità particolari, altri le hanno dall'evocazione. La tecnica della
+## classe (ROLES[role].skill) è a parte: ce l'hanno tutti ed è sempre la prima della lista.
+## Effetti: hp/atk/def = +% a vita, attacco (anche magia) e difesa; acc/eva/crit = punti di
+## precisione, schivata e critico; heal = +% alle cure che dà; fear = quanto prima gli passa
+## la paura (1 = non ne ha). Al livello 2 l'effetto vale ×1,5, al livello 3 ×2.
+## `roles`: solo per queste classi (le cure servono solo a chi cura).
+const SKILLS := {
+	"Disciplina da Campo": {"kind": "common", "text": "Tiene la formazione sotto pressione: la paura gli passa prima.", "fear": 0.35},
+	"Pelle dura": {"kind": "common", "text": "Incassa meglio degli altri.", "hp": 0.08},
+	"Braccio pesante": {"kind": "common", "text": "Colpi più pesanti.", "atk": 0.06},
+	"Occhio fino": {"kind": "common", "text": "Mira meglio e trova i punti deboli.", "acc": 6.0, "crit": 2.0},
+	"Riflessi pronti": {"kind": "common", "text": "Schiva più spesso.", "eva": 4.0},
+	"Guardia alta": {"kind": "common", "text": "Si copre meglio.", "def": 0.08},
+	"Mani svelte": {"kind": "common", "text": "Cure più efficaci.", "heal": 0.15, "roles": ["Support"]},
+	"Cuore d'acciaio": {"kind": "unique", "text": "Non conosce la paura e non arretra.", "fear": 1.0, "def": 0.05},
+	"Lama del giuramento": {"kind": "unique", "text": "Colpi devastanti.", "atk": 0.12, "crit": 3.0},
+	"Bastione vivente": {"kind": "unique", "text": "Un muro di carne e acciaio.", "hp": 0.15, "def": 0.10},
+	"Occhio del falco": {"kind": "unique", "text": "Non sbaglia quasi mai un colpo.", "acc": 12.0, "crit": 5.0},
+	"Mani di luce": {"kind": "unique", "text": "Le sue cure salvano vite.", "heal": 0.30, "hp": 0.05, "roles": ["Support"]},
+	"Passo d'ombra": {"kind": "unique", "text": "Sparisce quando lo colpiscono.", "eva": 8.0, "atk": 0.05},
+}
+const SKILL_MAX_LEVEL := 3
+## Abilità particolari al massimo per eroe (la tecnica di classe non conta).
+const SKILL_SLOTS := 3
+## Abilità alla nascita: più la rarità è alta, più è facile averne, ma non è una regola fissa.
+## NONE = probabilità di nascere senza abilità comuni; SECOND = di averne una seconda;
+## UNIQUE = di avere anche un'abilità unica.
+const BORN_SKILL_NONE := {1: 0.75, 2: 0.6, 3: 0.4, 4: 0.25, 5: 0.15, 6: 0.1, 7: 0.05}
+const BORN_SKILL_SECOND := {1: 0.0, 2: 0.05, 3: 0.12, 4: 0.22, 5: 0.32, 6: 0.42, 7: 0.5}
+const BORN_SKILL_UNIQUE := {1: 0.0, 2: 0.0, 3: 0.02, 4: 0.06, 5: 0.25, 6: 0.45, 7: 0.7}
+
 # --- Base e strutture ---------------------------------------------------------
 ## Livelli della base. Ogni livello alza il livello massimo delle strutture e sblocca nuovi cantieri.
 ## Con 100 piani nella Torre la base arriva al Lv.10 (decisione del proprietario, 2026-11-05):
@@ -438,6 +471,9 @@ func _normalize_hero(hero: Dictionary) -> void:
 		if injuries[i] is String: injuries[i] = {"name": injuries[i], "severity": "Moderata", "minutes": 20.0}
 	var equipment: Dictionary = hero.get_or_add("equipment", _starter_equipment(str(hero.get("role", "Guardian"))))
 	equipment.get_or_add("accessory", {})
+	# nomi delle abilità dei salvataggi più vecchi (in inglese) → nomi di adesso
+	for skill in hero.get_or_add("skills", []):
+		if skill is Dictionary: skill.name = skill_label(str(skill.get("name", "")))
 
 func _apply_offline_progress() -> void:
 	var now := Time.get_unix_time_from_system()
@@ -604,7 +640,7 @@ func generate_hero(seed_text: String, rarity: int, forced_role: String = "") -> 
 		"id": id, "seed": "%08X" % abs(seed_text.hash()), "name": name, "native_rarity": rarity, "current_rarity": rarity, "level": 1, "xp": 0,
 		"role": role, "class_name": role, "origin": _pick(rng, ORIGINS), "profession": job if commoner else _pick(rng, PROFESSIONS), "stats": stats, "potential": potential, "growth": 3.35 + rarity * 0.62 + potential * 0.004,
 		"personality": {"courage": rng.randi_range(25, 95), "discipline": rng.randi_range(20, 96), "aggression": rng.randi_range(15, 95), "altruism": rng.randi_range(15, 95), "composure": rng.randi_range(20, 95), "loyalty": rng.randi_range(25, 90)},
-		"traits": _pick_two(rng, TRAITS), "skills": [{"name": ROLES[role].skill, "level": 1, "xp": 0}, {"name": "Disciplina da Campo", "level": 1, "xp": 0}],
+		"traits": _pick_two(rng, TRAITS), "skills": [{"name": ROLES[role].skill, "level": 1, "xp": 0}],
 		"morale": rng.randi_range(60, 84), "fatigue": rng.randi_range(0, 8), "injuries": [], "missions": 0, "victories": 0, "kills": 0, "state": "ALIVE", "hue": rng.randi_range(0, 359),
 		"equipment": _starter_equipment(role), "memories": ["Ha attraversato il Rift e ha visto il Nexus per la prima volta."],
 		"commoner": commoner, "class_chosen": not commoner or not forced_role.is_empty(),
@@ -621,6 +657,7 @@ func generate_hero(seed_text: String, rarity: int, forced_role: String = "") -> 
 			hero.equipment.armor.name = "Abiti da lavoro"
 			hero.equipment.armor.defense = 4
 			hero.skills[0] = {"name": "Mestiere: " + job, "level": 1, "xp": 0}
+	hero.skills.append_array(_born_skills(id, rarity, role))
 	hero.assessment = _assessment(hero)
 	# Aspetto: colori dal generatore personaggi (categoria scelta da mestiere o classe),
 	# pezzi del foglio (archetipo, volto, capigliatura, corporatura, età) dall'id.
@@ -629,6 +666,49 @@ func generate_hero(seed_text: String, rarity: int, forced_role: String = "") -> 
 	hero.category = str(hero.appearance.category)
 	hero.look = HeroLookScript.generate(id, base_archetype(hero), is_feminine(hero), rarity, hero.appearance)
 	return hero
+
+## Abilità particolari con cui nasce un eroe (estrazione a parte, non tocca il resto del seme).
+func _born_skills(hero_id: String, rarity: int, role: String) -> Array:
+	var rng := rng_for(hero_id + ":skills")
+	var commons := []
+	var uniques := []
+	for key in SKILLS:
+		var roles: Array = SKILLS[key].get("roles", [])
+		if not roles.is_empty() and not role in roles: continue
+		if str(SKILLS[key].kind) == "unique": uniques.append(key)
+		else: commons.append(key)
+	var names := []
+	if rng.randf() < float(BORN_SKILL_UNIQUE.get(rarity, 0.0)): names.append(uniques[rng.randi_range(0, uniques.size() - 1)])
+	if rng.randf() >= float(BORN_SKILL_NONE.get(rarity, 0.5)):
+		var first: String = commons[rng.randi_range(0, commons.size() - 1)]
+		names.append(first)
+		if rng.randf() < float(BORN_SKILL_SECOND.get(rarity, 0.0)):
+			var rest := commons.filter(func(n): return n != first)
+			names.append(rest[rng.randi_range(0, rest.size() - 1)])
+	var output := []
+	for n in names: output.append({"name": n, "level": 1, "xp": 0})
+	return output
+
+## Abilità particolari dell'eroe (senza la tecnica di classe).
+static func particular_skills(hero: Dictionary) -> Array:
+	return hero.get("skills", []).filter(func(skill): return SKILLS.has(str(skill.get("name", ""))))
+
+## Somma degli effetti delle abilità particolari, già moltiplicati per il livello.
+static func skill_effects(hero: Dictionary) -> Dictionary:
+	var output := {"hp": 0.0, "atk": 0.0, "def": 0.0, "acc": 0.0, "eva": 0.0, "crit": 0.0, "heal": 0.0, "fear": 0.0}
+	for skill in particular_skills(hero):
+		var info: Dictionary = SKILLS[str(skill.name)]
+		var mult := 1.0 + 0.5 * (clampi(int(skill.get("level", 1)), 1, SKILL_MAX_LEVEL) - 1)
+		for key in output:
+			if info.has(key): output[key] += float(info[key]) * mult
+	output.fear = minf(1.0, output.fear)
+	return output
+
+## Testo breve di un'abilità particolare per le schede: "Pelle dura Lv.2 (comune): incassa meglio".
+static func skill_text(skill: Dictionary) -> String:
+	var info: Dictionary = SKILLS.get(str(skill.get("name", "")), {})
+	if info.is_empty(): return skill_label(str(skill.get("name", "")))
+	return "%s Lv.%d (%s): %s" % [str(skill.name), int(skill.get("level", 1)), "unica" if str(info.kind) == "unique" else "comune", str(info.text).to_lower().trim_suffix(".")]
 
 ## Mestiere adatto a una classe già decisa (squadra iniziale): uno di quelli che pendono verso di lei.
 func _job_for_role(role: String, fallback: String) -> String:
@@ -830,15 +910,18 @@ func derived_stats(hero: Dictionary) -> Dictionary:
 	var equipment: Dictionary = hero.equipment
 	var accessory: Dictionary = equipment.get("accessory", {})
 	var f := fatigue_level(hero)
-	var max_hp := roundi((100 + hero.stats.sta * 12 + hero.level * 6 + int(accessory.get("hp", 0))) * float(f.hp))
+	var k := skill_effects(hero)
+	var max_hp := roundi((100 + hero.stats.sta * 12 + hero.level * 6 + int(accessory.get("hp", 0))) * float(f.hp) * (1.0 + k.hp))
 	return {
 		"max_hp": max_hp,
-		"attack": (float(equipment.main.get("power", 0)) + hero.stats.str * 1.75) * float(f.atk),
-		"magic": (hero.stats.int * 1.9 + (12 if hero.role in ["Mage", "Support"] else 0) + float(equipment.main.get("power", 0)) * (0.6 if hero.role in ["Mage", "Support"] else 0.0)) * float(f.atk),
-		"defense": (float(equipment.armor.get("defense", 0)) + hero.stats.sta * 0.55) * float(f.def),
-		"accuracy": clampf(70 + hero.stats.agi * 0.45 - float(f.acc), 35, 98),
-		"evasion": clampf(hero.stats.agi * 0.22 - float(f.eva), 0, 35),
-		"crit": clampf(3 + hero.stats.agi * 0.08, 3, 30),
+		"attack": (float(equipment.main.get("power", 0)) + hero.stats.str * 1.75) * float(f.atk) * (1.0 + k.atk),
+		"magic": (hero.stats.int * 1.9 + (12 if hero.role in ["Mage", "Support"] else 0) + float(equipment.main.get("power", 0)) * (0.6 if hero.role in ["Mage", "Support"] else 0.0)) * float(f.atk) * (1.0 + k.atk),
+		"defense": (float(equipment.armor.get("defense", 0)) + hero.stats.sta * 0.55) * float(f.def) * (1.0 + k.def),
+		"accuracy": clampf(70 + hero.stats.agi * 0.45 - float(f.acc) + k.acc, 35, 98),
+		"evasion": clampf(hero.stats.agi * 0.22 - float(f.eva) + k.eva, 0, 40),
+		"crit": clampf(3 + hero.stats.agi * 0.08 + k.crit, 3, 35),
+		"heal_mult": 1.0 + k.heal,
+		"fear_resist": k.fear,
 		"block": equipment.sub.get("block", 0),
 		"ammo": equipment.sub.get("ammo", 0),
 		"speed_mult": float(f.speed),
@@ -1222,52 +1305,110 @@ func _roll_rarity(pool: String, roll: float) -> int:
 		if roll < threshold: return int(rates[index][0])
 	return int(rates[0][0])
 
+# --- Fusione (regola del proprietario, 2026-11-12) ------------------------------
+## Si fondono due eroi: il primo resta, il secondo viene sacrificato per sempre. Chi resta
+## prende una parte delle statistiche del sacrificato e a volte una sua abilità. La rarità
+## non cambia (le stelle salgono solo con la promozione). Ogni eroe ha un margine nascosto
+## (dal potenziale): quando l'ha riempito, la fusione non gli dà più statistiche.
+
+## Quota delle statistiche del sacrificato che passa a chi resta: 10% + 1% per livello del Centro.
+func merge_retention() -> float:
+	return 0.10 + 0.01 * maxf(0.0, float(facility_level("merging") - 1))
+
+## Margine nascosto: punti statistica che un eroe può prendere in tutto con le fusioni.
+static func merge_capacity(hero: Dictionary) -> int:
+	return roundi(float(hero.get("potential", 50)) * 4.0)
+
+## Abilità particolari che il sacrificato può passare: nuove (se c'è posto) o da migliorare.
+func inheritable_skills(survivor: Dictionary, sacrifice: Dictionary) -> Array:
+	var owned := {}
+	for skill in particular_skills(survivor): owned[str(skill.name)] = int(skill.get("level", 1))
+	var output := []
+	for skill in particular_skills(sacrifice):
+		var skill_name := str(skill.name)
+		if owned.has(skill_name):
+			if int(owned[skill_name]) < SKILL_MAX_LEVEL: output.append(skill_name)
+		elif owned.size() < SKILL_SLOTS: output.append(skill_name)
+	return output
+
+## Punti statistica che passerebbero (già limitati dal margine nascosto) e abilità possibili.
+func _merge_plan(survivor: Dictionary, sacrifice: Dictionary) -> Dictionary:
+	var retention := merge_retention()
+	var gains := {}
+	var total := 0
+	for key in STAT_ORDER:
+		gains[key] = maxi(1, roundi(float(sacrifice.stats.get(key, 0)) * retention))
+		total += int(gains[key])
+	var room := maxi(0, merge_capacity(survivor) - int(survivor.get("merge_gain", 0)))
+	if total > room:
+		var scale := float(room) / float(total)
+		total = 0
+		for key in gains:
+			gains[key] = floori(float(gains[key]) * scale)
+			total += int(gains[key])
+	return {"gains": gains, "total": total, "skills": inheritable_skills(survivor, sacrifice)}
+
 func validate_merge_heroes(hero_ids: Array) -> Dictionary:
-	if hero_ids.size() != 3:
-		return {"ok": false, "message": "Seleziona esattamente tre eroi.", "heroes": []}
-	var unique_ids: Dictionary = {}
+	if hero_ids.size() != 2:
+		return {"ok": false, "message": "Scegli due eroi: chi resta e chi viene sacrificato.", "heroes": []}
+	if str(hero_ids[0]) == str(hero_ids[1]):
+		return {"ok": false, "message": "Servono due eroi diversi.", "heroes": []}
 	var heroes: Array = []
 	for value in hero_ids:
-		var hero_id := str(value)
-		if unique_ids.has(hero_id):
-			return {"ok": false, "message": "Lo stesso eroe non può occupare più slot.", "heroes": []}
-		unique_ids[hero_id] = true
-		var hero := hero_by_id(hero_id)
+		var hero := hero_by_id(str(value))
 		if hero.is_empty() or str(hero.state) != "ALIVE":
 			return {"ok": false, "message": "Uno degli eroi non è disponibile.", "heroes": []}
-		if data.party.has(hero_id):
-			return {"ok": false, "message": "%s è nella squadra." % hero.name, "heroes": []}
 		heroes.append(hero)
-	var rarity := int(heroes[0].current_rarity)
-	if rarity >= 5:
-		return {"ok": false, "message": "Oltre le 5★ si sale solo con la promozione.", "heroes": []}
-	for hero in heroes:
-		if int(hero.current_rarity) != rarity:
-			return {"ok": false, "message": "I tre eroi devono avere la stessa rarità.", "heroes": []}
-	return {"ok": true, "message": "Fusione pronta.", "heroes": heroes}
+	var sacrifice: Dictionary = heroes[1]
+	if data.party.has(str(sacrifice.id)):
+		return {"ok": false, "message": "%s è nella squadra: toglilo prima di sacrificarlo." % sacrifice.name, "heroes": []}
+	var plan := _merge_plan(heroes[0], sacrifice)
+	if int(plan.total) <= 0 and plan.skills.is_empty():
+		return {"ok": false, "message": "%s ha raggiunto il suo limite: questa fusione non lo renderebbe più forte." % heroes[0].name, "heroes": []}
+	return {"ok": true, "message": "Fusione pronta.", "heroes": heroes, "skills": plan.skills}
 
 func merge_heroes(hero_ids: Array) -> Dictionary:
 	var validation := validate_merge_heroes(hero_ids)
 	if not bool(validation.ok): return validation
-	var heroes: Array = validation.heroes
-	var core: Dictionary = heroes[0]
-	var old_rarity := int(core.current_rarity)
-	var retention := 0.04 + 0.01 * (facility_level("merging") - 1)
-	for stat_key in core.stats:
-		var absorbed := int(heroes[1].stats.get(stat_key, 0)) + int(heroes[2].stats.get(stat_key, 0))
-		core.stats[stat_key] += maxi(1, roundi(float(absorbed) * retention))
-	core.current_rarity = old_rarity + 1
-	core.potential = mini(100, maxi(int(core.potential), maxi(int(heroes[1].potential), int(heroes[2].potential))) + 2)
-	core.morale = mini(100, int(core.morale) + 5)
-	var donor_ids := [str(heroes[1].id), str(heroes[2].id)]
-	for donor_id in donor_ids: data.assignments.erase(donor_id)
+	var survivor: Dictionary = validation.heroes[0]
+	var sacrifice: Dictionary = validation.heroes[1]
+	var plan := _merge_plan(survivor, sacrifice)
+	for key in plan.gains: survivor.stats[key] = int(survivor.stats[key]) + int(plan.gains[key])
+	survivor.merge_gain = int(survivor.get("merge_gain", 0)) + int(plan.total)
+	# abilità: al massimo una per fusione; le uniche passano più di rado
+	var rng := rng_for(str(survivor.id) + ":" + str(sacrifice.id) + ":fusione")
+	var bonus := 0.03 * maxf(0.0, float(facility_level("merging") - 1))
+	var candidates: Array = plan.skills.duplicate()
+	candidates.sort_custom(func(a, b): return str(SKILLS[a].kind) == "unique" and str(SKILLS[b].kind) != "unique")
+	var learned := ""
+	var improved := false
+	for skill_name in candidates:
+		if rng.randf() < (0.35 if str(SKILLS[skill_name].kind) == "unique" else 0.55) + bonus:
+			learned = skill_name
+			break
+	if not learned.is_empty():
+		for skill in survivor.skills:
+			if str(skill.name) == learned:
+				skill.level = mini(SKILL_MAX_LEVEL, int(skill.get("level", 1)) + 1)
+				improved = true
+		if not improved: survivor.skills.append({"name": learned, "level": 1, "xp": 0})
+	survivor.morale = mini(100, int(survivor.morale) + 5)
+	# l'equipaggiamento forgiato del sacrificato torna in magazzino
+	for slot in sacrifice.equipment:
+		var item = sacrifice.equipment[slot]
+		if item is Dictionary and item.has("id"): data.inventory.append(item.duplicate())
+	data.assignments.erase(str(sacrifice.id))
 	for index in range(data.heroes.size() - 1, -1, -1):
-		if str(data.heroes[index].id) in donor_ids:
-			data.heroes.remove_at(index)
-	core.memories.push_front("Ha assorbito l'eco di %s e %s." % [heroes[1].name, heroes[2].name])
-	add_event("MERGE", core.name + " ha completato la fusione", "%s + %s assorbiti · rarità %s." % [heroes[1].name, heroes[2].name, stars(core.current_rarity)], "good")
+		if str(data.heroes[index].id) == str(sacrifice.id): data.heroes.remove_at(index)
+	survivor.memories.push_front("Ha assorbito l'eco di %s." % sacrifice.name)
+	var parts := []
+	for key in STAT_ORDER:
+		if int(plan.gains[key]) > 0: parts.append("+%d %s" % [int(plan.gains[key]), STAT_LABELS[key][0]])
+	var text := "%s è stato sacrificato. %s" % [sacrifice.name, ", ".join(parts) if not parts.is_empty() else "Nessuna statistica in più"]
+	if not learned.is_empty(): text += " · %s %s" % ["migliora" if improved else "impara", learned]
+	add_event("MERGE", survivor.name + " ha completato la fusione", text + ".", "good")
 	save_and_notify()
-	return {"ok": true, "hero": core, "consumed": donor_ids}
+	return {"ok": true, "hero": survivor, "consumed": [str(sacrifice.id)], "gains": plan.gains, "skill": learned, "improved": improved}
 
 func promotion_requirements(hero: Dictionary) -> Dictionary:
 	var rarity := int(hero.current_rarity)

@@ -395,11 +395,11 @@ func _build_merging(body: VBoxContainer) -> void:
 	if merging_tab == "promotion":
 		_build_promotion(body)
 		return
-	body.add_child(info_card("Unisci tre eroi della stessa rarità (fino a 4★). Il primo scelto è il nucleo: sale di una stella e assorbe parte della forza degli altri due, che se ne vanno per sempre."))
+	body.add_child(info_card("Fondi due eroi. Il primo resta e prende una parte delle statistiche del secondo (%d%% con il Centro al Lv.%d) e a volte una sua abilità. Il secondo viene sacrificato e se ne va per sempre. Le stelle non cambiano: per quelle c'è la promozione. Non tutti gli eroi possono crescere allo stesso modo." % [roundi(GS.merge_retention() * 100.0), GS.facility_level("merging")]))
 	var slots := HBoxContainer.new()
 	slots.alignment = BoxContainer.ALIGNMENT_CENTER
 	slots.add_theme_constant_override("separation", 10)
-	for i in 3:
+	for i in 2:
 		var holder := VBoxContainer.new()
 		holder.alignment = BoxContainer.ALIGNMENT_CENTER
 		if i < merge_selected.size():
@@ -412,20 +412,22 @@ func _build_merging(body: VBoxContainer) -> void:
 			var empty := PanelContainer.new()
 			empty.custom_minimum_size = Vector2(112, 174)
 			var st := UIKit.ornate("inset", 0.0)
-			st.border = Color("#3f6a8c") if i == 0 else Color("#22304a")
+			st.border = Color("#3f6a8c") if i == 0 else Color("#6a2a36")
 			empty.add_theme_stylebox_override("panel", st)
-			var q := UIKit.title("?", 34, Color("#3f6a8c"))
+			var q := UIKit.title("?", 34, Color("#3f6a8c") if i == 0 else Color("#8c3f4a"))
 			q.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			q.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 			empty.add_child(q)
 			holder.add_child(empty)
-		var caption := UIKit.label("NUCLEO" if i == 0 else "DONATORE", 13, UIKit.LILAC if i == 0 else UIKit.MUTED, UIKit.head_medium())
+		var caption := UIKit.label("RESTA" if i == 0 else "SACRIFICATO", 13, UIKit.LILAC if i == 0 else UIKit.ROSE, UIKit.head_medium())
 		caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		holder.add_child(caption)
 		slots.add_child(holder)
-		if i < 2: slots.add_child(UIKit.title("+", 26, UIKit.MUTED))
+		if i == 0: slots.add_child(UIKit.title("←", 26, UIKit.MUTED))
 	body.add_child(slots)
 	var validation := GS.validate_merge_heroes(merge_selected)
+	if validation.ok and not validation.get("skills", []).is_empty():
+		body.add_child(UIKit.para("Può passare: " + ", ".join(validation.skills), 14, UIKit.LILAC))
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 8)
 	var fuse := UIKit.button("Fondi", _confirm_merge, "violet", 0)
@@ -435,14 +437,17 @@ func _build_merging(body: VBoxContainer) -> void:
 	actions.add_child(UIKit.button("Svuota", _clear_merge, "ghost", 120))
 	body.add_child(actions)
 	if not validation.ok and merge_selected.size() > 0: body.add_child(UIKit.label(str(validation.message), 14, UIKit.ROSE, UIKit.body_bold()))
-	body.add_child(section("Candidati", "fuori squadra"))
-	var candidates := GS.get_alive_heroes().filter(func(h): return not GS.data.party.has(h.id) and int(h.current_rarity) <= 4)
+	body.add_child(section("Eroi", "prima chi resta, poi chi viene sacrificato"))
+	var candidates := GS.get_alive_heroes()
 	candidates.sort_custom(func(a, b): return int(a.current_rarity) * 1000 + int(a.level) > int(b.current_rarity) * 1000 + int(b.level))
-	if candidates.is_empty(): body.add_child(UIKit.para("Nessun eroe fuori squadra da fondere. Evoca nuovi eroi al Cristallo del Nexus.", 15))
+	if candidates.size() < 2: body.add_child(UIKit.para("Servono almeno due eroi. Evoca nuovi eroi al Cristallo del Nexus.", 15))
 	for hero in candidates:
 		var selected := merge_selected.has(str(hero.id))
-		var b := small_button("Togli" if selected else "Scegli", _toggle_merge.bind(str(hero.id)), "ghost" if selected else "violet")
-		body.add_child(hero_row(hero, [b], null, true, UIKit.VIOLET if selected else Color.TRANSPARENT))
+		var reason := ""
+		if not selected and merge_selected.size() == 1 and GS.data.party.has(hero.id): reason = "È in squadra: non si può sacrificare"
+		var b := small_button("Togli" if selected else "Scegli", _toggle_merge.bind(str(hero.id)), "ghost" if selected else "violet", reason)
+		var extra: Control = UIKit.label(reason, 13, UIKit.MUTED, UIKit.body_bold()) if not reason.is_empty() else null
+		body.add_child(hero_row(hero, [b], extra, true, UIKit.VIOLET if selected else Color.TRANSPARENT))
 
 func _set_merging_tab(tab: String) -> void:
 	merging_tab = tab
@@ -450,8 +455,8 @@ func _set_merging_tab(tab: String) -> void:
 
 func _toggle_merge(hero_id: String) -> void:
 	if merge_selected.has(hero_id): merge_selected.erase(hero_id)
-	elif merge_selected.size() < 3: merge_selected.append(hero_id)
-	else: main.toast("Selezione completa", "Puoi fondere tre eroi alla volta.", "warn")
+	elif merge_selected.size() < 2: merge_selected.append(hero_id)
+	else: main.toast("Selezione completa", "Si fondono due eroi alla volta: togline uno.", "warn")
 	main._render_panel()
 
 func _clear_merge() -> void:
@@ -464,13 +469,18 @@ func _confirm_merge() -> void:
 		main.toast("Fusione non pronta", str(validation.message), "warn")
 		return
 	var heroes: Array = validation.heroes
-	main.confirm("Fusione degli eroi", "%s diventerà %s.\n\n%s e %s se ne andranno per sempre." % [heroes[0].name, GS.stars(int(heroes[0].current_rarity) + 1), heroes[1].name, heroes[2].name], "Fondi", _do_merge, "violet")
+	main.confirm("Fusione degli eroi", "%s assorbirà parte della forza di %s.\n\n%s verrà sacrificato e se ne andrà per sempre." % [heroes[0].name, heroes[1].name, heroes[1].name], "Fondi", _do_merge, "violet")
 
 func _do_merge() -> void:
 	var result := GS.merge_heroes(merge_selected)
 	if result.ok:
 		merge_selected.clear()
-		main.toast("Fusione completata", "%s ora è %s" % [result.hero.name, GS.stars(int(result.hero.current_rarity))], "good")
+		var parts := []
+		for key in GS.STAT_ORDER:
+			if int(result.gains.get(key, 0)) > 0: parts.append("+%d %s" % [int(result.gains[key]), GS.STAT_LABELS[key][0]])
+		var text := ", ".join(parts) if not parts.is_empty() else "Nessuna statistica in più"
+		if not str(result.skill).is_empty(): text += " · %s %s" % ["migliora" if result.improved else "impara", result.skill]
+		main.toast("Fusione: " + str(result.hero.name), text, "good")
 	else: main.toast("Fusione bloccata", str(result.message), "warn")
 
 func _build_promotion(body: VBoxContainer) -> void:
@@ -1282,9 +1292,12 @@ func build_dossier(content: VBoxContainer, hero: Dictionary, modal_ref: Array) -
 	var eq: Dictionary = hero.equipment
 	var accessory: Dictionary = eq.get("accessory", {})
 	dv.add_child(UIKit.para("Arma: %s [%s] · Secondaria: %s · Armatura: %s [%s]%s" % [eq.main.get("name", "—"), eq.main.get("grade", "-"), eq.sub.get("name", "—"), eq.armor.get("name", "—"), eq.armor.get("grade", "-"), (" · Amuleto: " + str(accessory.get("name", ""))) if not accessory.is_empty() else ""], 15, UIKit.INK_SOFT))
-	var skills := []
-	for skill in hero.skills: skills.append("%s Lv.%d" % [GS.skill_label(str(skill.name)), int(skill.level)])
-	dv.add_child(UIKit.para("Abilità: " + " · ".join(skills) + "   ·   Tratti: " + ", ".join(hero.traits), 15, UIKit.INK_SOFT))
+	dv.add_child(UIKit.para("Tecnica di classe: %s   ·   Tratti: %s" % [GS.skill_label(str(hero.skills[0].name)) if not hero.skills.is_empty() else "—", ", ".join(hero.traits)], 15, UIKit.INK_SOFT))
+	var particular := RiftwardState.particular_skills(hero)
+	if particular.is_empty(): dv.add_child(UIKit.para("Abilità particolari: nessuna", 15, UIKit.MUTED))
+	for skill in particular:
+		var unique := str(GS.SKILLS[str(skill.name)].kind) == "unique"
+		dv.add_child(UIKit.para(("✦ " if unique else "◆ ") + RiftwardState.skill_text(skill), 15, UIKit.GOLD if unique else UIKit.INK))
 	var tired := GS.fatigue_penalty_text(hero)
 	if tired != "": dv.add_child(UIKit.para("Stanchezza %d · %s%s" % [roundi(float(hero.fatigue)), tired, " · non può partire" if float(hero.fatigue) >= GS.FATIGUE_NO_DEPLOY else ""], 15, UIKit.ROSE))
 	if not hero.injuries.is_empty():
@@ -1304,7 +1317,7 @@ func build_dossier(content: VBoxContainer, hero: Dictionary, modal_ref: Array) -
 	content.add_child(notes)
 	if bool(GS.data.dev.get("reveal_hidden", false)):
 		var p: Dictionary = hero.personality
-		content.add_child(info_card("Sviluppo · Potenziale %d/100 · Crescita %.2f · Coraggio %d · Disciplina %d · Aggressività %d · Altruismo %d · Compostezza %d · Lealtà %d" % [int(hero.potential), float(hero.growth), int(p.courage), int(p.discipline), int(p.aggression), int(p.altruism), int(p.composure), int(p.loyalty)], "warn"))
+		content.add_child(info_card("Sviluppo · Potenziale %d/100 · Crescita %.2f · Margine fusione %d/%d · Coraggio %d · Disciplina %d · Aggressività %d · Altruismo %d · Compostezza %d · Lealtà %d" % [int(hero.potential), float(hero.growth), int(hero.get("merge_gain", 0)), RiftwardState.merge_capacity(hero), int(p.courage), int(p.discipline), int(p.aggression), int(p.altruism), int(p.composure), int(p.loyalty)], "warn"))
 
 ## Descrizione dei pezzi del personaggio, come nel foglio: archetipo, volto, capelli, corporatura, età, occhi.
 func look_text(hero: Dictionary) -> String:
