@@ -84,6 +84,14 @@ Misurato con la simulazione (6 battaglie per piano, 2026-11-05): con la squadra 
 
 **Da ritarare (2026-11-12):** la tabella era tarata con la 7★ fino al Lv.120. Con il massimo a 99 la squadra smette di salire di livello dal Piano 71 e gli scaglioni 15–20 sono troppo duri (simulazione: piani 76–100 vinti 0–1 volte su 4). Oltre il Lv.99 gli eroi cresceranno con la nuova Fusione (statistiche dall'eroe sacrificato); la curva degli ultimi scaglioni si ritara insieme a quella.
 
+### Dungeon giornalieri (richiesta del proprietario, 2026-11-12)
+Missioni facili per raccogliere materiali, dal Portale (scheda "Dungeon"). `GameState.DUNGEONS`, `begin_dungeon`, `dungeon_stage`, `dungeon_rewards`.
+- Quattro dungeon, uno per materiale: Miniera abbandonata (Ferro), Riserva di caccia (Pelle), Segheria nel bosco (Assi di legno), Giardino selvatico (Erbe).
+- **Mostri deboli**: solo predoni, segugi e arcieri, mai bruti o guardiani, tre piccole ondate. Forza = 45% di quella del primo piano dello scaglione corrispondente della Torre (`DUNGEON_POWER`). Simulazione: la squadra di riferimento vince sempre senza caduti, a tutti i livelli (`tower_curve_runner.gd --dungeons`).
+- **Livello** scelto dal giocatore: 1 all'inizio, uno in più ogni 5 piani della Torre superati (massimo 20). Più è alto, più bottino: materiale principale 5 + 2 × livello, un secondo materiale 1 + livello/2, Oro 600 + 300 × livello, poca esperienza.
+- Ogni dungeon si può **vincere 2 volte al giorno** (si azzera a mezzanotte UTC come il negozio). Una sconfitta o una ritirata non consuma l'ingresso.
+- Stanca il 60% di un piano della Torre. La morte resta permanente anche qui. Non tocca i piani della Torre.
+
 These are the **currently implemented contents**, not the final scope of the game. Riftward is intended to continue expanding with more floors, mission types, systems and content while preserving the core identity and progression logic.
 
 ## Economy and summon

@@ -12,7 +12,7 @@ class_name SystemAdvisor
 ##   tone      "danger", "warn", "good" o "info"
 ##   title     riga breve
 ##   text      spiegazione con i numeri veri
-##   action    dove porta il pulsante: "panel:<struttura>", "squad", "tower",
+##   action    dove porta il pulsante: "panel:<struttura>", "squad", "tower", "dungeon",
 ##             "roster", "journal", "shop", "" (nessun pulsante)
 ##   button    testo del pulsante
 
@@ -24,6 +24,7 @@ const TIPS := [
 	"Guardiani e Avanguardie davanti, Lancieri e Supporti al centro, Ranger o Maghi dietro: fuori ruolo un eroe rende meno.",
 	"I Popolani 1★–2★ ti dicono da soli quale classe si adatta a loro: di solito conviene ascoltarli, il morale sale.",
 	"Nel Centro di Fusione un eroe può assorbirne un altro: il sacrificato se ne va per sempre, chi resta prende parte delle sue statistiche e a volte una sua abilità.",
+	"I dungeon giornalieri al Portale sono missioni facili: mostri deboli e tanti materiali. Ognuno si può completare due volte al giorno.",
 	"Alcuni eroi nascono con abilità particolari, comuni o uniche, altri senza. Con la fusione un eroe può impararne una dal sacrificato.",
 	"Al livello massimo della sua rarità un eroe smette di crescere: serve una promozione con le Pietre.",
 	"Ripetere un piano dà meno oro ed esperienza ogni volta: serve per allenarsi, non per arricchirsi.",
@@ -263,6 +264,17 @@ static func _economy_advice(gs: Node, out: Array) -> void:
 	if not full.is_empty():
 		var where := "panel:warehouse" if gs.facility_built("warehouse") else "panel:armory" if gs.facility_built("armory") else ""
 		_add(out, "materials_full", 50, "warn", "Scorte quasi piene", "%s %s quasi al limite (%d). Usali nella forgia o alza il Magazzino, altrimenti quelli trovati in missione vanno persi." % [", ".join(full), "è" if full.size() == 1 else "sono", cap], where, "Vai" if not where.is_empty() else "")
+	# dungeon giornalieri ancora da fare, se la squadra può partire
+	var dungeons_left := 0
+	for id in gs.DUNGEON_ORDER: dungeons_left += int(gs.dungeon_runs_left(id))
+	if dungeons_left > 0 and bool(gs.party_readiness().ready):
+		var short := []
+		for key in ["ore", "leather", "wood", "herbs"]:
+			if int(gs.resource_amount(key)) < 6: short.append(str(gs.MATERIALS[key].name))
+		if not short.is_empty():
+			_add(out, "dungeon_materials", 48, "info", "Pochi materiali", "Sei a corto di %s. I dungeon giornalieri al Portale sono facili e ne danno tanti (%d ingressi rimasti oggi)." % [", ".join(short), dungeons_left], "dungeon", "Dungeon")
+		else:
+			_add(out, "dungeon_daily", 22, "info", "Dungeon giornalieri", "Hai ancora %d ingressi ai dungeon di oggi: missioni facili, soprattutto materiali." % dungeons_left, "dungeon", "Dungeon")
 	var daily_left := 0
 	var shop: Dictionary = gs.data.get("shop", {})
 	var bought: Dictionary = shop.get("bought", {}) if int(shop.get("day", -1)) == gs.shop_day() else {}

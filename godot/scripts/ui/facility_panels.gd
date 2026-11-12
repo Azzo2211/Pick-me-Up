@@ -20,6 +20,7 @@ var main
 var merge_selected: Array[String] = []
 var merging_tab := "fusion"
 var gate_tab := "mission"
+var dungeon_level := 0
 var gate_floor := -1
 var last_summon: Array = []
 var roster_limit := ROSTER_PAGE
@@ -502,9 +503,12 @@ func _promote(hero_id: String) -> void:
 # =============================================================================
 
 func _build_gate(body: VBoxContainer, footer: VBoxContainer) -> void:
-	body.add_child(tabs([["mission", "Missione"], ["squad", "Squadra"]], gate_tab, _set_gate_tab))
+	body.add_child(tabs([["mission", "Torre"], ["dungeon", "Dungeon"], ["squad", "Squadra"]], gate_tab, _set_gate_tab))
 	if gate_tab == "squad":
 		_build_squad(body)
+		return
+	if gate_tab == "dungeon":
+		_build_dungeons(body, footer)
 		return
 	var max_floor := int(GS.data.world.max_floor)
 	if gate_floor < 1 or gate_floor > max_floor: gate_floor = int(GS.data.world.current_floor)
@@ -593,6 +597,71 @@ func _build_gate(body: VBoxContainer, footer: VBoxContainer) -> void:
 	go.disabled = not ready.ready
 	footer.add_child(go)
 	if not ready.ready: footer.add_child(UIKit.button("Componi la squadra", _set_gate_tab.bind("squad"), "primary", 0))
+
+# --- Dungeon giornalieri -------------------------------------------------------
+
+func _build_dungeons(body: VBoxContainer, footer: VBoxContainer) -> void:
+	var max_level := GS.dungeon_max_level()
+	if dungeon_level < 1 or dungeon_level > max_level: dungeon_level = max_level
+	body.add_child(info_card("Missioni facili per fare scorta di materiali: pochi mostri e deboli, niente bruti né guardiani. Ogni dungeon si può completare %d volte al giorno. Parte la squadra del Portale. Attenzione: chi cade non torna, anche qui." % GS.DUNGEON_RUNS_PER_DAY))
+	var selector := HBoxContainer.new()
+	selector.add_theme_constant_override("separation", 8)
+	var prev := UIKit.button("‹", _shift_dungeon_level.bind(-1), "ghost", 52)
+	prev.add_theme_font_size_override("font_size", 28)
+	prev.disabled = dungeon_level <= 1
+	selector.add_child(prev)
+	var title := UIKit.title("Livello %d" % dungeon_level, 26, UIKit.INK)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	selector.add_child(title)
+	var next := UIKit.button("›", _shift_dungeon_level.bind(1), "ghost", 52)
+	next.add_theme_font_size_override("font_size", 28)
+	next.disabled = dungeon_level >= max_level
+	selector.add_child(next)
+	body.add_child(selector)
+	var ready := GS.party_readiness()
+	var note := "Livello massimo %d: se ne apre uno ogni 5 piani della Torre superati." % max_level if max_level < GS.DUNGEON_MAX_LEVEL else "Hai aperto tutti i livelli."
+	body.add_child(UIKit.para("%s Potenza della squadra: %s." % [note, GS.format_number(ready.score)], 13, UIKit.MUTED))
+	for id in GS.DUNGEON_ORDER:
+		var info: Dictionary = GS.DUNGEONS[id]
+		var stage := GS.dungeon_stage(id, dungeon_level)
+		var loot := GS.dungeon_rewards(id, dungeon_level)
+		var left := GS.dungeon_runs_left(id)
+		var color := Color(str(info.color))
+		var card := PanelContainer.new()
+		card.add_theme_stylebox_override("panel", UIKit.tinted(color.lightened(0.15), 12.0))
+		var v := VBoxContainer.new()
+		v.add_theme_constant_override("separation", 4)
+		var tags := HBoxContainer.new()
+		tags.add_theme_constant_override("separation", 6)
+		tags.add_child(UIKit.pill(str(GS.MATERIALS[str(info.material)].name), color.lightened(0.3)))
+		tags.add_child(UIKit.pill("Oggi %d/%d" % [left, GS.DUNGEON_RUNS_PER_DAY], UIKit.TEAL if left > 0 else UIKit.MUTED))
+		tags.add_child(UIKit.pill("Minaccia %d" % int(stage.threat), Color("#7d8a9e")))
+		v.add_child(tags)
+		v.add_child(UIKit.title(str(info.name), 20, UIKit.INK))
+		v.add_child(UIKit.para(str(info.description), 14))
+		var parts := []
+		for key in loot.materials: parts.append("%s +%d" % [str(GS.MATERIALS[key].name), int(loot.materials[key])])
+		var loot_line := UIKit.para("Bottino: %s · %s Oro" % [" · ".join(parts), GS.format_number(loot.gold)], 14, UIKit.INK)
+		loot_line.add_theme_font_override("font", UIKit.body_bold())
+		v.add_child(loot_line)
+		var reason := ""
+		if left <= 0: reason = "Completato per oggi: torna domani"
+		elif not ready.ready: reason = "Componi prima la squadra"
+		var go := UIKit.button("Entra", main.deploy_dungeon.bind(id, dungeon_level), "gold", 0)
+		go.disabled = not reason.is_empty()
+		go.tooltip_text = reason
+		v.add_child(go)
+		if not reason.is_empty(): v.add_child(UIKit.label(reason, 13, UIKit.MUTED, UIKit.body_bold()))
+		card.add_child(v)
+		body.add_child(card)
+	var hours := ceili(GS.shop_refresh_in() / 3600.0)
+	footer.add_child(UIKit.para("I dungeon si rinnovano tra circa %d %s." % [hours, "ora" if hours == 1 else "ore"], 14, UIKit.MUTED))
+	if not ready.ready: footer.add_child(UIKit.button("Componi la squadra", _set_gate_tab.bind("squad"), "primary", 0))
+
+func _shift_dungeon_level(delta: int) -> void:
+	dungeon_level = clampi(dungeon_level + delta, 1, GS.dungeon_max_level())
+	main._render_panel()
 
 func _line_label(line: String) -> String:
 	return {"Front": "Prima linea", "Mid": "Centro", "Rear": "Retroguardia"}.get(line, line)
@@ -1214,7 +1283,7 @@ func _memorial_card(record: Dictionary, width: float) -> HeroCard:
 	var hero := GS.hero_by_id(str(record.id))
 	if hero.is_empty(): hero = {"id": record.id, "name": record.name, "role": record.role, "current_rarity": record.get("rarity", 1), "state": "DEAD"}
 	var card: HeroCard = HeroCardScript.new()
-	card.setup(hero, width, "Caduto al\nPiano %d" % int(record.floor))
+	card.setup(hero, width, ("Caduto al\nPiano %d" % int(record.floor)) if int(record.floor) > 0 else "Caduto in\nun dungeon")
 	card.tooltip_text = "%s — %s" % [record.name, record.cause]
 	return card
 

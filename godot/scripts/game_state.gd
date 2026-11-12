@@ -228,6 +228,23 @@ const TOWER_TRIALS := {
 }
 const GUARDIAN_TITLES := ["Custode delle radici", "Colosso di cenere", "Sentinella di vetro", "Signore del guado", "Il Senza Volto", "Araldo del Rift", "Gigante delle lanterne", "Cuore di ferro", "Il Giuramento infranto", "Re delle ceneri"]
 
+# --- Dungeon giornalieri (richiesta del proprietario, 2026-11-12) ---------------
+## Missioni facili per raccogliere materiali: mostri deboli, niente bruti né guardiani.
+## Ogni dungeon si può vincere DUNGEON_RUNS_PER_DAY volte al giorno (si azzera a mezzanotte
+## UTC, come il negozio). Il livello lo sceglie il giocatore: uno ogni 5 piani superati.
+## Più è alto, più materiali; i nemici valgono meno della metà di quelli della Torre.
+const DUNGEONS := {
+	"miniera": {"name": "Miniera abbandonata", "material": "ore", "biome": "Canyon ramato", "color": "#b8865a", "description": "Gallerie piene di ferro, occupate da qualche predone.", "waves": ["raider", "raider", "archer"]},
+	"riserva": {"name": "Riserva di caccia", "material": "leather", "biome": "Pianure ventose", "color": "#7a9a3a", "description": "Branchi di segugi del Rift: pelli buone per chi li abbatte.", "waves": ["hound", "hound", "raider"]},
+	"segheria": {"name": "Segheria nel bosco", "material": "wood", "biome": "Bosco cinereo", "color": "#3c7968", "description": "Cataste di assi già tagliate, sorvegliate da pochi sbandati.", "waves": ["raider", "hound", "archer"]},
+	"giardino": {"name": "Giardino selvatico", "material": "herbs", "biome": "Giardini di cristallo", "color": "#6c6a8a", "description": "Erbe rare cresciute tra i cristalli. Qualche segugio ci ha fatto la tana.", "waves": ["hound", "archer", "hound"]},
+}
+const DUNGEON_ORDER := ["miniera", "riserva", "segheria", "giardino"]
+const DUNGEON_RUNS_PER_DAY := 2
+const DUNGEON_MAX_LEVEL := 20
+## Forza dei nemici rispetto al primo piano dello scaglione corrispondente della Torre.
+const DUNGEON_POWER := 0.45
+
 var data: Dictionary = {}
 var is_test_mode := OS.get_cmdline_user_args().has("--test-mode")
 var _tick_accumulator := 0.0
@@ -1691,9 +1708,12 @@ func enemy_scaling(floor_index: int) -> Dictionary:
 	var tier := tower_tier(floor_index)
 	var power := floor_power(floor_index) * debug_enemy_scale
 	if is_trial_floor(floor_index): power *= float(TOWER_TRIAL_POWER[mini(tier, TOWER_TRIAL_POWER.size() - 1)])
-	# la vita cresce un po' meno dell'attacco (i piani a tempo restano fattibili, il pericolo
-	# per gli eroi no); la difesa ancora meno: con 100/(100+difesa) una difesa enorme
-	# renderebbe i nemici intoccabili
+	return scaling_for_power(power)
+
+## Moltiplicatori dei nemici per una forza data. La vita cresce un po' meno dell'attacco
+## (i piani a tempo restano fattibili, il pericolo per gli eroi no); la difesa ancora meno:
+## con 100/(100+difesa) una difesa enorme renderebbe i nemici intoccabili.
+static func scaling_for_power(power: float) -> Dictionary:
 	return {"power": power, "hp": pow(power, 0.85), "attack": power, "defense": pow(power, 0.5)}
 
 ## Minaccia mostrata sulla mappa: segue la forza dei nemici. Una prova conta più dei piani
@@ -1771,12 +1791,115 @@ func floor_rewards(floor_index: int, attempt: int, first_clear: bool) -> Diction
 		rewards.gems = maxi(5, roundi((15 + floor_index * 1.5) * gem_trial * retry_multiplier))
 	return rewards
 
-func begin_mission(floor_index: int) -> Dictionary:
-	if floor_index < 1 or floor_index > int(data.world.max_floor): return {"ok": false, "message": "Piano non sbloccato"}
+## La squadra può partire? Vale per la Torre e per i dungeon.
+func _party_can_deploy() -> Dictionary:
 	var party := get_party()
 	if party.filter(func(hero): return not hero.is_empty()).size() != PARTY_SIZE: return {"ok": false, "message": "Servono cinque eroi vivi in squadra"}
 	for hero in party:
 		if float(hero.fatigue) >= FATIGUE_NO_DEPLOY: return {"ok": false, "message": "%s è sfinito: deve riposare al Dormitorio" % hero.name}
+	return {"ok": true, "party": party}
+
+# --- Dungeon giornalieri -------------------------------------------------------
+
+## Livello massimo dei dungeon: 1, poi uno in più ogni 5 piani della Torre superati.
+func dungeon_max_level() -> int:
+	return clampi(1 + cleared_floor_count() / TOWER_TIER_FLOORS, 1, DUNGEON_MAX_LEVEL)
+
+func _dungeon_state() -> Dictionary:
+	var state: Dictionary = data.get_or_add("dungeons", {"day": -1, "runs": {}})
+	if int(state.get("day", -1)) != shop_day():
+		state.day = shop_day()
+		state.runs = {}
+	return state
+
+## Vittorie rimaste oggi in un dungeon. Solo lettura: non tocca il salvataggio.
+func dungeon_runs_left(id: String) -> int:
+	if not DUNGEONS.has(id): return 0
+	var state: Dictionary = data.get("dungeons", {})
+	var done := int(state.get("runs", {}).get(id, 0)) if int(state.get("day", -1)) == shop_day() else 0
+	return maxi(0, DUNGEON_RUNS_PER_DAY - done)
+
+## Bottino di una vittoria: soprattutto il materiale del dungeon, un po' di un altro, poco oro.
+func dungeon_rewards(id: String, level: int) -> Dictionary:
+	var info: Dictionary = DUNGEONS[id]
+	var others := ["ore", "leather", "wood", "herbs"].filter(func(key): return key != str(info.material))
+	var second: String = others[(level + DUNGEON_ORDER.find(id)) % others.size()]
+	return {"gold": 600 + 300 * level, "xp": 20 + 8 * level, "materials": {str(info.material): 5 + 2 * level, second: 1 + level / 2}}
+
+## Descrizione della missione di un dungeon al livello scelto (uguale per tutto il giorno).
+func dungeon_stage(id: String, level: int) -> Dictionary:
+	var info: Dictionary = DUNGEONS[id]
+	level = clampi(level, 1, DUNGEON_MAX_LEVEL)
+	var waves := []
+	for index in info.waves.size():
+		waves.append([index * 11.0, str(info.waves[index]), 2 + (1 if index == 0 else 0) + level / 7])
+	var power := floor_power((level - 1) * TOWER_TIER_FLOORS + 1) * DUNGEON_POWER
+	return {
+		"type": "Subjugation", "name": str(info.name), "biome": str(info.biome), "color": str(info.color), "objective": "Elimina tutte le minacce",
+		"duration": 90.0, "waves": waves, "description": str(info.description), "floor": 0, "dungeon": id, "level": level, "enemy_power": power,
+		"seed": "%08X" % abs(("%s:dungeon:%s:%d:%d" % [str(data.world.seed), id, level, shop_day()]).hash()),
+		"threat": roundi(120.0 * pow(power, 0.85)),
+	}
+
+func begin_dungeon(id: String, level: int) -> Dictionary:
+	if not DUNGEONS.has(id): return {"ok": false, "message": "Dungeon sconosciuto"}
+	if level < 1 or level > dungeon_max_level(): return {"ok": false, "message": "Livello non ancora aperto: sali nella Torre"}
+	if dungeon_runs_left(id) <= 0: return {"ok": false, "message": "Già completato per oggi: torna domani"}
+	var check := _party_can_deploy()
+	if not check.ok: return check
+	var party: Array = check.party
+	for hero in party: data.assignments.erase(str(hero.id))
+	var state := _dungeon_state()
+	state["attempts"] = int(state.get("attempts", 0)) + 1
+	data.active_mission = {"floor": 0, "dungeon": id, "level": level, "attempt": int(state.attempts), "started": now(), "deaths": []}
+	save_game()
+	return {"ok": true, "stage": dungeon_stage(id, level), "party": party, "attempt": int(state.attempts)}
+
+func _finalize_dungeon(result: Dictionary, run: Dictionary) -> Dictionary:
+	var id := str(run.dungeon)
+	var level := int(run.level)
+	var info: Dictionary = DUNGEONS[id]
+	var rewards := {}
+	var drops := {}
+	var level_ups := []
+	if bool(result.victory):
+		var loot := dungeon_rewards(id, level)
+		rewards = {"gold": int(loot.gold), "xp": int(loot.xp)}
+		grant("gold", int(loot.gold), str(info.name), "dungeon")
+		for key in loot.materials:
+			drops[key] = int(loot.materials[key])
+			grant(key, int(loot.materials[key]), str(info.name), "dungeon")
+		var state := _dungeon_state()
+		state.runs[id] = int(state.runs.get(id, 0)) + 1
+		add_event("DUNGEON", "%s completato" % info.name, "Livello %d · %s." % [level, cost_text(drops)], "good")
+	else:
+		add_event("DUNGEON", "%s: squadra rientrata" % info.name, "Niente bottino. Il tentativo di oggi non è stato consumato.", "warn")
+	for hero_result in result.get("hero_results", []):
+		var hero := hero_by_id(str(hero_result.id))
+		if hero.is_empty() or hero.state != "ALIVE": continue
+		hero.missions += 1
+		hero.kills += int(hero_result.get("kills", 0))
+		# un dungeon stanca meno di un piano della Torre
+		hero.fatigue = clampi(int(hero.fatigue) + roundi(float(hero_result.get("fatigue", 10)) * 0.6), 0, 100)
+		hero.morale = clampi(int(hero.morale) + (2 if result.victory else -4), 0, 100)
+		if result.victory:
+			var before := int(hero.level)
+			add_xp(hero, float(rewards.get("xp", 0)))
+			if int(hero.level) > before: level_ups.append({"name": hero.name, "from": before, "to": int(hero.level)})
+		var hp_ratio := float(hero_result.get("hp_ratio", 1.0))
+		if hp_ratio < 0.3:
+			var serious := hp_ratio < 0.12
+			hero.injuries.append({"name": "Ferita grave" if serious else "Ferita da combattimento", "severity": "Grave" if serious else "Moderata", "minutes": 45.0 if serious else 20.0})
+	var deaths: Array = run.deaths.duplicate()
+	data.active_mission = {}
+	save_and_notify()
+	return {"ok": true, "gold": int(rewards.get("gold", 0)), "xp": int(rewards.get("xp", 0)), "rewards": rewards, "drops": drops, "level_ups": level_ups, "deaths": deaths, "first_clear": false, "title": "%s · Livello %d" % [info.name, level], "dungeon": id}
+
+func begin_mission(floor_index: int) -> Dictionary:
+	if floor_index < 1 or floor_index > int(data.world.max_floor): return {"ok": false, "message": "Piano non sbloccato"}
+	var check := _party_can_deploy()
+	if not check.ok: return check
+	var party: Array = check.party
 	for hero in party: data.assignments.erase(str(hero.id))
 	var stage_state := _materialize_stage(floor_index)
 	stage_state.attempts += 1
@@ -1788,20 +1911,23 @@ func record_death(hero_id: String, cause: String) -> void:
 	var hero := hero_by_id(hero_id)
 	if hero.is_empty() or hero.state == "DEAD": return
 	var floor := int(data.active_mission.get("floor", data.world.current_floor))
+	var place := "Piano %d" % floor
+	if data.active_mission.has("dungeon"): place = str(DUNGEONS.get(str(data.active_mission.dungeon), {}).get("name", "Dungeon"))
 	hero.state = "DEAD"
-	hero.memories.push_front("Caduto al Piano %d: %s" % [floor, cause])
+	hero.memories.push_front("Caduto (%s): %s" % [place, cause])
 	data.assignments.erase(hero_id)
 	var party_slot: int = data.party.find(hero_id)
 	if party_slot >= 0: data.party[party_slot] = ""
 	var tombstone := {"id": hero.id, "name": hero.name, "level": hero.level, "role": hero.role, "rarity": hero.current_rarity, "floor": floor, "cause": cause, "timestamp": now()}
 	data.memorial.push_front(tombstone)
 	if not data.active_mission.is_empty(): data.active_mission.deaths.append(tombstone)
-	add_event("DEATH", hero.name + " è caduto", "Piano %d · %s · morte permanente." % [floor, cause], "danger")
+	add_event("DEATH", hero.name + " è caduto", "%s · %s · morte permanente." % [place, cause], "danger")
 	save_and_notify()
 
 func finalize_mission(result: Dictionary) -> Dictionary:
 	if data.active_mission.is_empty(): return {"ok": false, "message": "Nessuna missione attiva", "deaths": []}
 	var run: Dictionary = data.active_mission
+	if run.has("dungeon"): return _finalize_dungeon(result, run)
 	var floor := int(run.floor)
 	var stage_state: Dictionary = _materialize_stage(floor)
 	var first_clear: bool = not bool(stage_state.cleared)

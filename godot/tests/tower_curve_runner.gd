@@ -9,6 +9,8 @@ extends SceneTree
 ##       con la squadra dello scaglione successivo (quella che serve per passarla)
 ##   ... --calibrate-trials [--target=0.65]
 ##       per le prove: fattore di forza con cui la squadra dello scaglione dopo vince
+##   ... --dungeons [--tiers=0,3,9]
+##       dungeon giornalieri al livello dello scaglione: devono essere facili
 ##   ... --calibrate [--target=0.6]
 ##       cerca la forza dei nemici che dà quella percentuale di vittorie (media dei
 ##       piani 1–4 dello scaglione) e stampa i valori per TOWER_TIER_POWER
@@ -44,7 +46,9 @@ func _run() -> void:
 	battle_script = load("res://scripts/battle/battle_scene.gd")
 	var tiers: Array = Array(_arg("tiers", "0,1,2,3,4,6,9,13,19").split(",")).map(func(v): return int(v))
 	var trials := int(_arg("trials", "6"))
-	if OS.get_cmdline_user_args().has("--calibrate-trials"):
+	if OS.get_cmdline_user_args().has("--dungeons"):
+		for tier in tiers: await _check_dungeons(tier, trials)
+	elif OS.get_cmdline_user_args().has("--calibrate-trials"):
 		var target := float(_arg("target", "0.65"))
 		for tier in tiers: await _calibrate_trial(tier, trials, target)
 	elif OS.get_cmdline_user_args().has("--calibrate"):
@@ -83,6 +87,37 @@ func _series(floor_index: int, tier_squad: int, trials: int, scale: float = 1.0)
 		await process_frame
 	state.debug_enemy_scale = 1.0
 	return [wins, deaths, total_time / maxf(1.0, trials)]
+
+## Dungeon giornalieri: devono essere facili per la squadra di riferimento dello scaglione
+## (livello del dungeon = scaglione + 1) e fattibili anche per quella dello scaglione prima.
+func _check_dungeons(tier: int, trials: int) -> void:
+	print("\n== Dungeon livello %d" % (tier + 1))
+	for id in state.DUNGEON_ORDER:
+		var line := "  %-22s" % str(state.DUNGEONS[id].name)
+		for squad in [tier, maxi(0, tier - 1)]:
+			var wins := 0
+			var deaths := 0
+			var time := 0.0
+			for trial in trials:
+				_reference_squad(squad, trial)
+				var battle = battle_script.new()
+				battle.setup(state.dungeon_stage(id, tier + 1), state.get_party(), trial + 1)
+				root.add_child(battle)
+				var guard := 0
+				while not battle.completed and guard < 4000:
+					battle.accumulator += 0.1
+					while battle.accumulator >= battle.TICK and not battle.completed:
+						battle._tick(battle.TICK)
+						battle.accumulator -= battle.TICK
+					guard += 1
+				if battle.completed and battle.result_victory: wins += 1
+				for u in battle.units:
+					if u.hero and not u.alive: deaths += 1
+				time += battle.elapsed
+				battle.queue_free()
+				await process_frame
+			line += "  squadra scaglione %d: vittorie %d/%d morti %d durata %ds" % [squad + 1, wins, trials, deaths, roundi(time / maxf(1.0, trials))]
+		print(line)
 
 func _reference_squad(tier: int, variant: int) -> void:
 	var row: Array = REFERENCE[clampi(tier, 0, REFERENCE.size() - 1)]

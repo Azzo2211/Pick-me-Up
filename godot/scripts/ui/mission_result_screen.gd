@@ -102,7 +102,7 @@ func _show_lost(index: int) -> void:
 	v.add_child(_centered(sigil))
 	v.add_child(_centered(UIKit.title("EROE PERDUTO", 38, UIKit.ROSE)))
 	v.add_child(_centered(UIKit.label("%s  %s" % [str(record.name), "★".repeat(int(record.get("rarity", 1)))], 22, UIKit.INK, UIKit.head_font())))
-	v.add_child(_centered(UIKit.label("%s · Lv.%d · Piano %d" % [GameState.role_label(str(record.get("role", ""))), int(record.get("level", 1)), int(record.get("floor", 0))], 15, UIKit.INK_SOFT, UIKit.head_medium())))
+	v.add_child(_centered(UIKit.label("%s · Lv.%d · Piano %d" % [GameState.role_label(str(record.get("role", ""))), int(record.get("level", 1)), int(record.get("floor", 0))] if int(record.get("floor", 0)) > 0 else "%s · Lv.%d · Dungeon" % [GameState.role_label(str(record.get("role", ""))), int(record.get("level", 1))], 15, UIKit.INK_SOFT, UIKit.head_medium())))
 	v.add_child(_centered(UIKit.para(str(record.get("cause", "")), 16, UIKit.INK_SOFT)))
 	v.add_child(UIKit.hsep(4))
 	v.add_child(_centered(UIKit.para("Questo eroe non può tornare nel roster. Non esistono resurrezioni.", 15, UIKit.MUTED)))
@@ -148,7 +148,8 @@ func _show_summary() -> void:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 12)
 	var floor_index := int(result.get("floor", 0))
-	v.add_child(_centered(UIKit.label(("Piano %d · %s" % [floor_index, reason_text(str(result.get("reason", "")))]).to_upper(), 14, UIKit.CYAN, UIKit.head_medium())))
+	var place := str(resolved.get("title", "Piano %d" % floor_index))
+	v.add_child(_centered(UIKit.label(("%s · %s" % [place, reason_text(str(result.get("reason", "")))]).to_upper(), 14, UIKit.CYAN, UIKit.head_medium())))
 	var heading := "STAGE CLEAR" if victory else "RITIRATA" if extracted else "MISSIONE FALLITA"
 	v.add_child(_centered(UIKit.title(heading, 48, _accent.lightened(0.15))))
 	if victory:
@@ -161,7 +162,7 @@ func _show_summary() -> void:
 		var notes := ["Vittoria", "Nessun caduto" if g[1] else "Ci sono caduti", "Squadra in forze" if g[2] else "Feriti gravi"]
 		v.add_child(_centered(UIKit.label(" · ".join(notes).to_upper(), 12, UIKit.MUTED, UIKit.head_medium())))
 	else:
-		v.add_child(_centered(UIKit.para("Il piano resta identico: ritenta con una squadra più forte o più riposata.", 16, UIKit.INK_SOFT)))
+		v.add_child(_centered(UIKit.para("Il dungeon resta aperto per oggi: ritenta con una squadra più riposata o a un livello più basso." if resolved.has("dungeon") else "Il piano resta identico: ritenta con una squadra più forte o più riposata.", 16, UIKit.INK_SOFT)))
 	v.add_child(UIKit.hsep(4))
 	if victory:
 		var rewards: Dictionary = resolved.get("rewards", {})

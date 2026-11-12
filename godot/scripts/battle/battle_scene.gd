@@ -426,7 +426,7 @@ func _build_hud() -> void:
 	top.add_theme_stylebox_override("panel", UIKit.ornate("plate", 0.0).set_padding(26.0, 8.0))
 	var tv := VBoxContainer.new()
 	tv.add_theme_constant_override("separation", 0)
-	title_label = UIKit.title("Piano %d · %s" % [int(stage.floor), stage.name], 22, UIKit.INK)
+	title_label = UIKit.title(("Dungeon Lv.%d · %s" % [int(stage.get("level", 1)), stage.name]) if stage.has("dungeon") else "Piano %d · %s" % [int(stage.floor), stage.name], 22, UIKit.INK)
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	objective_label = UIKit.label(str(stage.objective).to_upper(), 14, UIKit.GOLD, UIKit.head_medium())
 	objective_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -608,7 +608,8 @@ func _spawn_enemy(kind: String, wave: int, index: int, elite: bool = false) -> v
 	var floor_index := int(stage.floor)
 	var boss := kind == "boss"
 	# forza del piano: scaglioni di 5 piani, vedi GameState.enemy_scaling
-	var scaling: Dictionary = GameState.enemy_scaling(floor_index)
+	# i dungeon giornalieri portano la loro forza (nemici deboli)
+	var scaling: Dictionary = RiftwardState.scaling_for_power(float(stage.enemy_power) * GameState.debug_enemy_scale) if stage.has("enemy_power") else GameState.enemy_scaling(floor_index)
 	var hp_scale := float(scaling.hp)
 	var atk_scale := float(scaling.attack)
 	var def_scale := float(scaling.defense)

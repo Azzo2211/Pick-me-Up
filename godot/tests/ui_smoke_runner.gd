@@ -145,6 +145,28 @@ func _run() -> void:
 	if result_screen != null and result_screen.has_method("skip_to_summary"): result_screen.call("skip_to_summary")
 	_check(state.data.active_mission.is_empty() and int(state.data.stages["1"].attempts) == 1, "missione registrata nel salvataggio")
 	print("Piano 1 %s · piani sbloccati %d → %d" % ["completato" if state.data.stages["1"].cleared else "fallito", max_floor_before, int(state.data.world.max_floor)])
+	# Dungeon giornaliero dal Portale: missione facile, bottino di materiali
+	main.close_all_modals()
+	for hero in state.get_party():
+		if not hero.is_empty(): hero.fatigue = 0
+	main.panels.gate_tab = "dungeon"
+	main.open_panel("gate")
+	await _frames(3)
+	_check(main.side_body.get_child_count() >= 6, "scheda Dungeon al Portale con i quattro dungeon")
+	main.panels.gate_tab = "mission"
+	var ore_before: int = state.resource_amount("ore")
+	main.deploy_dungeon("miniera", 1)
+	waited = 0.0
+	while main.battle == null and waited < 20.0:
+		await create_timer(0.1).timeout
+		waited += 0.1
+	if main.battle != null:
+		main.battle.speed_scale = 8.0
+		var dungeon_limit := 0.0
+		while main.battle != null and dungeon_limit < 60.0:
+			await create_timer(0.1).timeout
+			dungeon_limit += 0.1
+	_check(main.battle == null and state.resource_amount("ore") > ore_before and state.dungeon_runs_left("miniera") == state.DUNGEON_RUNS_PER_DAY - 1, "dungeon giornaliero vinto: ferro in magazzino e un ingresso in meno")
 	# Base Lv.10: edifici al massimo, tre isole collegate da ponti e raggiungibili a piedi
 	main.close_all_modals()
 	state.dev_max_base()

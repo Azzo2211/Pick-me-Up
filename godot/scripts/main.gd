@@ -221,6 +221,9 @@ func _advisor_action(action: String) -> void:
 	else:
 		match action:
 			"squad": _open_squad()
+			"dungeon":
+				panels.gate_tab = "dungeon"
+				open_panel("gate")
 			"tower": _open_tower()
 			"roster": open_roster()
 			"journal": _show_journal()
@@ -645,7 +648,14 @@ func _finish_onboarding(modal_ref: Array) -> void:
 
 func deploy(floor_index: int) -> void:
 	if busy: return
-	var result := GameState.begin_mission(floor_index)
+	_launch(GameState.begin_mission(floor_index), "PIANO %d" % floor_index)
+
+## Dungeon giornaliero: stessa partenza dal Portale, missione facile per i materiali.
+func deploy_dungeon(id: String, level: int) -> void:
+	if busy: return
+	_launch(GameState.begin_dungeon(id, level), "DUNGEON · LIVELLO %d" % level)
+
+func _launch(result: Dictionary, heading: String) -> void:
 	if not result.ok:
 		toast("Partenza bloccata", str(result.message), "warn")
 		return
@@ -661,7 +671,7 @@ func deploy(floor_index: int) -> void:
 	await hub.world.play_deploy(party_ids)
 	var stage: Dictionary = result.stage
 	var loading = LoadingScript.new()
-	loading.setup("PIANO %d" % floor_index, "APERTURA DEL VARCO…", ("%s · %s" % [str(stage.get("name", "")), str(stage.get("biome", ""))]).to_upper(), Color(str(stage.get("color", "#f052c8"))).lightened(0.35))
+	loading.setup(heading, "APERTURA DEL VARCO…", ("%s · %s" % [str(stage.get("name", "")), str(stage.get("biome", ""))]).to_upper(), Color(str(stage.get("color", "#f052c8"))).lightened(0.35))
 	loading.modulate.a = 0.0
 	add_child(loading)
 	var tween := create_tween()

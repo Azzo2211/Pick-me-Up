@@ -35,6 +35,7 @@ func _initialize() -> void:
 	_test("armeria: forgia ed equipaggiamento", _test_armory)
 	_test("armeria: forgia a mano, gradi da F a S e difficoltà", _test_forge_minigame_rules)
 	_test("richiamo d'emergenza contro il blocco", _test_emergency)
+	_test("dungeon giornalieri: materiali, mostri deboli, due vittorie al giorno", _test_dungeons)
 	_test("ricarica JSON: niente piani completati falsi", _test_json_reload)
 	_test("sblocchi di sviluppo non sopravvivono", _test_dev_leak)
 	_test("addestramento offline rispetta la stanchezza", _test_offline_steps)
@@ -438,6 +439,42 @@ func _test_forge_minigame_rules() -> Array:
 	valid = valid and game.forge_window_bonus() > 1.0
 	game.free()
 	return [valid, "Forgia a mano non conforme"]
+
+func _test_dungeons() -> Array:
+	var game := _fresh("dungeon-seed")
+	var valid: bool = game.dungeon_max_level() == 1 and game.dungeon_runs_left("miniera") == game.DUNGEON_RUNS_PER_DAY
+	# livello non ancora aperto e dungeon sconosciuto rifiutati
+	valid = valid and not game.begin_dungeon("miniera", 2).ok and not game.begin_dungeon("niente", 1).ok
+	# mostri deboli: meno forti del Piano 1, nessun bruto né guardiano, a tutti i livelli
+	for id in game.DUNGEON_ORDER:
+		for level in [1, 5, 20]:
+			var stage: Dictionary = game.dungeon_stage(id, level)
+			valid = valid and float(stage.enemy_power) < RiftwardState.floor_power((level - 1) * 5 + 1) * 0.5
+			for wave in stage.waves: valid = valid and not str(wave[1]) in ["brute", "boss"]
+	var ore_before: int = game.resource_amount("ore")
+	var floor_before := int(game.data.world.max_floor)
+	for run in game.DUNGEON_RUNS_PER_DAY:
+		var start: Dictionary = game.begin_dungeon("miniera", 1)
+		valid = valid and start.ok and str(start.stage.dungeon) == "miniera"
+		var results := []
+		for hero in start.party: results.append({"id": hero.id, "alive": true, "hp_ratio": 0.9, "kills": 1, "fatigue": 20})
+		var done: Dictionary = game.finalize_mission({"victory": true, "reason": "clear", "duration": 30.0, "floor": 0, "hero_results": results})
+		valid = valid and done.ok and int(done.drops.get("ore", 0)) == 7 and not bool(done.first_clear)
+	valid = valid and game.resource_amount("ore") == ore_before + 14 and game.dungeon_runs_left("miniera") == 0
+	valid = valid and not game.begin_dungeon("miniera", 1).ok and game.dungeon_runs_left("riserva") == game.DUNGEON_RUNS_PER_DAY
+	# non tocca la Torre; stanca meno di un piano (20 × 0,6 = 12 a missione)
+	valid = valid and int(game.data.world.max_floor) == floor_before and game.data.active_mission.is_empty()
+	# una sconfitta non consuma l'ingresso
+	var lost: Dictionary = game.begin_dungeon("riserva", 1)
+	game.finalize_mission({"victory": false, "reason": "extracted", "duration": 10.0, "floor": 0, "hero_results": []})
+	valid = valid and lost.ok and game.dungeon_runs_left("riserva") == game.DUNGEON_RUNS_PER_DAY
+	# il giorno dopo si ricomincia; un livello in più ogni 5 piani superati
+	game.data.dungeons.day = int(game.data.dungeons.day) - 1
+	valid = valid and game.dungeon_runs_left("miniera") == game.DUNGEON_RUNS_PER_DAY
+	game.debug_clear_floors(10)
+	valid = valid and game.dungeon_max_level() == 3 and int(game.dungeon_rewards("miniera", 3).materials.ore) == 11
+	game.free()
+	return [valid, "Dungeon giornalieri non conformi"]
 
 func _test_emergency() -> Array:
 	var game := _fresh("emergency-seed")
