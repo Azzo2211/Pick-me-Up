@@ -171,7 +171,7 @@ I dungeon giornalieri sono missioni fuori dalla Torre che servono **soprattutto 
 - I materiali rari servono per forgiare equipaggiamento migliore e per i potenziamenti avanzati delle strutture.
 - I dungeon non sostituiscono la Torre: danno poca esperienza e niente Gemme o Pietre come quelle dei piani.
 
-Proposta di gradi per i materiali (**da decidere**, issue di Game Design):
+Proposta di gradi per i materiali (**da decidere**, issue #19):
 
 | Grado | Nome | Esempio | Dove si trova |
 |---|---|---|---|
@@ -217,4 +217,11 @@ Proposta di gradi per i materiali (**da decidere**, issue di Game Design):
 4. **Cibo**: resta come ora (compare da solo) o si compra e si gestisce come dicono le sezioni 12 e 16?
 
 ## Lavoro dei reparti
-Le issue con le etichette `reparto:*` dicono a ogni reparto cosa cambia. Vedi la guida #9 e la chat dei reparti.
+- Game Design: #19 (con le cose da decidere)
+- Programming: #20
+- Art & Animation: #21
+- UI/UX: #22
+- Audio: #23
+- QA: #24
+
+Il lavoro sulle regole precedenti è in #18. Guida: #9 e la chat dei reparti.
