@@ -130,7 +130,7 @@ Locked reference values:
   - Archivio (Archivista, Cartografo): +1,5% per livello all'esperienza delle missioni.
   - Scorte (Contadino, Minatore): a ogni nuovo giorno di gioco 1 + livello/3 materiali (ferro il minatore, erbe e legno il contadino).
   - Ronda (Guardia cittadina): ai pasti il morale non resta sotto una soglia.
-- **Cibo** (precisazione del proprietario): compare da solo, non si compra e non si gestisce; nessuno resta senza. Il cuoco serve solo a renderlo migliore (vedi Cucina).
+- **Cibo**: ~~compare da solo~~ **superato dalla decisione del proprietario del 2026-11-14**: il cibo si compra e va gestito; il cuoco lo cucina per alzare il morale (da fare, #20).
 - **Tempo di gioco**: 1 minuto vero = 3 minuti di gioco (`GAME_TIME_SCALE`, `data.world.game_minutes`), quindi un giorno di gioco dura 8 ore vere. L'orologio "Giorno N · hh:mm" sta in alto a sinistra. Pasti alle 7, alle 13 e alle 20. Vale anche a gioco chiuso (fino a 8 ore). Negozio e dungeon giornalieri restano sui giorni veri.
 
 ## Consigli del Sistema

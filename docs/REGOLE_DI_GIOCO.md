@@ -6,7 +6,7 @@ Le sezioni 5, 9 e 14 sono state aggiornate dal proprietario; la sezione 18 (Dung
 Come si usa:
 - Queste sono le **regole**: se un altro documento o il codice dice una cosa diversa, vince questo file (salvo una decisione più recente del proprietario scritta in `GAME_SYSTEMS.md`).
 - I **numeri** (probabilità, costi, curve) stanno in `docs/GAME_SYSTEMS.md` e nel codice. Qui ci sono solo le regole.
-- In fondo: cosa c'è già nel gioco, cosa manca e cosa resta da decidere. Ogni reparto ha un'issue con il proprio pezzo (vedi "Lavoro dei reparti").
+- In fondo: cosa c'è già nel gioco, cosa manca e le decisioni del proprietario. Ogni reparto ha un'issue con il proprio pezzo (vedi "Lavoro dei reparti").
 
 ---
 
@@ -50,7 +50,7 @@ Il Master decide **quali caratteristiche o abilità allenare** per ciascun eroe.
 - La scelta di cosa allenare deve essere strategica.
 
 Il **livello generale** (esperienza) e l'**allenamento delle singole caratteristiche** devono restare due sistemi distinguibili.
-L'eventuale esperienza ottenuta direttamente dall'allenamento è **da definire**.
+**Decisione del proprietario (2026-11-14):** l'allenamento **resta com'è ora** (gli eroi al Training Center guadagnano esperienza nel tempo). Quello che cambia: **non si vede se un eroe impara più in fretta degli altri**, deve scoprirlo il giocatore guardandolo crescere. Chi ha un apprendimento migliore **può anche imparare più skill**.
 
 ## 6. Skill e classi
 - Ogni eroe può possedere una classe.
@@ -98,7 +98,7 @@ Altre regole:
 ## 12. Risorse
 Risorse principali: **Oro**, **Ferro (grado C)**, **Pelle (grado C)**, **Assi di legno / Plank (grado C)**.
 Servono per costruire e migliorare le strutture e per produrre equipaggiamento.
-Le risorse della vita quotidiana, come il cibo, possono essere acquistate, ma vanno gestite.
+Le risorse della vita quotidiana, come il cibo, possono essere acquistate, ma vanno gestite. **Decisione del proprietario (2026-11-14):** il cibo **non compare da solo**: va comprato; al massimo un cuoco lo cucina per alzare il morale.
 
 ## 13. Facilities
 **Training Center** — disponibile dall'inizio.
@@ -137,7 +137,7 @@ Gli eroi evocati sono persone che possono aver avuto una vita e una professione 
 
 ## 15. Utilità delle professioni
 - **Cuoco**: prepara il cibo; un cuoco esperto migliora la qualità dei pasti; pasti migliori aumentano morale ed energia.
-- **Fabbro**: contribuisce alla creazione delle armi; migliora con l'allenamento; le sue abilità influenzano il risultato delle lavorazioni (probabilità esatte **da definire**).
+- **Fabbro**: contribuisce alla creazione delle armi; migliora con l'allenamento; le sue abilità influenzano il risultato delle lavorazioni. **Decisione del proprietario (2026-11-14): niente probabilità.** Le armi si fanno in due modi: (1) con il **minigioco** dell'Armeria, dove il Master sceglie la difficoltà; (2) **affidando il lavoro a un fabbro**, e più il fabbro è talentuoso più le armi sono belle.
 - **Carpentiere**: lavora il legno e contribuisce a certi equipaggiamenti.
 - **Conciatore**: lavora la pelle e contribuisce a certi equipaggiamenti.
 
@@ -171,7 +171,7 @@ I dungeon giornalieri sono missioni fuori dalla Torre che servono **soprattutto 
 - I materiali rari servono per forgiare equipaggiamento migliore e per i potenziamenti avanzati delle strutture.
 - I dungeon non sostituiscono la Torre: danno poca esperienza e niente Gemme o Pietre come quelle dei piani.
 
-Proposta di gradi per i materiali (**da decidere**, issue #19):
+Gradi dei materiali (**approvati dal proprietario il 2026-11-14**):
 
 | Grado | Nome | Esempio | Dove si trova |
 |---|---|---|---|
@@ -188,10 +188,11 @@ Proposta di gradi per i materiali (**da decidere**, issue #19):
 |---|---|---|
 | 1–3 Torre 100 piani, rarità 1–7★, Lv max 99, 7★ solo da evocazione, permadeath | Fatto | #18 blocco 1 |
 | 4 Statistiche STR / INT / HP / DEX | Fatto | chiavi del salvataggio invariate |
-| 5 **Allenamento a scelta** (statistica, skill, competenza) con limite per eroe | **Manca** | oggi l'Addestramento dà solo esperienza nel tempo |
-| 5 Esperienza dall'allenamento | **Da decidere** | |
+| 5 Allenamento come ora (esperienza nel tempo) | Fatto | decisione del 2026-11-14 |
+| 5 Apprendimento nascosto | Fatto | `potential`/`growth` non si vedono nel gioco (#18 blocco 1) |
+| 5 **Più apprendimento = più skill imparabili** | **Manca** | |
 | 6 Skill comuni/uniche, eroi senza skill | Fatto | #18 blocco 2 |
-| 6 **Imparare/migliorare skill al Training Center** | **Manca** | oggi solo alla nascita o con la Fusione |
+| 6 **Imparare skill al Training Center** | **Manca** | oggi solo alla nascita o con la Fusione; quante dipende dall'apprendimento nascosto |
 | 7 Paura che abbassa le statistiche | Parziale | c'è la paura in battaglia; manca l'effetto "esperti calmano gli inesperti" |
 | 7 **Disobbedienza**, rifiuto di combattere senza esperienza | **Manca** | |
 | 7 **Intesa / relazioni** con bonus in battaglia | **Manca** | il campo `relationships` esiste ma è vuoto |
@@ -202,22 +203,22 @@ Proposta di gradi per i materiali (**da decidere**, issue #19):
 | 10 **MVP a fine round** | **Manca** | |
 | 11 Piani 1–4 facili, boss ogni 5 piani | Fatto | curva dei piani 71–100 da ritarare (Lv max 99) |
 | 12 Materiali di grado C | Fatto | |
-| 12/16 Cibo | Fatto in forma semplice | precisazione del proprietario del 2026-11-12: il cibo compare da solo, il cuoco lo migliora |
-| 13 Training, Merge, Summon, Dormitorio, Armeria con puzzle | Fatto (Training da rifare, vedi 5) | Armeria: minigioco di forgia, difficoltà, fallimento |
+| 12/16 **Cibo da comprare** | **Manca** | oggi compare da solo (da togliere); va comprato, il cuoco lo cucina per il morale |
+| 13 Training, Merge, Summon, Dormitorio, Armeria con puzzle | Fatto | Armeria: minigioco di forgia, difficoltà, fallimento |
 | 14–15 Mestieri e professioni | Fatto | #18 blocco 4, posti di lavoro al Cristallo |
-| 15 Probabilità del fabbro | **Da decidere** | oggi il fabbro limita il grado massimo, non ci sono probabilità |
+| 15 **Arma fatta dal fabbro** (senza minigioco, qualità dal talento) | **Manca** | oggi il fabbro al lavoro limita solo il grado massimo del minigioco |
 | 16 Base che cambia aspetto con i livelli | Fatto | |
 | 18 Dungeon giornalieri con mostri deboli | Fatto | #18 blocco 3, quattro dungeon al Portale |
 | 18 **Materiali da comuni a rari** | **Manca** | oggi i dungeon danno solo materiali di grado C |
 
-## Da decidere (etichetta `da-decidere`)
-1. **Esperienza dall'allenamento**: l'allenamento mirato dà anche esperienza di livello? Quanta?
-2. **Probabilità del fabbro**: come la bravura del fabbro cambia le probabilità del risultato della forgia.
-3. **Gradi rari dei materiali**: gradi C/B/A/S proposti sopra, quanto spesso escono e a cosa servono.
-4. **Cibo**: resta come ora (compare da solo) o si compra e si gestisce come dicono le sezioni 12 e 16?
+## Decisioni del proprietario (2026-11-14)
+1. **Allenamento**: resta com'è; l'apprendimento di ogni eroe è nascosto e lo scopre il giocatore; chi impara meglio può imparare più skill.
+2. **Fabbro**: niente probabilità. Due modi di fare armi: minigioco (difficoltà a scelta) oppure fabbro (più talento = armi più belle).
+3. **Materiali**: gradi C / B / A / S approvati.
+4. **Cibo**: non compare da solo, si compra; il cuoco lo cucina per alzare il morale.
 
 ## Lavoro dei reparti
-- Game Design: #19 (con le cose da decidere)
+- Game Design: #19
 - Programming: #20
 - Art & Animation: #21
 - UI/UX: #22
