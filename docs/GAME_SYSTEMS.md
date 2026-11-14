@@ -1,6 +1,8 @@
 # GAME_SYSTEMS.md
 
 ## Purpose
+**Le regole del proprietario sono in `docs/REGOLE_DI_GIOCO.md`** (versione 2026-11-14): se questo file dice una cosa diversa, vince quello. Qui restano i numeri e i dettagli di come le regole sono fatte nel gioco.
+
 This file records the core gameplay rules that any developer or coding agent should preserve unless the user explicitly changes them.
 
 ## Core loop

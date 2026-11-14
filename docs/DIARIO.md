@@ -11,6 +11,12 @@ Qui ogni Claude (o altro agente) che lavora sul repository scrive **cosa sta fac
 
 ---
 
+## 2026-11-14 · Production · Regole aggiornate del proprietario distribuite ai reparti — fatto
+Il proprietario ha mandato la versione aggiornata delle regole (sezioni 5 allenamento, 9 tempo, 14 professioni) e ha chiesto i dungeon giornalieri con materiali da comuni a rari.
+- Documento di riferimento nuovo: `docs/REGOLE_DI_GIOCO.md` (regole + sezione 18 Dungeon giornalieri + stato nel gioco + cose da decidere). `GAME_SYSTEMS.md` ora rimanda lì.
+- Cosa manca davvero: allenamento a scelta con limite per eroe, skill imparate al Training Center, disobbedienza, intesa in battaglia, moderatrice, MVP, materiali rari nei dungeon. Da decidere: esperienza dall'allenamento, probabilità del fabbro, gradi rari dei materiali, cibo.
+- Un'issue per reparto con il proprio pezzo (vedi `REGOLE_DI_GIOCO.md`, "Lavoro dei reparti"). Il lavoro di codice continua nella voce #18 qui sotto.
+
 ## 2026-11-12 · Art + Programming · Personaggi 3D uguali ai ritratti, tutti nella base, grafica più viva — fatto
 Richiesta del proprietario: "migliora tutta la grafica… allinea le immagini ai personaggi 3D, ogni personaggio dell'immagine devi metterlo anche nella base".
 - **Stessa persona in carta e in 3D**: ogni eroe ha un ritratto fisso salvato (`hero.portrait_id`, `GameState.assign_portraits`; i salvataggi vecchi tengono gli stessi volti). `appearance_for` prende dal ritratto sesso, pelle, taglio dei capelli, barba, occhiali, cicatrice, età, corporatura, elfi, nani, pelleverde, uomini-bestia e copricapo. Prima il 3D seguiva solo il generatore: pelle, barba, occhiali e capelli spesso non c'entravano col ritratto.
